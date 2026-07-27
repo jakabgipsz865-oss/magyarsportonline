@@ -56,6 +56,7 @@ Mielőtt "kijavítanál" valamit, ami szokatlannak tűnik, nézd meg a `docs/adr
 - **[ADR 0004](docs/adr/0004-phase-0-env-vars-optional.md)** — a `apps/web/lib/env.ts`-ben egyik secret sincs kötelezővé téve Fázis 0-ban, mert még semmi nem használja őket; minden változó a saját roadmap-fázisában válik kötelezővé.
 - **[ADR 0005](docs/adr/0005-mvp-end-to-end-scope-cuts.md)** — az első end-to-end MVP hatókör-szűkítései (in-process event dispatcher Inngest helyett, fingerprint-only dedup, alias-lookup entitás-egyeztetés, slug-only SEO Agent) — mindegyik később, adapter-cserével bővíthető, nem újratervezés.
 - **[ADR 0006](docs/adr/0006-no-llm-passthrough-mode.md)** — `LLM_PROVIDER=none` (alapértelmezés): determinisztikus `NoLlmClient` adapter fizetős LLM API nélküli üzemhez — a Fact Verification/Hungarian Writer agent kód nem tud a különbségről, csak az adapter cserélődik.
+- **[ADR 0007](docs/adr/0007-migration-on-build.md)** — `apps/web`'s `build` scriptje a `next build` előtt lefuttatja a `db:migrate`-et (`drizzle-kit migrate`), így minden deploy (Vercel, CI, lokális) automatikusan migrálja a sémát a saját `DATABASE_URL`-je ellen — kézi migrációs lépés helyett.
 
 Ha egy hasonlóan nem-nyilvánvaló, tervben nem rögzített döntést hozol, **írj hozzá egy új, sorszámozott ADR-t** a `docs/adr/` alá ugyanebben a formátumban (döntési helyzet / döntés / indoklás / következmény).
 
