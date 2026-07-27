@@ -24,8 +24,16 @@ export const env = createEnv({
     // Wired: packages/db kliens (lib/db.ts).
     DATABASE_URL: z.string().url(),
 
-    // Wired: Fact Verification / Hungarian Writer agentek (packages/llm, lib/llm.ts).
-    ANTHROPIC_API_KEY: z.string().min(1),
+    // LLM_PROVIDER=none (alapértelmezés) esetén a pipeline a determinisztikus
+    // NoLlmClient adaptert használja (packages/llm/src/no-llm-client.ts) —
+    // nincs API-hívás, nincs költség, ANTHROPIC_API_KEY nem szükséges.
+    // LLM_PROVIDER=anthropic esetén ANTHROPIC_API_KEY kötelező — ezt a
+    // feltételes kényszert lib/llm.ts ellenőrzi (createEnv nem támogat
+    // egyszerűen mező-közti feltételes validációt).
+    LLM_PROVIDER: z.enum(["none", "anthropic"]).default("none"),
+
+    // Csak akkor kötelező ténylegesen, ha LLM_PROVIDER=anthropic (lib/llm.ts).
+    ANTHROPIC_API_KEY: z.string().min(1).optional(),
 
     // Wired: /api/internal/cron/dispatch-ingest — Vercel Cron "Authorization: Bearer $CRON_SECRET" konvenció (docs/architecture/04-api-spec.md §4.3, 06-deployment.md §6.5).
     CRON_SECRET: z.string().min(1),

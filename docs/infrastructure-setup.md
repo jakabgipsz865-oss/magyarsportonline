@@ -27,8 +27,35 @@ cp apps/web/.env.example apps/web/.env.local
 | Változó            | Kötelező | Forrás                                                                             |
 | ------------------ | -------- | ----------------------------------------------------------------------------------- |
 | `DATABASE_URL`     | igen     | Neon konzol → Project → Connection Details ("Pooled connection" ajánlott)           |
-| `ANTHROPIC_API_KEY` | igen     | Anthropic Console → API Keys                                                        |
+| `LLM_PROVIDER`     | nem (alapértelmezés: `none`) | `none` vagy `anthropic` — lásd lent                             |
+| `ANTHROPIC_API_KEY` | csak ha `LLM_PROVIDER=anthropic` | Anthropic Console → API Keys                                |
 | `CRON_SECRET`      | igen     | tetszőleges, magad generált titkos érték (pl. `openssl rand -hex 32`)               |
+
+### `LLM_PROVIDER` — fizetős LLM API nélküli üzemmód
+
+Alapértelmezetten (`LLM_PROVIDER=none`, vagy a változó hiánya) a pipeline a
+determinisztikus **`NoLlmClient`** adaptert használja
+(`packages/llm/src/no-llm-client.ts`) — nincs kimenő API-hívás, nincs
+költség, `ANTHROPIC_API_KEY` nem szükséges. Ebben a módban a Fact
+Verification / Hungarian Writer agentek nem generálnak AI-fordítást: az
+eredeti, angol nyelvű RSS-cím és -leírás jelenik meg változatlanul, a Story
+oldalon egyértelmű **"nem AI-fordított tartalom"** jelöléssel (lásd
+`story_read_model.is_ai_generated` és a `/hir/[slug]` oldal figyelmeztetése).
+Minden más — RSS ingest, deduplikáció, Story-létrehozás, Confidence Score,
+Risk Classifier, Publish Gate, Timeline/verziókezelés — ettől függetlenül,
+teljes egészében működik, mert ezek eleve nem használnak LLM-et.
+
+Amikor lesz Anthropic (vagy később OpenAI) API-kereted, a váltás **egyetlen
+env-változó módosítása**, kód nélkül:
+
+```bash
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=<valódi kulcs>
+```
+
+(`apps/web/lib/llm.ts` ekkor a valódi `AnthropicLlmClient`-et adja vissza —
+ha `LLM_PROVIDER=anthropic`, de `ANTHROPIC_API_KEY` hiányzik, az app egy
+egyértelmű hibával áll le boot-kor, nem csendes fallback-kel.)
 
 A `DATABASE_URL`-nek Neon esetén tartalmaznia kell az `sslmode=require`
 paramétert, pl. formátumban:

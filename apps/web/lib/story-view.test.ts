@@ -22,6 +22,7 @@ function row(overrides?: Partial<StoryReadModelRow>): StoryReadModelRow {
     category: null,
     confidenceScore: "0.700",
     isDeveloping: false,
+    isAiGenerated: true,
     publishedAt: new Date("2026-07-27T21:00:00.000Z"),
     lastUpdatedAt: new Date("2026-07-27T21:05:00.000Z"),
     versionHistorySummary: [
@@ -40,6 +41,7 @@ describe("toStorySummaryView", () => {
       lead: "Lead szöveg.",
       confidenceScore: 0.7,
       isDeveloping: false,
+      isAiGenerated: true,
       publishedAt: "2026-07-27T21:00:00.000Z",
       lastUpdatedAt: "2026-07-27T21:05:00.000Z",
       versionCount: 1,
@@ -54,6 +56,11 @@ describe("toStorySummaryView", () => {
   it("passes through a null confidence score", () => {
     const result = toStorySummaryView(row({ confidenceScore: null }));
     expect(result.confidenceScore).toBeNull();
+  });
+
+  it("passes through isAiGenerated=false (no-LLM passthrough content)", () => {
+    const result = toStorySummaryView(row({ isAiGenerated: false }));
+    expect(result.isAiGenerated).toBe(false);
   });
 });
 

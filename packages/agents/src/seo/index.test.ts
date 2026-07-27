@@ -54,6 +54,7 @@ function buildDeps(overrides?: {
         structuredData: null,
         changeSummaryHu: null,
         generatedByModel: "claude-sonnet-5",
+        isAiGenerated: true,
         promptVersion: "hungarian-writer@0.1.0",
         factConsistencyScore: "1.000",
         isPublished: false,

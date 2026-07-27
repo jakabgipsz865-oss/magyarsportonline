@@ -4,7 +4,12 @@ import type {
   StoryVersionRepository,
 } from "@magyarsportonline/db";
 import { createEventEnvelope, type SportsNewsEvent } from "@magyarsportonline/events";
-import { MODEL_TIERS, type LlmClient } from "@magyarsportonline/llm";
+import {
+  MODEL_TIERS,
+  NoLlmClient,
+  NO_LLM_MODEL_LABEL,
+  type LlmClient,
+} from "@magyarsportonline/llm";
 import type { Logger } from "@magyarsportonline/observability";
 import { toWriterFact } from "./facts";
 import { generateStoryVersion, type PreviousVersionContent } from "./generation";
@@ -92,12 +97,18 @@ export async function handleStoryFactsVerified(
         ? (generated.changeSummaryHu ?? FALLBACK_UPDATE_SUMMARY)
         : null;
 
+      // Purely a labeling check — NoLlmClient answers the exact same
+      // completeJson calls above, so nothing upstream of this line branches
+      // on which adapter is in play (see no-llm-client.ts's module comment).
+      const isAiGenerated = !(deps.llm instanceof NoLlmClient);
+
       const version = await deps.storyVersionRepository.createNextVersion(story.id, {
         titleHu: generated.titleHu,
         leadHu: generated.leadHu,
         bodyHu: generated.bodyHu,
         changeSummaryHu,
-        generatedByModel: MODEL_TIERS.writing,
+        generatedByModel: isAiGenerated ? MODEL_TIERS.writing : NO_LLM_MODEL_LABEL,
+        isAiGenerated,
         promptVersion: AGENT_VERSION,
         factConsistencyScore: check.factConsistencyScore,
       });

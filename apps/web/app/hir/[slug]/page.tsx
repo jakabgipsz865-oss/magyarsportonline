@@ -48,6 +48,14 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
         <Link href="/">← Vissza a főoldalra</Link>
       </p>
       <article>
+        {!story.isAiGenerated && (
+          <p role="note">
+            <strong>
+              ⚠ Nem AI-fordított tartalom — az eredeti, angol nyelvű forrásszöveg jelenik meg
+              változatlanul.
+            </strong>
+          </p>
+        )}
         <h1>{story.title}</h1>
         <p>
           <strong>{story.lead}</strong>

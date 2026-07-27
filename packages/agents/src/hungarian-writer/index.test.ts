@@ -1,6 +1,6 @@
 import type { Fact, NewStoryVersionInput, StoryVersion } from "@magyarsportonline/db";
 import { createEventEnvelope } from "@magyarsportonline/events";
-import { FakeLlmClient } from "@magyarsportonline/llm";
+import { FakeLlmClient, NO_LLM_MODEL_LABEL, NoLlmClient } from "@magyarsportonline/llm";
 import { createLogger } from "@magyarsportonline/observability";
 import { describe, expect, it, vi } from "vitest";
 import { handleStoryFactsVerified, type HungarianWriterDeps } from "./index";
@@ -59,6 +59,7 @@ function buildDeps(overrides?: {
             structuredData: null,
             changeSummaryHu: null,
             generatedByModel: "claude-sonnet-5",
+            isAiGenerated: true,
             promptVersion: "hungarian-writer@0.1.0",
             factConsistencyScore: "1.000",
             isPublished: true,
@@ -85,6 +86,7 @@ function buildDeps(overrides?: {
             structuredData: null,
             changeSummaryHu: input.changeSummaryHu,
             generatedByModel: input.generatedByModel,
+            isAiGenerated: input.isAiGenerated,
             promptVersion: input.promptVersion,
             factConsistencyScore: String(input.factConsistencyScore),
             isPublished: false,
@@ -208,6 +210,22 @@ describe("handleStoryFactsVerified", () => {
       titleHu: "Jó cím",
       factConsistencyScore: 0.9,
     });
+  });
+
+  it("labels the version as not-AI-generated when deps.llm is the NoLlmClient adapter", async () => {
+    const deps = buildDeps();
+    deps.llm = new NoLlmClient() as unknown as FakeLlmClient;
+
+    await handleStoryFactsVerified(deps, triggerEvent());
+
+    expect(deps.createNextVersionCalls).toEqual([
+      expect.objectContaining({
+        generatedByModel: NO_LLM_MODEL_LABEL,
+        isAiGenerated: false,
+      }),
+    ]);
+    // no-LLM self-check is always consistent -> exactly one generation attempt, no retry.
+    expect(deps.createNextVersionCalls).toHaveLength(1);
   });
 
   it("throws when the Story cannot be found", async () => {

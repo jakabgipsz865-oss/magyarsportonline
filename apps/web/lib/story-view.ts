@@ -20,6 +20,7 @@ export interface StorySummaryView {
   lead: string;
   confidenceScore: number | null;
   isDeveloping: boolean;
+  isAiGenerated: boolean;
   publishedAt: string;
   lastUpdatedAt: string;
   versionCount: number;
@@ -52,6 +53,7 @@ export function toStorySummaryView(row: StoryReadModelRow): StorySummaryView {
     lead: row.leadHu,
     confidenceScore: row.confidenceScore === null ? null : Number(row.confidenceScore),
     isDeveloping: row.isDeveloping,
+    isAiGenerated: row.isAiGenerated,
     publishedAt: row.publishedAt.toISOString(),
     lastUpdatedAt: row.lastUpdatedAt.toISOString(),
     versionCount: versionHistory.length,

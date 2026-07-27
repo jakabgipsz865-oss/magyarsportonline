@@ -44,7 +44,7 @@ Lásd [`docs/architecture/05-repo-structure.md`](docs/architecture/05-repo-struc
 | `packages/observability` | strukturált logolási határ                                                                              |
 | `packages/agents`        | a 8 AI Agent + a `story_read_model` projector — lásd `packages/agents/src/*`                            |
 
-**MVP állapot:** az end-to-end pipeline (RSS ingest → Story → magyar AI-összefoglaló → tárolás → publikálás → frissítés/confidence-növelés → verziótörténet) minden lépése implementálva és tesztelve; a hatókör-szűkítéseket (Inngest helyett in-process dispatcher, fingerprint-only dedup, slug-only SEO stb.) az [ADR 0005](docs/adr/0005-mvp-end-to-end-scope-cuts.md) dokumentálja. Élő adatbázis/LLM-hitelesítő adat nélkül a kód build/lint/typecheck/teszt-szinten ellenőrzött; valódi végponttól-végpontig futtatás a `DATABASE_URL`/`ANTHROPIC_API_KEY`/`CRON_SECRET` beállítása után lehetséges (lásd lent).
+**MVP állapot:** az end-to-end pipeline (RSS ingest → Story → magyar AI-összefoglaló → tárolás → publikálás → frissítés/confidence-növelés → verziótörténet) minden lépése implementálva és tesztelve; a hatókör-szűkítéseket (Inngest helyett in-process dispatcher, fingerprint-only dedup, slug-only SEO stb.) az [ADR 0005](docs/adr/0005-mvp-end-to-end-scope-cuts.md) dokumentálja. Valódi végponttól-végpontig futtatás a `DATABASE_URL`/`CRON_SECRET` beállítása után, **fizetős LLM API nélkül is** lehetséges: `LLM_PROVIDER=none` (alapértelmezés) esetén a determinisztikus `NoLlmClient` adapter (`packages/llm`) az eredeti RSS-tartalmat adja tovább, egyértelműen "nem AI-fordított" jelöléssel — `ANTHROPIC_API_KEY` csak `LLM_PROVIDER=anthropic` esetén szükséges (lásd [`docs/infrastructure-setup.md`](docs/infrastructure-setup.md)).
 
 ## Fontos kódstílus-döntések (ADR-ek)
 
@@ -55,6 +55,7 @@ Mielőtt "kijavítanál" valamit, ami szokatlannak tűnik, nézd meg a `docs/adr
 - **[ADR 0003](docs/adr/0003-extensionless-relative-imports.md)** — a `packages/shared`, `packages/events`, `packages/db` csomagokban a relatív importok **kiterjesztés nélküliek** (`from "./enums"`, NEM `from "./enums.js"`), mert a `drizzle-kit generate` CJS-alapú betöltője nem tud `.js`-re végződő importot feloldani `.ts` fájlhoz. Ne írd vissza `.js`-re ezekben a csomagokban.
 - **[ADR 0004](docs/adr/0004-phase-0-env-vars-optional.md)** — a `apps/web/lib/env.ts`-ben egyik secret sincs kötelezővé téve Fázis 0-ban, mert még semmi nem használja őket; minden változó a saját roadmap-fázisában válik kötelezővé.
 - **[ADR 0005](docs/adr/0005-mvp-end-to-end-scope-cuts.md)** — az első end-to-end MVP hatókör-szűkítései (in-process event dispatcher Inngest helyett, fingerprint-only dedup, alias-lookup entitás-egyeztetés, slug-only SEO Agent) — mindegyik később, adapter-cserével bővíthető, nem újratervezés.
+- **[ADR 0006](docs/adr/0006-no-llm-passthrough-mode.md)** — `LLM_PROVIDER=none` (alapértelmezés): determinisztikus `NoLlmClient` adapter fizetős LLM API nélküli üzemhez — a Fact Verification/Hungarian Writer agent kód nem tud a különbségről, csak az adapter cserélődik.
 
 Ha egy hasonlóan nem-nyilvánvaló, tervben nem rögzített döntést hozol, **írj hozzá egy új, sorszámozott ADR-t** a `docs/adr/` alá ugyanebben a formátumban (döntési helyzet / döntés / indoklás / következmény).
 

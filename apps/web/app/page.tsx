@@ -32,6 +32,12 @@ export default async function HomePage(): Promise<ReactNode> {
             <li key={story.id}>
               <Link href={`/hir/${story.slug}`}>{story.title}</Link>
               {story.isDeveloping ? " (élő, alakuló sztori)" : null}
+              {!story.isAiGenerated ? (
+                <>
+                  {" "}
+                  <strong>[nem AI-fordított]</strong>
+                </>
+              ) : null}
             </li>
           ))}
         </ul>

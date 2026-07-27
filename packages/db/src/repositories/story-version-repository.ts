@@ -10,6 +10,7 @@ export interface NewStoryVersionInput {
   bodyHu: string;
   changeSummaryHu: string | null;
   generatedByModel: string;
+  isAiGenerated: boolean;
   promptVersion: string;
   factConsistencyScore: number;
 }
@@ -50,6 +51,7 @@ export class StoryVersionRepository {
           bodyHu: input.bodyHu,
           changeSummaryHu: input.changeSummaryHu,
           generatedByModel: input.generatedByModel,
+          isAiGenerated: input.isAiGenerated,
           promptVersion: input.promptVersion,
           factConsistencyScore: input.factConsistencyScore.toFixed(3),
         })

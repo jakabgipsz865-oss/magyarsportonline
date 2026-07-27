@@ -33,6 +33,10 @@ export const storyVersions = pgTable(
     structuredData: jsonb("structured_data"),
     changeSummaryHu: text("change_summary_hu"),
     generatedByModel: text("generated_by_model").notNull(),
+    // false when LLM_PROVIDER=none produced this version (packages/llm's
+    // NoLlmClient passthrough) — surfaced through story_read_model so the
+    // frontend can show an explicit "not yet AI-translated" notice.
+    isAiGenerated: boolean("is_ai_generated").notNull().default(true),
     promptVersion: text("prompt_version").notNull(),
     factConsistencyScore: numeric("fact_consistency_score", {
       precision: 4,

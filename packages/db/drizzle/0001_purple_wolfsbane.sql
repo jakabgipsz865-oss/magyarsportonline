@@ -1,0 +1,2 @@
+ALTER TABLE "story_versions" ADD COLUMN "is_ai_generated" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+ALTER TABLE "story_read_model" ADD COLUMN "is_ai_generated" boolean DEFAULT true NOT NULL;

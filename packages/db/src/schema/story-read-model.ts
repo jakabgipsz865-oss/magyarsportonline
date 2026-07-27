@@ -22,6 +22,10 @@ export const storyReadModel = pgTable("story_read_model", {
   titleHu: text("title_hu").notNull(),
   leadHu: text("lead_hu").notNull(),
   bodyHtml: text("body_html").notNull(),
+  // Projected from story_versions.is_ai_generated (read-model-projector) —
+  // false means LLM_PROVIDER=none produced this content (packages/llm's
+  // NoLlmClient), so the frontend must show an explicit notice.
+  isAiGenerated: boolean("is_ai_generated").notNull().default(true),
   metaDescription: text("meta_description"),
   structuredData: jsonb("structured_data"),
   sourcesSummary: jsonb("sources_summary").notNull().default([]),

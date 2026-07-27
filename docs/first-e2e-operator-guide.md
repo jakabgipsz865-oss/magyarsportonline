@@ -17,8 +17,15 @@ ugyanazokat az értékeket:
 | Változó            | Hol olvassa                                                                 | Hogyan állítsd be                                                                                          |
 | ------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL`      | `apps/web` (Next.js dev/build szerver) **és** a `packages/db` CLI-szkriptjei (`db:migrate`, `db:seed`, `env:doctor`) | Kétszer kell beállítani: (a) `apps/web/.env.local`-ban a Next.js szerverhez, (b) exportálva a shell környezetedben a CLI-parancsokhoz |
-| `ANTHROPIC_API_KEY` | csak `apps/web` (Next.js szerver, a Fact Verification / Hungarian Writer agentek hívják)  | csak `apps/web/.env.local`                                                                                    |
+| `ANTHROPIC_API_KEY` | csak `apps/web`, csak ha `LLM_PROVIDER=anthropic` (Fact Verification / Hungarian Writer agentek)  | csak `apps/web/.env.local`                                                                                    |
 | `CRON_SECRET`       | csak `apps/web` (a cron endpoint hitelesítéséhez)                            | csak `apps/web/.env.local`                                                                                    |
+
+> **Fizetős API-keret nélkül?** Ez az útmutató a valódi Anthropic-hívást
+> feltételezi. Ha nincs API-kereted, hagyd `LLM_PROVIDER=none`-on (ez az
+> alapértelmezés) — a pipeline ekkor is végigfut, valódi Neon adatbázisra
+> írva, csak a magyar AI-összefoglaló helyett az eredeti forrásszöveg
+> jelenik meg, egyértelműen jelölve. Lásd [`docs/infrastructure-setup.md`](infrastructure-setup.md)
+> és [ADR 0006](adr/0006-no-llm-passthrough-mode.md).
 
 Lépések:
 
