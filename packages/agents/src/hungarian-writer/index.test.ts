@@ -228,6 +228,31 @@ describe("handleStoryFactsVerified", () => {
     expect(deps.createNextVersionCalls).toHaveLength(1);
   });
 
+  it("labels the version as not-AI-generated when a wrapping client (e.g. ProviderFallbackLlmClient) served this content from its own fallback branch", async () => {
+    // Regression test: deps.llm is NOT literally a NoLlmClient instance here
+    // (it's a FakeLlmClient, simulating a wrapper like ProviderFallbackLlmClient
+    // or BudgetGuardedLlmClient), so `deps.llm instanceof NoLlmClient` alone
+    // would incorrectly say isAiGenerated=true even though the actual content
+    // came from a fallback (see client.ts's `LlmUsage.isFallback`).
+    const deps = buildDeps();
+    deps.llm.queueJson({
+      data: { title_hu: "Cím", lead_hu: "Lead", body_hu: "Törzs", change_summary_hu: null },
+      inputTokens: 0,
+      outputTokens: 0,
+      isFallback: true,
+    });
+    queueSelfCheck(deps.llm, true, 1);
+
+    await handleStoryFactsVerified(deps, triggerEvent());
+
+    expect(deps.createNextVersionCalls).toEqual([
+      expect.objectContaining({
+        generatedByModel: NO_LLM_MODEL_LABEL,
+        isAiGenerated: false,
+      }),
+    ]);
+  });
+
   it("throws when the Story cannot be found", async () => {
     const deps = buildDeps();
     deps.storyRepository.getById = vi.fn(async () => null);

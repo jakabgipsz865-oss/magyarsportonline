@@ -18,8 +18,32 @@ describe("selfCheckContent", () => {
       bodyHu: "B",
     });
 
-    expect(result).toEqual({ consistent: true, factConsistencyScore: 0.95, issues: [] });
+    expect(result).toEqual({
+      consistent: true,
+      factConsistencyScore: 0.95,
+      issues: [],
+      isFallback: false,
+    });
     expect(llm.jsonRequests[0]?.model).toBe(MODEL_TIERS.selfCheck);
+  });
+
+  it("propagates isFallback when the LLM client served this call from a fallback", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: { consistent: true, fact_consistency_score: 1, issues: [] },
+      inputTokens: 0,
+      outputTokens: 0,
+      isFallback: true,
+    });
+
+    const result = await selfCheckContent(llm, {
+      facts: [],
+      titleHu: "T",
+      leadHu: "L",
+      bodyHu: "B",
+    });
+
+    expect(result.isFallback).toBe(true);
   });
 
   it("surfaces reported issues when inconsistent", async () => {

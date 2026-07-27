@@ -13,6 +13,7 @@ export class LlmUsageRepository {
   constructor(private readonly db: Database) {}
 
   async insert(input: {
+    provider: string;
     model: string;
     inputTokens: number;
     outputTokens: number;
@@ -22,6 +23,7 @@ export class LlmUsageRepository {
     const [row] = await this.db
       .insert(llmUsage)
       .values({
+        provider: input.provider,
         model: input.model,
         inputTokens: input.inputTokens,
         outputTokens: input.outputTokens,

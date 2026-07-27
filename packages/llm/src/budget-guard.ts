@@ -15,6 +15,7 @@ import { estimateCostUsd } from "./pricing";
 export interface LlmUsageStore {
   sumCostUsdSince(since: Date): Promise<number>;
   insert(entry: {
+    provider: string;
     model: string;
     inputTokens: number;
     outputTokens: number;
@@ -57,7 +58,8 @@ export class BudgetGuardedLlmClient implements LlmClient {
 
   async completeText(request: TextCompletionRequest): Promise<TextCompletionResult> {
     if (await this.isOverBudget()) {
-      return this.options.fallback.completeText(request);
+      const fallbackResult = await this.options.fallback.completeText(request);
+      return { ...fallbackResult, isFallback: true };
     }
     const result = await this.options.inner.completeText(request);
     await this.recordUsage(request.model, result.inputTokens, result.outputTokens);
@@ -66,7 +68,8 @@ export class BudgetGuardedLlmClient implements LlmClient {
 
   async completeJson(request: JsonCompletionRequest): Promise<JsonCompletionResult> {
     if (await this.isOverBudget()) {
-      return this.options.fallback.completeJson(request);
+      const fallbackResult = await this.options.fallback.completeJson(request);
+      return { ...fallbackResult, isFallback: true };
     }
     const result = await this.options.inner.completeJson(request);
     await this.recordUsage(request.model, result.inputTokens, result.outputTokens);
@@ -102,7 +105,13 @@ export class BudgetGuardedLlmClient implements LlmClient {
   ): Promise<void> {
     const costUsd = estimateCostUsd(model, inputTokens, outputTokens);
     try {
-      await this.options.usageStore.insert({ model, inputTokens, outputTokens, costUsd });
+      await this.options.usageStore.insert({
+        provider: "anthropic",
+        model,
+        inputTokens,
+        outputTokens,
+        costUsd,
+      });
     } catch (error) {
       // A már kifizetett hívás eredményét nem dobjuk el egy naplózási hiba
       // miatt — de hangosan jelezzük, mert a plafon pontossága múlik rajta.

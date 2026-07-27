@@ -26,14 +26,25 @@ export const env = createEnv({
 
     // LLM_PROVIDER=none (alapértelmezés) esetén a pipeline a determinisztikus
     // NoLlmClient adaptert használja (packages/llm/src/no-llm-client.ts) —
-    // nincs API-hívás, nincs költség, ANTHROPIC_API_KEY nem szükséges.
-    // LLM_PROVIDER=anthropic esetén ANTHROPIC_API_KEY kötelező — ezt a
-    // feltételes kényszert lib/llm.ts ellenőrzi (createEnv nem támogat
-    // egyszerűen mező-közti feltételes validációt).
-    LLM_PROVIDER: z.enum(["none", "anthropic"]).default("none"),
+    // nincs API-hívás, nincs költség, semmilyen API-kulcs nem szükséges.
+    // LLM_PROVIDER=anthropic esetén ANTHROPIC_API_KEY, LLM_PROVIDER=gemini
+    // esetén GEMINI_API_KEY kötelező — ezt a feltételes kényszert lib/llm.ts
+    // ellenőrzi (createEnv nem támogat egyszerűen mező-közti feltételes
+    // validációt).
+    LLM_PROVIDER: z.enum(["none", "anthropic", "gemini"]).default("none"),
 
     // Csak akkor kötelező ténylegesen, ha LLM_PROVIDER=anthropic (lib/llm.ts).
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
+
+    // Csak akkor kötelező ténylegesen, ha LLM_PROVIDER=gemini (lib/llm.ts).
+    // Ingyenes tier — a Google AI Studio-ban generálható API kulcs, nem
+    // igényel fizetős Google Cloud billinget.
+    GEMINI_API_KEY: z.string().min(1).optional(),
+
+    // Ingyenes tierben elérhető, stabil Flash-Lite modell alapértelmezésben
+    // (packages/llm/src/gemini-client.ts) — kód nélkül felülírható, ha
+    // Google időközben megváltoztatja a free-tier kínálatot.
+    GEMINI_MODEL: z.string().min(1).default("gemini-2.0-flash-lite"),
 
     // A futó alkalmazás havi Anthropic-költségplafonja USD-ben — elérésekor
     // a Budget Guard automatikusan No-LLM módra vált (packages/llm/src/budget-guard.ts),

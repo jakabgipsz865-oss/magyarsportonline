@@ -26,8 +26,23 @@ describe("generateStoryVersion", () => {
       leadHu: "A csapat magabiztosan nyert.",
       bodyHu: "Részletek a mérkőzésről.",
       changeSummaryHu: null,
+      isFallback: false,
     });
     expect(llm.jsonRequests[0]?.model).toBe(MODEL_TIERS.writing);
+  });
+
+  it("propagates isFallback when the LLM client served this call from a fallback", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: { title_hu: "T", lead_hu: "L", body_hu: "B", change_summary_hu: null },
+      inputTokens: 0,
+      outputTokens: 0,
+      isFallback: true,
+    });
+
+    const result = await generateStoryVersion(llm, { facts: [], previousVersion: null });
+
+    expect(result.isFallback).toBe(true);
   });
 
   it("includes the previous version in the request when updating", async () => {

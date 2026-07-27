@@ -17,8 +17,13 @@ function makeClient(label: string): LlmClient {
 }
 
 class FakeUsageStore implements LlmUsageStore {
-  entries: Array<{ model: string; inputTokens: number; outputTokens: number; costUsd: number }> =
-    [];
+  entries: Array<{
+    provider: string;
+    model: string;
+    inputTokens: number;
+    outputTokens: number;
+    costUsd: number;
+  }> = [];
   constructor(
     private spentUsd = 0,
     private failSum = false,
@@ -30,6 +35,7 @@ class FakeUsageStore implements LlmUsageStore {
     return Promise.resolve(this.spentUsd);
   }
   insert(entry: {
+    provider: string;
     model: string;
     inputTokens: number;
     outputTokens: number;
@@ -87,6 +93,7 @@ describe("BudgetGuardedLlmClient", () => {
     const result = await makeGuard(store).completeText(textRequest);
     expect(result.text).toBe("inner");
     expect(store.entries).toHaveLength(1);
+    expect(store.entries[0]!.provider).toBe("anthropic");
     expect(store.entries[0]!.model).toBe("claude-sonnet-5");
     expect(store.entries[0]!.costUsd).toBeCloseTo(estimateCostUsd("claude-sonnet-5", 1000, 2000));
   });

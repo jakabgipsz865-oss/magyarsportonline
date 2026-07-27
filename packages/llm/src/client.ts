@@ -8,6 +8,16 @@ export interface LlmMessage {
 export interface LlmUsage {
   inputTokens: number;
   outputTokens: number;
+  /**
+   * true, ha ez a konkrét hívás egy fallback kliens (jellemzően
+   * NoLlmClient) válasza, mert a valódi provider hívása hibázott — a
+   * ProviderFallbackLlmClient és a BudgetGuardedLlmClient állítja be a
+   * saját fallback-águkban. A Hungarian Writer Agent ez alapján dönti el
+   * helyesen az `isAiGenerated`/`generated_by_model` mezőket, mert
+   * `deps.llm instanceof NoLlmClient` önmagában hamis maradna egy
+   * becsomagolt kliens fallback-ága esetén is (lásd hungarian-writer/index.ts).
+   */
+  isFallback?: boolean | undefined;
 }
 
 export interface TextCompletionRequest {
@@ -44,6 +54,21 @@ export interface JsonCompletionResult extends LlmUsage {
 export interface LlmClient {
   completeText(request: TextCompletionRequest): Promise<TextCompletionResult>;
   completeJson(request: JsonCompletionRequest): Promise<JsonCompletionResult>;
+  /**
+   * A ténylegesen válaszoló modell neve, ha az eltér(het) a hívó által a
+   * `request.model` mezőben küldött logikai tier-névtől (pl. a
+   * GeminiLlmClient mindig a saját konfigurált modelljét használja,
+   * függetlenül a MODEL_TIERS Anthropic-specifikus értékeitől — lásd
+   * gemini-client.ts). Hiányában (pl. AnthropicLlmClient) a hívó a
+   * `request.model` értékét tekinti helyesnek. Kizárólag a Hungarian
+   * Writer Agent `StoryVersion.generated_by_model` mezőjének helyes
+   * kitöltéséhez kell (hungarian-writer/index.ts).
+   *
+   * `| undefined` explicit kiírása szükséges `exactOptionalPropertyTypes`
+   * mellett, mert a ProviderFallbackLlmClient a becsomagolt kliens
+   * `modelLabel`-jét adja tovább változtatás nélkül, ami maga is hiányozhat.
+   */
+  readonly modelLabel?: string | undefined;
 }
 
 class RefusalError extends Error {

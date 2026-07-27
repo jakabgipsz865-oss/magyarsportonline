@@ -22,6 +22,13 @@
       "when": 1785169492166,
       "tag": "0002_curious_jetstream",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1785173362287,
+      "tag": "0003_majestic_anita_blake",
+      "breakpoints": true
     }
   ]
 }

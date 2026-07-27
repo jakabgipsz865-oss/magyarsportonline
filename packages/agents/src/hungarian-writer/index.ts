@@ -97,17 +97,32 @@ export async function handleStoryFactsVerified(
         ? (generated.changeSummaryHu ?? FALLBACK_UPDATE_SUMMARY)
         : null;
 
-      // Purely a labeling check — NoLlmClient answers the exact same
-      // completeJson calls above, so nothing upstream of this line branches
-      // on which adapter is in play (see no-llm-client.ts's module comment).
-      const isAiGenerated = !(deps.llm instanceof NoLlmClient);
+      // Labeling check — NoLlmClient answers the exact same completeJson
+      // calls above, so nothing upstream of this line branches on which
+      // adapter is in play (see no-llm-client.ts's module comment). A plain
+      // `instanceof NoLlmClient` check on `deps.llm` is not enough on its
+      // own: a wrapping decorator (BudgetGuardedLlmClient,
+      // ProviderFallbackLlmClient) is never itself a NoLlmClient instance
+      // even when ITS OWN fallback branch served this exact content — so we
+      // also check the per-call `isFallback` flag those wrappers set
+      // (client.ts's `LlmUsage.isFallback`, threaded through generation.ts
+      // and self-check.ts) on the two calls that actually produced this
+      // version's title/lead/body.
+      const isAiGenerated =
+        !(deps.llm instanceof NoLlmClient) && !generated.isFallback && !check.isFallback;
 
+      // `deps.llm.modelLabel` — ha a kliens (pl. GeminiLlmClient) a
+      // ténylegesen hívott modellt jelzi, azt használjuk a DB-rekordban;
+      // ennek hiányában (pl. AnthropicLlmClient) MODEL_TIERS.writing marad
+      // a helyes érték, változatlan viselkedéssel.
       const version = await deps.storyVersionRepository.createNextVersion(story.id, {
         titleHu: generated.titleHu,
         leadHu: generated.leadHu,
         bodyHu: generated.bodyHu,
         changeSummaryHu,
-        generatedByModel: isAiGenerated ? MODEL_TIERS.writing : NO_LLM_MODEL_LABEL,
+        generatedByModel: isAiGenerated
+          ? (deps.llm.modelLabel ?? MODEL_TIERS.writing)
+          : NO_LLM_MODEL_LABEL,
         isAiGenerated,
         promptVersion: AGENT_VERSION,
         factConsistencyScore: check.factConsistencyScore,
