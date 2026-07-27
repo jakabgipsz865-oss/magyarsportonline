@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { createRepositories } from "../../../lib/db";
+import { env } from "../../../lib/env";
 import { toStoryDetailView } from "../../../lib/story-view";
 
 // DB-driven, always-fresh — never statically prerendered at build time.
@@ -27,7 +28,45 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: story.title,
     description: story.metaDescription ?? story.lead,
+    alternates: { canonical: `/hir/${story.slug}` },
+    openGraph: {
+      type: "article",
+      title: story.title,
+      description: story.metaDescription ?? story.lead,
+      url: `/hir/${story.slug}`,
+      publishedTime: story.publishedAt,
+      modifiedTime: story.lastUpdatedAt,
+      locale: "hu_HU",
+    },
   };
+}
+
+/**
+ * schema.org NewsArticle strukturált adat (SEO, docs/architecture/08-roadmap.md
+ * Fázis 8). A `<` escape-elése kötelező: a kimenet <script> tagbe kerül, és a
+ * forrásból/LLM-ből érkező szöveg elvben tartalmazhatna "</script>"-et (XSS).
+ */
+function newsArticleJsonLd(story: NonNullable<Awaited<ReturnType<typeof loadStory>>>): string {
+  return jsonLdStringify({
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    headline: story.title,
+    description: story.metaDescription ?? story.lead,
+    datePublished: story.publishedAt,
+    dateModified: story.lastUpdatedAt,
+    inLanguage: "hu",
+    isAccessibleForFree: true,
+    mainEntityOfPage: `${env.SITE_URL}/hir/${story.slug}`,
+    publisher: {
+      "@type": "Organization",
+      name: "magyarsportonline.hu",
+      url: env.SITE_URL,
+    },
+  });
+}
+
+function jsonLdStringify(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
 /**
@@ -44,6 +83,11 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
 
   return (
     <main>
+      {/* biztonságos: newsArticleJsonLd kimenete JSON.stringify-jal épül, nem nyers string-összefűzéssel */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: newsArticleJsonLd(story) }}
+      />
       <p>
         <Link href="/">← Vissza a főoldalra</Link>
       </p>

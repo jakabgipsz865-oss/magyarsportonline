@@ -10,8 +10,7 @@ import { estimateCostUsd, MODEL_PRICING, UNKNOWN_MODEL_PRICING } from "./pricing
 
 function makeClient(label: string): LlmClient {
   return {
-    completeText: () =>
-      Promise.resolve({ text: label, inputTokens: 1000, outputTokens: 2000 }),
+    completeText: () => Promise.resolve({ text: label, inputTokens: 1000, outputTokens: 2000 }),
     completeJson: () =>
       Promise.resolve({ data: { from: label }, inputTokens: 1000, outputTokens: 2000 }),
   };

@@ -3,7 +3,7 @@ import { FixedWindowRateLimiter, clientKeyFromHeaders } from "./rate-limit";
 
 describe("FixedWindowRateLimiter", () => {
   it("allows requests up to the limit and rejects above it", () => {
-    let now = 0;
+    const now = 0;
     const limiter = new FixedWindowRateLimiter({ windowMs: 1000, maxRequests: 3, now: () => now });
     expect(limiter.allow("a")).toBe(true);
     expect(limiter.allow("a")).toBe(true);
