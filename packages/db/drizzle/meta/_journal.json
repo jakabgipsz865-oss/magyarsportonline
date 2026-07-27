@@ -15,6 +15,13 @@
       "when": 1785162424226,
       "tag": "0001_purple_wolfsbane",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785169492166,
+      "tag": "0002_curious_jetstream",
+      "breakpoints": true
     }
   ]
 }

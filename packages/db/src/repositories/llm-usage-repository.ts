@@ -1,0 +1,47 @@
+import { gte, sql } from "drizzle-orm";
+import type { Database } from "../client";
+import { llmUsage } from "../schema/index";
+
+export type LlmUsageRow = typeof llmUsage.$inferSelect;
+
+/**
+ * Hívás-szintű LLM token-/költségnapló a havi budget-plafonhoz
+ * (packages/llm/src/budget-guard.ts). Bounded-context repository a többi
+ * repositoryval azonos mintára.
+ */
+export class LlmUsageRepository {
+  constructor(private readonly db: Database) {}
+
+  async insert(input: {
+    model: string;
+    inputTokens: number;
+    outputTokens: number;
+    costUsd: number;
+    occurredAt?: Date;
+  }): Promise<LlmUsageRow> {
+    const [row] = await this.db
+      .insert(llmUsage)
+      .values({
+        model: input.model,
+        inputTokens: input.inputTokens,
+        outputTokens: input.outputTokens,
+        // `numeric` oszlop stringet vár — fix 6 tizedes, a séma skálájával egyezően.
+        costUsd: input.costUsd.toFixed(6),
+        ...(input.occurredAt ? { occurredAt: input.occurredAt } : {}),
+      })
+      .returning();
+    if (!row) {
+      throw new Error("LlmUsage insert returned no row");
+    }
+    return row;
+  }
+
+  /** A megadott időpont óta felhalmozott összköltség USD-ben (üres táblára 0). */
+  async sumCostUsdSince(since: Date): Promise<number> {
+    const [row] = await this.db
+      .select({ total: sql<string>`coalesce(sum(${llmUsage.costUsd}), 0)` })
+      .from(llmUsage)
+      .where(gte(llmUsage.occurredAt, since));
+    return row ? Number(row.total) : 0;
+  }
+}
