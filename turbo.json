@@ -3,7 +3,13 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      // Turborepo 2.x strict env mode only forwards env vars listed here to
+      // the task's child process (and includes them in the cache hash) —
+      // without this, apps/web/lib/env.ts's validation fails even when
+      // these are set in the actual shell/CI/Vercel environment, because
+      // `next build` never sees them (docs/architecture/06-deployment.md §6.6).
+      "env": ["DATABASE_URL", "ANTHROPIC_API_KEY", "CRON_SECRET"]
     },
     "lint": {
       "dependsOn": ["^build"]

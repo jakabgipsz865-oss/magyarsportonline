@@ -30,18 +30,20 @@ Egyetlen csomagra szűkítve: `pnpm --filter @magyarsportonline/<csomagnév> <sc
 
 ## Monorepo struktúra
 
-Lásd [`docs/architecture/05-repo-structure.md`](docs/architecture/05-repo-structure.md) a teljes tervezett struktúráért. Fázis 0 után létező csomagok:
+Lásd [`docs/architecture/05-repo-structure.md`](docs/architecture/05-repo-structure.md) a teljes tervezett struktúráért. Jelenleg létező csomagok:
 
-| Csomag                   | Felelősség                                                          |
-| ------------------------ | ------------------------------------------------------------------- |
-| `apps/web`               | Next.js frontend (publikus oldalak, admin UI, API route-ok)         |
-| `packages/config`        | megosztott ESLint/TypeScript/Prettier presetek                      |
-| `packages/shared`        | megosztott típusok, enumok                                          |
-| `packages/events`        | event-contract (Zod sémák)                                          |
-| `packages/db`            | Drizzle adatbázis-séma, kliens, fingerprint/locking segédfüggvények |
-| `packages/observability` | strukturált logolási határ                                          |
+| Csomag                   | Felelősség                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `apps/web`               | Next.js frontend (publikus oldalak, API route-ok, cron-belépési pont) — lásd `apps/web/lib/pipeline.ts` |
+| `packages/config`        | megosztott ESLint/TypeScript/Prettier presetek                                                          |
+| `packages/shared`        | megosztott típusok, enumok                                                                              |
+| `packages/events`        | event-contract (Zod sémák) + in-process dispatcher (ADR 0005 — az Inngest-kötés MVP-helyettesítője)     |
+| `packages/db`            | Drizzle adatbázis-séma, kliens, repository-réteg, fingerprint/locking segédfüggvények, dev seed script  |
+| `packages/llm`           | Anthropic SDK kliens-absztrakció (`LlmClient`, `FakeLlmClient`, modell-tiering)                         |
+| `packages/observability` | strukturált logolási határ                                                                              |
+| `packages/agents`        | a 8 AI Agent + a `story_read_model` projector — lásd `packages/agents/src/*`                            |
 
-**`packages/agents` még nem létezik** — az agent-logika (Source Ingest, Deduplication, stb.) a roadmap Fázis 3+ része, lásd [`docs/architecture/08-roadmap.md`](docs/architecture/08-roadmap.md).
+**MVP állapot:** az end-to-end pipeline (RSS ingest → Story → magyar AI-összefoglaló → tárolás → publikálás → frissítés/confidence-növelés → verziótörténet) minden lépése implementálva és tesztelve; a hatókör-szűkítéseket (Inngest helyett in-process dispatcher, fingerprint-only dedup, slug-only SEO stb.) az [ADR 0005](docs/adr/0005-mvp-end-to-end-scope-cuts.md) dokumentálja. Élő adatbázis/LLM-hitelesítő adat nélkül a kód build/lint/typecheck/teszt-szinten ellenőrzött; valódi végponttól-végpontig futtatás a `DATABASE_URL`/`ANTHROPIC_API_KEY`/`CRON_SECRET` beállítása után lehetséges (lásd lent).
 
 ## Fontos kódstílus-döntések (ADR-ek)
 

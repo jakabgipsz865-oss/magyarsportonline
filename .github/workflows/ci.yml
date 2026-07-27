@@ -44,7 +44,16 @@ jobs:
         run: pnpm test
 
       - name: Build
+        # apps/web/lib/env.ts validates these at module load — `next build`
+        # only needs schema-valid placeholders (no DB/LLM call happens
+        # during a build), never real credentials. Real secrets are Vercel
+        # Environment Variables, set separately per environment
+        # (docs/architecture/06-deployment.md §6.6) — CI never sees them.
         run: pnpm build
+        env:
+          DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+          ANTHROPIC_API_KEY: ci-placeholder-key
+          CRON_SECRET: ci-placeholder-secret
 
       # A docs/architecture/06-deployment.md §6.4 egy további CI-lépést ír elő:
       # "DB migráció dry-run Neon preview branch ellen". Ez Neon-projekt és
