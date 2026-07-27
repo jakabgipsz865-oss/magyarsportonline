@@ -89,16 +89,14 @@ jobs:
           BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
           echo "Target: $BASE"
 
-          # A GitHub Actions secret mezőbe másoláskor gyakran bekerül egy záró
-          # newline/whitespace (pl. .env fájlból vagy terminálból copy-paste
-          # esetén) — a szerver oldali pontos string-egyezés emiatt örökre
-          # 401-et adna. Ideiglenes, csak-log diagnosztika: hossz előtte/utána
-          # (a titok tartalma soha nem kerül logba).
-          CRON_SECRET_RAW_LEN=${#CRON_SECRET}
-          CRON_SECRET="$(printf '%s' "$CRON_SECRET" | tr -d '[:space:]')"
-          echo "== CRON_SECRET whitespace-diagnosztika (csak hossz, a tartalom soha) =="
-          echo "  repo secret hossza whitespace-trim előtt: $CRON_SECRET_RAW_LEN karakter"
-          echo "  repo secret hossza whitespace-trim után:  ${#CRON_SECRET} karakter"
+          echo "== CRON_SECRET (repo secret) — csak hossz + sha256-prefix, a tartalom soha =="
+          echo "  hossz: ${#CRON_SECRET} karakter"
+          echo "  sha256-prefix (első 12 hex): $(printf '%s' "$CRON_SECRET" | sha256sum | cut -c1-12)"
+
+          if [ -n "${ADMIN_SECRET:-}" ]; then
+            echo "== CRON_SECRET (Vercel production) — ugyanez a diagnosztika, a /api/admin/debug-secret-check ideiglenes végponton keresztül =="
+            curl -sS -u "admin:$ADMIN_SECRET" --max-time 30 "$BASE/api/admin/debug-secret-check"; echo
+          fi
 
           if [ -z "${CRON_SECRET:-}" ]; then
             echo "SKIPPED  production validáció — a CRON_SECRET repo-secret nincs beállítva (Settings → Secrets and variables → Actions). PRODUCTION_URL és ADMIN_SECRET repo-secretek is szükségesek a teljes futáshoz."
