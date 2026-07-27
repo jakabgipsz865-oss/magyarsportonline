@@ -194,3 +194,39 @@ sort (`fetchConfig.url` = a fejlesztői RSS feed).
 
 Ez a sorrend egy friss repository-klónozás után, más előfeltétel nélkül
 (a Neon projekt és az Anthropic API kulcs meglétén túl) reprodukálható.
+
+## 6. V1 üzemeltetési kiegészítések
+
+### Admin/review felület
+
+`/admin/review` — HTTP Basic auth, felhasználónév `admin`, jelszó az
+`ADMIN_SECRET` env változó (min. 8 karakter; generálás: `openssl rand -hex 16`).
+Ha az `ADMIN_SECRET` nincs beállítva, a felület 503-mal le van tiltva.
+Vercel-en environment variable-ként állítsd be (Production + Preview).
+
+### Havi LLM költségplafon
+
+`LLM_MONTHLY_BUDGET_USD` (alapértelmezés: 5). Minden valódi Anthropic-hívás
+token- és költségadata az `llm_usage` táblába íródik; a tárgyhónapban
+felhalmozott költség a plafon elérésekor a rendszert automatikusan No-LLM
+módra váltja (az eredeti forrásszöveg jelenik meg, "nem AI-fordított"
+jelöléssel) — a pipeline nem áll le. Aktuális havi költés lekérdezése:
+
+```sql
+select coalesce(sum(cost_usd), 0) as spent_usd
+from llm_usage
+where occurred_at >= date_trunc('month', now());
+```
+
+### Ütemezett automatikus ingest
+
+1. **Vercel cron** (`apps/web/vercel.json`): naponta egyszer hívja a
+   `/api/internal/cron/dispatch-ingest` végpontot GET-tel — a Vercel a
+   `CRON_SECRET` env alapján automatikusan beállítja az
+   `Authorization: Bearer` fejlécet. (Szándékosan napi: a Hobby csomag
+   gyakoribb cront nem enged.)
+2. **GitHub Actions** (`.github/workflows/scheduled-ingest.yml`): 30
+   percenként POST-olja ugyanazt a végpontot. Aktiválásához két repo
+   secret kell (Settings → Secrets and variables → Actions):
+   `PRODUCTION_URL` és `CRON_SECRET`. Amíg nincsenek beállítva, a workflow
+   csendben kilép.

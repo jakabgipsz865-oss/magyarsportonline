@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createRepositories } from "../../../../lib/db";
+import { allowPublicApiRequest } from "../../../../lib/rate-limit";
 import { toStorySummaryView } from "../../../../lib/story-view";
 
 export const dynamic = "force-dynamic";
@@ -11,9 +12,13 @@ const DEFAULT_LIMIT = 20;
  * Publikus API (docs/architecture/04-api-spec.md §4.1) — kizárólag a
  * `story_read_model` CQRS-projekciót olvassa, sosem a write-oldali
  * táblákat közvetlenül (docs/architecture/01-data-model.md §1.5.2).
- * Rate limiting (Upstash Ratelimit) Fázis 13-kiegészítés, MVP-ben nincs.
+ * Alap rate limiting: folyamaton belüli fixed window (lib/rate-limit.ts);
+ * elosztott limiter (Upstash Ratelimit) a Fázis 13-kiegészítés.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  if (!allowPublicApiRequest(request.headers)) {
+    return NextResponse.json({ error: "rate limit exceeded" }, { status: 429 });
+  }
   const url = new URL(request.url);
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
   const limit = Math.min(

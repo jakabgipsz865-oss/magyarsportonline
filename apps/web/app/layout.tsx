@@ -1,13 +1,24 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { env } from "../lib/env";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(env.SITE_URL),
   title: {
-    default: "magyarsportonline.hu",
+    default: "magyarsportonline.hu — AI-alapú sporthírek",
     template: "%s — magyarsportonline.hu",
   },
-  description: "AI-first, Story-alapú sporthír-platform — fejlesztés alatt (Fázis 0).",
+  description:
+    "Story-alapú, AI-támogatott sporthírek: több forrásból összevetett, folyamatosan frissülő hírek verziótörténettel és forrásmegjelöléssel.",
+  alternates: {
+    types: { "application/rss+xml": [{ url: "/rss.xml", title: "magyarsportonline.hu RSS" }] },
+  },
+  openGraph: {
+    type: "website",
+    siteName: "magyarsportonline.hu",
+    locale: "hu_HU",
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }): ReactNode {

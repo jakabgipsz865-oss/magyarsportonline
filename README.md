@@ -9,7 +9,15 @@ AI-first, Story-alapú sporthír-platform — event-driven, AI Agent-vezérelt a
 
 A fejlesztési munka a [`docs/architecture/08-roadmap.md`](docs/architecture/08-roadmap.md)-ban rögzített fázisolt roadmapet követi. Jelenlegi fázis állapotát lásd a roadmap dokumentumban és a nyitott Pull Requestekben.
 
-**MVP állapot:** a teljes end-to-end pipeline (RSS forrás → Story → magyar AI-összefoglaló → tárolás → publikálás → ugyanazon esemény új forrásból történő frissítés → confidence score növelés → verziótörténet/timeline) implementálva van — lásd [`docs/adr/0005-mvp-end-to-end-scope-cuts.md`](docs/adr/0005-mvp-end-to-end-scope-cuts.md) a tudatos hatókör-szűkítésekért (pl. Inngest helyett in-process event dispatcher).
+**V1 állapot:** a teljes end-to-end pipeline (RSS forrás → Story → magyar AI-összefoglaló → tárolás → publikálás → ugyanazon esemény új forrásból történő frissítés → confidence score növelés → verziótörténet/timeline) implementálva van — lásd [`docs/adr/0005-mvp-end-to-end-scope-cuts.md`](docs/adr/0005-mvp-end-to-end-scope-cuts.md) a tudatos hatókör-szűkítésekért (pl. Inngest helyett in-process event dispatcher).
+
+A V1 ezen felül tartalmazza:
+
+- **Admin/review felület** — `/admin/review` (HTTP Basic auth, `ADMIN_SECRET` env): a Publish Gate által visszatartott Story-k kézi jóváhagyása/elutasítása;
+- **LLM költségmérés + havi plafon** — minden Anthropic-hívás token-/költségadata a `llm_usage` táblába kerül; a `LLM_MONTHLY_BUDGET_USD` (alapértelmezés: 5 USD) elérésekor a rendszer automatikusan No-LLM módra vált, nem áll le;
+- **Ütemezett ingest** — Vercel cron (napi, `apps/web/vercel.json`) + 30 percenkénti GitHub Actions workflow (`.github/workflows/scheduled-ingest.yml`, a `PRODUCTION_URL` és `CRON_SECRET` repo-secretek beállítása után él);
+- **SEO** — canonical URL-ek, OpenGraph, schema.org NewsArticle JSON-LD, `sitemap.xml`, `robots.txt`, publikus RSS feed (`/rss.xml`);
+- **Alapvédelem** — per-IP rate limit a publikus API-n, HTML-escape a Story-törzsön, prompt-injection heurisztika (gyanú esetén review queue), retry/backoff az RSS-fetch-en.
 
 ## Monorepo struktúra
 

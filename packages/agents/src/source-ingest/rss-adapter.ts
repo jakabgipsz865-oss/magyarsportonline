@@ -1,5 +1,6 @@
 import Parser from "rss-parser";
 import { z } from "zod";
+import { withRetry } from "../shared/retry";
 import { stripHtml } from "../shared/strip-html";
 import type { NormalizedArticle, SourceAdapter } from "./types";
 
@@ -31,7 +32,10 @@ export class RssSourceAdapter implements SourceAdapter {
 
   async fetch(fetchConfig: unknown): Promise<NormalizedArticle[]> {
     const config = rssFetchConfigSchema.parse(fetchConfig);
-    const feed = await this.parser.parseURL(config.url);
+    // Átmeneti hálózati hibára (feed pillanatnyi elérhetetlensége) rövid
+    // exponenciális backoff-fal újrapróbálkozunk, mielőtt a forrás futását
+    // hibásnak jelölnénk.
+    const feed = await withRetry(() => this.parser.parseURL(config.url));
 
     return feed.items
       .map((item): NormalizedArticle | null => {

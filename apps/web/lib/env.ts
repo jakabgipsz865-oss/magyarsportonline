@@ -35,6 +35,20 @@ export const env = createEnv({
     // Csak akkor kötelező ténylegesen, ha LLM_PROVIDER=anthropic (lib/llm.ts).
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
 
+    // A futó alkalmazás havi Anthropic-költségplafonja USD-ben — elérésekor
+    // a Budget Guard automatikusan No-LLM módra vált (packages/llm/src/budget-guard.ts),
+    // a pipeline nem áll le.
+    LLM_MONTHLY_BUDGET_USD: z.coerce.number().positive().default(5),
+
+    // Admin/review felület (/admin/review) HTTP Basic auth jelszava.
+    // Ha nincs beállítva, az admin felület 503-mal letiltva marad —
+    // titok sosem kerül kódba, csak env-be.
+    ADMIN_SECRET: z.string().min(8).optional(),
+
+    // A publikus site kanonikus origin-je (SEO: canonical URL, sitemap,
+    // JSON-LD, RSS). Vercel-en alapértelmezésként a production URL.
+    SITE_URL: z.string().url().default("https://magyarsportonline-web.vercel.app"),
+
     // Wired: /api/internal/cron/dispatch-ingest — Vercel Cron "Authorization: Bearer $CRON_SECRET" konvenció (docs/architecture/04-api-spec.md §4.3, 06-deployment.md §6.5).
     CRON_SECRET: z.string().min(1),
 

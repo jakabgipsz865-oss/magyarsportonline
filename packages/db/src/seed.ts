@@ -152,8 +152,14 @@ async function main(): Promise<void> {
     throw new Error("DATABASE_URL must be set to run the seed script");
   }
   const db = createDatabaseClient(connectionString);
-  await seed(db);
-  process.stdout.write("Seed completed.\n");
+  try {
+    await seed(db);
+    process.stdout.write("Seed completed.\n");
+  } finally {
+    // postgres.js kapcsolat lezárása nélkül a folyamat sosem lép ki —
+    // a CLI-futtatás (és minden rá épülő automatizálás) örökre lógna.
+    await db.$client.end();
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
