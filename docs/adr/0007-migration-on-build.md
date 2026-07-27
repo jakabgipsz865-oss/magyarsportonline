@@ -22,6 +22,8 @@ A már meglévő `db:migrate` (`drizzle-kit migrate`, `packages/db/drizzle.confi
 
 Ellenőrizve: tiszta (séma nélküli) Postgres ellen a `pnpm build` most már létrehozza mind a 16 táblát és sikeresen buildel; másodszorra futtatva idempotens (`No schema changes` / `already exists, skipping`).
 
+**Turbo cache-kockázat, amit menet közben találtunk és lezártunk:** a `build` Turborepo task alapból cache-eli a sikeres futás kimenetét a bemenetek hash-e alapján. Mivel a `db:migrate` most már a `build` egy valódi, külső mellékhatása (ír egy adatbázisba, ami a task hash-én kívül eső állapot), egy hash-azonos, cache-elt build **lejátszaná a korábbi "sikeres" logot anélkül, hogy ténylegesen újra lefuttatná a migrációt** — pl. ha a Neon adatbázis egy friss branch-re vált, vagy egy Preview environment üres DB-re mutat, de a build inputjai (kód, lockfile) nem változtak. Ezt ténylegesen reprodukáltuk: egy megürített DB ellen egy cache-elt `turbo run build` "sikeresként" futott le úgy, hogy a DB üres maradt. Ezért a `turbo.json`-ban egy `@magyarsportonline/web#build` per-csomag task-felülírás **kikapcsolja a cache-elést** erre a taskra (`"cache": false`) — minden `apps/web` build ténylegesen újra lefut, a többi csomag (`db`, `agents`, `shared`, stb.) build-je változatlanul cache-elhető marad, mert azoknak nincs külső mellékhatásuk.
+
 ## Indoklás
 
 - **A migráció idempotens** — a `drizzle-kit migrate` egy `__drizzle_migrations` táblában tartja nyilván a lefutott migrációkat, minden build biztonságosan újra lefuttathatja.
