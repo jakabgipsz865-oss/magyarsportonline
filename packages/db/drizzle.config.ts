@@ -1,13 +1,18 @@
 import { defineConfig } from "drizzle-kit";
 
+// `db:generate` only diffs the TypeScript schema against previously generated
+// migrations — it does not need a live database connection, so this file
+// must stay loadable without DATABASE_URL set. `db:migrate` (and any other
+// command that does need a live connection, e.g. `studio`) reads
+// `dbCredentials` below — read directly from `process.env`, matching
+// `src/seed.ts`'s standalone-CLI-script pattern (this file isn't part of
+// apps/web, so it can't go through apps/web/lib/env.ts). Never fall back to
+// a placeholder connection string — an unset DATABASE_URL must fail loudly.
+const connectionString = process.env["DATABASE_URL"];
+
 export default defineConfig({
   schema: "./src/schema/index.ts",
   out: "./drizzle",
   dialect: "postgresql",
-  // `db:generate` only diffs the TypeScript schema against previously
-  // generated migrations — it does not need a live database connection.
-  // `dbCredentials` is intentionally left unset here; commands that do need
-  // a live connection (`migrate`, `push`, `studio`) are introduced in a
-  // later phase together with validated env handling
-  // (docs/architecture/08-roadmap.md, Fázis 1+).
+  ...(connectionString ? { dbCredentials: { url: connectionString } } : {}),
 });

@@ -62,6 +62,7 @@ Ha egy hasonlóan nem-nyilvánvaló, tervben nem rögzített döntést hozol, **
 - Soha ne commitolj valódi secretet — `.env.local` git-ignorált (lásd `.gitignore`), csak `.env.example` (üres/placeholder értékekkel) kerül verziókezelésbe.
 - Minden env-változó validálva van a `apps/web/lib/env.ts`-ben (Zod séma) — soha ne olvasd `process.env.X`-et közvetlenül máshol az `apps/web`-ben.
 - Preview/staging/production környezetben a titkok Vercel Environment Variables-ként, környezetenként elkülönítve élnek — lásd [`docs/architecture/06-deployment.md` §6.6](docs/architecture/06-deployment.md#66-titkok-és-környezeti-változók-kezelése).
+- Valódi Neon PostgreSQL adatbázis bekötéséhez (env változók, migráció, seed, első valós end-to-end teszt) lásd [`docs/infrastructure-setup.md`](docs/infrastructure-setup.md).
 
 ## Commit- és branch-konvenció
 
