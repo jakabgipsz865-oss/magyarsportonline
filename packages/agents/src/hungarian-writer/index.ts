@@ -48,7 +48,6 @@ export interface HungarianWriterDeps {
   logger: Logger;
 }
 
-
 type Trigger = Extract<SportsNewsEvent, { type: "story/facts.verified" }>;
 
 /**

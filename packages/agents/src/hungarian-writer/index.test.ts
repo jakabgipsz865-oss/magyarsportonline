@@ -1,6 +1,11 @@
 import type { Fact, NewStoryVersionInput, StoryVersion } from "@magyarsportonline/db";
 import { createEventEnvelope } from "@magyarsportonline/events";
-import { FakeLlmClient, MODEL_TIERS, NO_LLM_MODEL_LABEL, NoLlmClient } from "@magyarsportonline/llm";
+import {
+  FakeLlmClient,
+  MODEL_TIERS,
+  NO_LLM_MODEL_LABEL,
+  NoLlmClient,
+} from "@magyarsportonline/llm";
 import { createLogger } from "@magyarsportonline/observability";
 import { describe, expect, it, vi } from "vitest";
 import { handleStoryFactsVerified, type HungarianWriterDeps } from "./index";
@@ -288,7 +293,9 @@ describe("handleStoryFactsVerified", () => {
     queueGeneration(deps.llm, { title_hu: englishTitle });
     queueSelfCheck(deps.llm, true, 1);
     // The fix-up call (targeted regeneration)
-    queueGeneration(deps.llm, { title_hu: "Anglia nyerte a harmadik helyet egy tíz gólos csatában" });
+    queueGeneration(deps.llm, {
+      title_hu: "Anglia nyerte a harmadik helyet egy tíz gólos csatában",
+    });
     queueSelfCheck(deps.llm, true, 1);
 
     await handleStoryFactsVerified(deps, triggerEvent());
