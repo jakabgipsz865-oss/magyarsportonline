@@ -7,9 +7,17 @@
 # érdemben, ha a PRODUCTION_URL / CRON_SECRET / ADMIN_SECRET repo-secretek be
 # vannak állítva — enélkül SKIPPED üzenettel lép ki. Nem a normál CI/CD
 # útvonal része, kézzel indítható.
+#
+# A `workflow_dispatch` API-n keresztüli indítás a repo tényleges default
+# branch-éhez van kötve (ami jelenleg nem `main` — lásd a korábbi,
+# már törölt cloudflare-live-validation.yml azonos megjegyzését), ezért
+# ideiglenesen egy push-trigger is szerepel erre a fejlesztési branch-re,
+# hogy API-hívás nélkül, egy egyszerű push-csal is indítható legyen.
 name: Quality hardening validation (one-off)
 
 on:
+  push:
+    branches: [claude/magyarsportonline-v1-launch-j26j54]
   workflow_dispatch:
 
 permissions: {}
