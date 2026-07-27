@@ -90,8 +90,17 @@ jobs:
           echo "Target: $BASE"
 
           if [ -n "${ADMIN_SECRET:-}" ]; then
-            echo "== Cloudflare Workers AI diagnosztika — miért esik vissza minden hívás No-LLM módra? =="
-            curl -sS -u "admin:$ADMIN_SECRET" --max-time 30 "$BASE/api/admin/debug-cloudflare-check"; echo
+            echo "== Cloudflare Workers AI diagnosztika — miért esik vissza minden hívás No-LLM módra? (friss deployra várva, max ~3 perc) =="
+            for i in $(seq 1 12); do
+              code=$(curl -sS -o /tmp/cfcheck.json -u "admin:$ADMIN_SECRET" -w '%{http_code}' --max-time 30 "$BASE/api/admin/debug-cloudflare-check" || echo 000)
+              echo "  [$i] HTTP $code"
+              if [ "$code" = "200" ]; then
+                cat /tmp/cfcheck.json; echo
+                break
+              fi
+              echo "  még nem él az új route — várakozás 15s..."
+              sleep 15
+            done
           fi
 
           if [ -z "${CRON_SECRET:-}" ]; then
