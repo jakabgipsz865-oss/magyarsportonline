@@ -16,7 +16,8 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx src/seed.ts"
+    "db:seed": "tsx src/seed.ts",
+    "env:doctor": "tsx src/doctor.ts"
   },
   "dependencies": {
     "@magyarsportonline/shared": "workspace:*",

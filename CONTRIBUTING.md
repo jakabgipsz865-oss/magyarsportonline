@@ -22,6 +22,7 @@ pnpm test            # Vitest minden csomagban/appban
 pnpm build            # build (Next.js / tsc) minden csomagban/appban
 pnpm format:check    # Prettier ellenőrzés
 pnpm format           # Prettier automatikus javítás
+pnpm env:doctor           # Environment Doctor — a dev környezet (DB, env változók, Node/pnpm verzió) ellenőrzése egy paranccsal
 ```
 
 Egyetlen csomagra szűkítve: `pnpm --filter @magyarsportonline/<csomagnév> <script>` (pl. `pnpm --filter @magyarsportonline/db test`).

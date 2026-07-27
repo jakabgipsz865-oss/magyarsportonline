@@ -16,7 +16,8 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "env:doctor": "pnpm --filter @magyarsportonline/db run env:doctor"
   },
   "devDependencies": {
     "@magyarsportonline/config": "workspace:*",

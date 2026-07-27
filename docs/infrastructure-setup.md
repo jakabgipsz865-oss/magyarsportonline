@@ -57,7 +57,32 @@ változókat a Next.js beépített mechanizmusával, validálva
 `apps/web/lib/env.ts`-ben — ott hiányzó/hibás érték esetén az app boot-kor
 hibázik, nem egy véletlen kérés közepén.
 
-## 2. Migráció futtatása
+## 2. Environment Doctor — egyetlen paranccsal ellenőrizhető állapot
+
+Bármikor, a folyamat bármely pontján lefuttatható egy összefoglaló
+ellenőrzés, ami megmondja, mi van kész és mi hiányzik még:
+
+```bash
+pnpm env:doctor
+```
+
+(`packages/db/src/doctor.ts` — nem üzleti funkció, tisztán fejlesztői
+élményt szolgáló diagnosztikai eszköz.) Ellenőrzi:
+
+- Node.js és pnpm verzió (a `.nvmrc` / `packageManager` mezőhöz képest);
+- `DATABASE_URL` / `ANTHROPIC_API_KEY` / `CRON_SECRET` megléte;
+- PostgreSQL kapcsolat és verzió;
+- a `pgvector` extension elérhetősége/telepítettsége;
+- a migrációk állapota (hányat vár a `drizzle/meta/_journal.json`, hány van
+  ténylegesen alkalmazva);
+- a dev seed adatok megléte.
+
+Minden sor `PASS` / `WARNING` / `ERROR` / `SKIPPED` státusszal és — ha nem
+`PASS` — egy pontos "Teendő" javaslattal zárul. Ha minden rendben,
+`✓ Ready for Development` jelenik meg; `ERROR` esetén a parancs `1`-es
+kilépőkóddal áll le, tehát szkriptekben/CI-ban is használható kapuként.
+
+## 3. Migráció futtatása
 
 A séma (`packages/db/src/schema/index.ts`) és a hozzá tartozó SQL migráció
 (`packages/db/drizzle/0000_wise_gertrude_yorkes.sql`) tartalmazza a
@@ -80,7 +105,7 @@ kapcsolati stringet).
 Ha a `DATABASE_URL` nincs beállítva, a parancs hibával leáll — nincs
 csendes fallback vagy placeholder kapcsolat.
 
-## 3. Seedelés
+## 4. Seedelés
 
 ```bash
 pnpm --filter @magyarsportonline/db db:seed
@@ -92,7 +117,7 @@ csapat/verseny entitás-taxonómiát (a determinisztikus alias-lookup
 entitás-egyeztetéshez, ADR 0005), és a "BBC Sport - Football" `Source`
 sort (`fetchConfig.url` = a fejlesztői RSS feed).
 
-## 4. Első valós end-to-end teszt
+## 5. Első valós end-to-end teszt
 
 1. Indítsd el az appot:
 
@@ -134,9 +159,10 @@ sort (`fetchConfig.url` = a fejlesztői RSS feed).
 2. pnpm install
 3. pnpm --filter @magyarsportonline/db db:migrate
 4. pnpm --filter @magyarsportonline/db db:seed
-5. pnpm --filter @magyarsportonline/web dev
-6. curl -X POST http://localhost:3000/api/internal/cron/dispatch-ingest -H "Authorization: Bearer $CRON_SECRET"
-7. curl http://localhost:3000/api/v1/stories   (vagy a főoldal böngészőben)
+5. pnpm env:doctor                                     (ellenőrzés — "Ready for Development"-nek kell lennie)
+6. pnpm --filter @magyarsportonline/web dev
+7. curl -X POST http://localhost:3000/api/internal/cron/dispatch-ingest -H "Authorization: Bearer $CRON_SECRET"
+8. curl http://localhost:3000/api/v1/stories   (vagy a főoldal böngészőben)
 ```
 
 Ez a sorrend egy friss repository-klónozás után, más előfeltétel nélkül
