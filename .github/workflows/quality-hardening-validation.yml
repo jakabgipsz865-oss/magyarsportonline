@@ -1,0 +1,82 @@
+# Egyszeri, kézi validációs workflow a Content Quality & Reliability
+# Hardening sprinthez: lefuttatja az isAiGenerated backfill-t, majd valódi BBC
+# Football RSS cikkeken keresztül ismételten hívja az ingest és a kiterjesztett
+# reprocess-no-llm végpontokat (2 Story/hívás batch-ekben, docs/architecture
+# terhelési korlát), és előtte/utána minőségi riportot készít a
+# /api/admin/quality-report diagnosztikai végponton keresztül. Csak akkor fut
+# érdemben, ha a PRODUCTION_URL / CRON_SECRET / ADMIN_SECRET repo-secretek be
+# vannak állítva — enélkül SKIPPED üzenettel lép ki. Nem a normál CI/CD
+# útvonal része, kézzel indítható.
+name: Quality hardening validation (one-off)
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  validate:
+    name: isAiGenerated backfill + real BBC ingest + quality report
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Run validation
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
+        run: |
+          set -u
+          BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
+          echo "Target: $BASE"
+
+          if [ -z "${CRON_SECRET:-}" ] || [ -z "${ADMIN_SECRET:-}" ]; then
+            echo "SKIPPED - CRON_SECRET and/or ADMIN_SECRET repo secrets are not set (Settings -> Secrets and variables -> Actions)."
+            exit 0
+          fi
+
+          echo "== Waiting for the merged deploy to go live (rss.xml, max ~6 min) =="
+          for i in $(seq 1 24); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$BASE/rss.xml" || echo 000)
+            if [ "$code" = "200" ]; then echo "deployed"; break; fi
+            echo "  waiting... ($code)"; sleep 15
+          done
+
+          echo "== BEFORE snapshot (full-table quality report) =="
+          curl -sS -u "admin:$ADMIN_SECRET" --max-time 30 "$BASE/api/admin/quality-report" | tee /tmp/before.json; echo
+
+          echo "== isAiGenerated backfill (idempotent, one-off) =="
+          code=$(curl -sS -o /tmp/backfill.json -w '%{http_code}' --max-time 60 \
+            -X POST "$BASE/api/internal/backfill-ai-labels" -H "Authorization: Bearer $CRON_SECRET" || echo 000)
+          echo "backfill-ai-labels: HTTP $code"; cat /tmp/backfill.json; echo
+
+          SINCE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          echo "Validation batch cutoff (since): $SINCE"
+
+          echo "== Real BBC Football RSS ingest, 25x (2 new articles/call cap) =="
+          for i in $(seq 1 25); do
+            code=$(curl -sS -o /tmp/ingest.json -w '%{http_code}' --max-time 90 \
+              -X POST "$BASE/api/internal/cron/dispatch-ingest" -H "Authorization: Bearer $CRON_SECRET" || echo 000)
+            echo "  ingest [$i] HTTP $code: $(cat /tmp/ingest.json)"
+          done
+
+          echo "== Reprocess No-LLM / quality-gate-failing backlog, 20x (2 Story/call cap) =="
+          for i in $(seq 1 20); do
+            code=$(curl -sS -o /tmp/reprocess.json -w '%{http_code}' --max-time 90 \
+              -X POST "$BASE/api/internal/reprocess-no-llm" -H "Authorization: Bearer $CRON_SECRET" || echo 000)
+            body=$(cat /tmp/reprocess.json)
+            echo "  reprocess [$i] HTTP $code: $body"
+            if echo "$body" | grep -q '"reprocessedCount":0'; then
+              echo "  no more candidates, stopping reprocess loop early"
+              break
+            fi
+          done
+
+          echo "== AFTER snapshot (full-table quality report) =="
+          curl -sS -u "admin:$ADMIN_SECRET" --max-time 30 "$BASE/api/admin/quality-report" | tee /tmp/after.json; echo
+
+          echo "== Validation-batch-only quality report (since=$SINCE) =="
+          curl -sS -u "admin:$ADMIN_SECRET" --max-time 30 "$BASE/api/admin/quality-report?since=$SINCE" | tee /tmp/since.json; echo
+
+          echo "== Pending review queue sample (first 10, title/lead only) =="
+          curl -sS --max-time 30 "$BASE/api/v1/stories?limit=5" | tee /tmp/stories.json; echo
