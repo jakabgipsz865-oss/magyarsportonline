@@ -4,3 +4,5 @@ export * as storyMerge from "./story-merge/index";
 export * as factVerification from "./fact-verification/index";
 export * as hungarianWriter from "./hungarian-writer/index";
 export * as seo from "./seo/index";
+export * as publishGate from "./publish-gate/index";
+export * as readModelProjector from "./read-model-projector/index";
