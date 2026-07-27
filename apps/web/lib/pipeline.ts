@@ -148,14 +148,6 @@ export function buildDispatcher(repos: Repositories = createRepositories()): InP
 }
 
 /**
- * Entry point for `/api/internal/cron/dispatch-ingest` (docs/architecture/06-deployment.md
- * §6.5): fetches every active Source and runs it all the way through the
- * pipeline — ingest → dedup → merge → fact verification → writing → SEO →
- * publish gate → read-model projection — synchronously, in-process, because
- * `source/article.ingested`'s handler chain-reacts through every
- * `dispatcher.on` registration above before `runSourceIngest` returns.
- */
-/**
  * A real LLM provider call chain (fact verification + writing + self-check,
  * up to 3 sequential network round-trips per article) can take long enough
  * per article that processing an entire RSS backlog in one synchronous HTTP
@@ -165,8 +157,16 @@ export function buildDispatcher(repos: Repositories = createRepositories()): InP
  * ingest request bounded; anything left over is picked up by the next
  * scheduled run (URLs already ingested are never reprocessed either way).
  */
-const DEFAULT_MAX_NEW_ARTICLES_PER_RUN = 8;
+const DEFAULT_MAX_NEW_ARTICLES_PER_RUN = 2;
 
+/**
+ * Entry point for `/api/internal/cron/dispatch-ingest` (docs/architecture/06-deployment.md
+ * §6.5): fetches every active Source and runs it all the way through the
+ * pipeline — ingest → dedup → merge → fact verification → writing → SEO →
+ * publish gate → read-model projection — synchronously, in-process, because
+ * `source/article.ingested`'s handler chain-reacts through every
+ * `dispatcher.on` registration above before `runSourceIngest` returns.
+ */
 export async function runIngestPipeline(): Promise<
   Awaited<ReturnType<typeof sourceIngest.runSourceIngest>>
 > {
