@@ -86,3 +86,39 @@ flowchart LR
 
 - Minden API-kulcs (Anthropic, Meta Graph API, X API, Inngest signing key, DB connection string) **Vercel Environment Variables**-ben, környezetenként (Preview/Staging/Production) elkülönítve.
 - Preview környezetben **külön, korlátozott jogosultságú** API-kulcsok (pl. alacsonyabb LLM-kvóta, teszt social media appok), hogy egy PR-ban futó kód sose tudjon éles közösségi posztot kiküldeni.
+
+---
+
+## 6.7 Deployment-felület izolációja (review-kiegészítés)
+
+A [09-architecture-review.md §3](./09-architecture-review.md#3-single-point-of-failure-spof-leltár) rámutatott, hogy a `/api/inngest` catch-all route és a publikus frontend **ugyanabban a Vercel deploymentben** él — egy hibás agent-kód deploy elméletileg egyszerre veszélyeztetheti a publikus oldal elérhetőségét is. Mivel a monorepo/egy-deployment modell egyébként jelentős fejlesztési sebességet ad (lásd [05-repo-structure.md](./05-repo-structure.md)), **nem javasolt külön szolgáltatásba szétválasztani** ezen a skálán — ehelyett a kockázatot deploy-folyamattal kezeljük:
+- **Kötelező canary/staged rollout**: minden production deploy előbb staging környezetben fut (lásd 6.3), és a production promote csak explicit, manuális jóváhagyással történik (már tervezve, 6.4).
+- **Gyors rollback**: Vercel egy paranccsal visszaállítja az előző working deploymentet — ezt a folyamatot dokumentálni és időnként gyakorolni kell (lásd 6.9, DR-próbák).
+- **Health-check a `/api/inngest` route-on**: minden deploy után automatikus smoke-test ellenőrzi, hogy a route fogad és helyesen dolgoz fel egy szintetikus eseményt, mielőtt a deploy "sikeresnek" minősülne.
+
+## 6.8 Observability stack (review-kiegészítés)
+
+A [09-architecture-review.md §10](./09-architecture-review.md#10-monitoring-tracing-observability-audit--production-követelmények) alapján a Monitoring & Audit Agent önmagában (Postgres `agent_runs` + Slack riasztás) nem elég 24/7 production üzemhez. Kiegészítő rétegek:
+
+| Réteg | Eszköz (javaslat) | Cél |
+|---|---|---|
+| Strukturált logolás | Axiom / Better Stack (vagy Datadog) | minden agent-futás nyers naplója **nem** a Postgres `agent_runs`-ban él (lásd [09-architecture-review.md §6](./09-architecture-review.md#6-gyorsan-növekvő-táblák-particionálás-archiválás)), hanem itt — magas kardinalitású keresés, retention-szabályozás |
+| Elosztott tracing | OpenTelemetry export → Honeycomb / Grafana Tempo / Axiom | egy Story teljes útja mind a 8 agentesen keresztül egyetlen trace-waterfall-ban, a `correlation_id`/`trace_id` mentén ([03-event-flow.md §3.8](./03-event-flow.md#38-tracing-és-observability-review-kiegészítés)) |
+| Metrikák/dashboard | Grafana (vagy a fenti eszközök beépített dashboardja) | ingest lag, pipeline-latencia forrástól publikálásig, auto-publish vs. review arány, LLM-költség/Story, confidence-eloszlás, kontradikció-arány, dedup precízió/recall (mintavételezett), review-queue kora, forrás-egészség, API p95/p99, DB connection pool telítettség, queue backlog |
+| SLO-alapú riasztás | Monitoring & Audit Agent + a fenti dashboard | explicit célértékek, pl.: alacsony kockázatú Story-k 95%-a 5 percen belül publikálódjon; review-queue elem max 4 órán belül megoldódjon; ingest hibaarány < 1% — riasztás **SLO-sértésre**, nem csak nyers hibaarányra |
+| Synthetic monitoring ("kanári forrás") | ütemezett Inngest job | egy szintetikus teszt-forrás rendszeresen (pl. 5 percenként) végigfuttat egy ismert tartalmat a teljes pipeline-on, és méri, hogy elvárt időn belül tényleg megjelenik-e Story formájában — **ez az egyetlen módszer, ami a `dispatch-ingest` cron néma leállását ténylegesen kiszúrja**, mert egy 0-throughput állapot 0 hibát termel |
+| Cost circuit breaker | Monitoring & Audit Agent | napi LLM-költség konfigurált küszöb felett a kill-switch **automatikusan** aktiválódik, nem csak manuálisan indítható (lásd [02-agents.md §2.9](./02-agents.md#29--monitoring--audit-agent)) |
+
+## 6.9 Backup és Disaster Recovery (review-kiegészítés)
+
+A [09-architecture-review.md §11](./09-architecture-review.md#11-backup-és-disaster-recovery) alapján, mert ez teljes egészében hiányzott az eredeti tervből:
+
+- **PITR (Point-in-Time Recovery)** bekapcsolása Neon/Supabase-en, célértékekkel: **RPO ≤ 5 perc, RTO ≤ 1 óra**.
+- **Negyedéves helyreállítási próba**: tényleges visszaállítás tesztkörnyezetbe, nem csak "van backup" feltételezés.
+- **Queue mint másodlagos helyreállítási forrás**: az Inngest durable, korlátozott ideig visszajátszható eseménynaplója lehetővé teszi, hogy egy DB-visszaállítás után a visszaállítási pont utáni eseményeket újrajátsszuk — ezt tudatosan kihasznált tervezési tulajdonságként dokumentáljuk, nem csak mellékhatásként.
+- **Konfiguráció/secrets helyreállítás**: dokumentált folyamat a Vercel env változók, Inngest signing key, API-kulcsok újralétrehozására egy vadonatúj környezetben.
+- **Egyrégiós DB elfogadott kockázat**: magyar közönségű oldalnál multi-region write-primary nem indokolt — tudatos, dokumentált döntés, nem hallgatólagos hiányosság.
+
+## 6.10 24/7 stabilitás — staleness kezelés (review-kiegészítés)
+
+A [09-architecture-review.md §12](./09-architecture-review.md#12-247-stabilitás) alapján: LLM-szolgáltatói kiesésnél a queue natívan visszatartja/újrapróbálja az eseményeket, de ez önmagában nem elég élő, gyorsan változó (`is_developing=true`) Story-knál — ha egy ilyen Story feldolgozása egy küszöbnél (pl. 15 perc) tovább késik, automatikusan `pending_review`-ba kerül publikálás helyett ahelyett, hogy elavult "élő" tartalom jelenne meg frissként. On-call/eszkalációs terv: **P1** (hibás tartalom él, vagy kill-switch aktiválódott) → azonnali riasztás; **P2** (ingest leállt) → 1 órán belüli; **P3** (költség-anomália) → napi összesítő — a felelős szerkesztő (jogi kötelezettség, [feasibility-analysis.md §9](../feasibility-analysis.md)) az elsődleges címzett.

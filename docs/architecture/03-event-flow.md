@@ -153,5 +153,47 @@ sequenceDiagram
 ## 3.6 Konzisztencia és idempotencia garanciák
 
 - **At-least-once delivery** feltételezett (Inngest/Trigger.dev alapértelmezés) → minden agent DB-írása **upsert vagy unique constraint** védett (pl. `story_sources(story_id, raw_article_id)` unique).
-- **Correlation ID** minden eseményen végigfut egy Story életciklusán, ami az `agent_runs` táblában egyetlen lekérdezéssel visszaadja a teljes feldolgozási láncot (debug/audit célra).
-- **Konkurencia-limit Story szinten**: egy adott `story_id`-re csak egy Fact Verification / Writer futás mehet párhuzamosan (Inngest `concurrency: { key: event.data.story_id, limit: 1 }`), hogy két egyidejűleg beérkező frissítés ne írjon egymásra inkonzisztens verziót.
+- **Correlation ID** minden eseményen végigfut egy Story életciklusán, ami az `agent_runs` táblában egyetlen lekérdezéssel visszaadja a teljes feldolgozási láncot (debug/audit célra). Ugyanez a `correlation_id` szolgál **OpenTelemetry trace ID**-ként is (lásd [3.8](#38-tracing-és-observability-review-kiegészítés)), hogy egy Story teljes útja egyetlen trace-waterfall-ban legyen megnézhető.
+- **Konkurencia-limit Story szinten**: egy adott `story_id`-re csak egy Fact Verification / Writer futás mehet párhuzamosan (Inngest `concurrency: { key: event.data.story_id, limit: 1 }`), hogy két egyidejűleg beérkező frissítés ne írjon egymásra inkonzisztens verziót. **Fontos korlát:** ez a védelem csak akkor működik, ha már létezik `story_id` — az ez előtti pillanatra lásd 3.7.
+
+## 3.7 Story-létrehozási race condition — javítás ([09-architecture-review.md §9](./09-architecture-review.md) alapján)
+
+**A hiba, amit a review talált:** a fenti Story-szintű concurrency-limit *nem* védi azt a pillanatot, amikor **még nem létezik** `story_id`. Ha két különböző forrásból *egyszerre* érkezik cikk ugyanarról az eseményről, a Deduplication Agent két párhuzamos futása **egyik sem látja a másik által épp létrehozás alatt álló Story-t** — mindkettő `NEW_STORY`-nak minősítheti magát, és két duplikált Story jöhet létre ugyanarról az eseményről. Ez pont azt az alapelvet sértené, amire a teljes architektúra épül ("egy esemény = egy Story").
+
+**Javítás:**
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant DA1 as Dedup Agent (forrás A)
+    participant DA2 as Dedup Agent (forrás B, ~egyidejű)
+    participant SMA as Story Merge Agent
+    participant DB as PostgreSQL
+
+    DA1->>DA1: fingerprint = hash(category + entity + date_bucket)
+    DA2->>DA2: fingerprint = hash(category + entity + date_bucket)  Note: azonos fingerprint
+    par egyidejű beérkezés
+        DA1->>SMA: story/candidate.identified (NEW_STORY, fingerprint=X)
+        DA2->>SMA: story/candidate.identified (NEW_STORY, fingerprint=X)
+    end
+    SMA->>DB: BEGIN; pg_advisory_xact_lock(hashtext(X))  [forrás A tranzakciója nyeri a lock-ot]
+    DB-->>SMA: lock megszerezve (A)
+    SMA->>DB: SELECT story_id FROM story_fingerprints WHERE fingerprint_hash=X
+    DB-->>SMA: nincs találat
+    SMA->>DB: INSERT stories(...); INSERT story_fingerprints(X, new story_id); COMMIT
+    Note over SMA,DB: forrás B tranzakciója eddig blokkolt a lock-on
+    SMA->>DB: BEGIN; pg_advisory_xact_lock(hashtext(X))  [forrás B most kapja meg]
+    DB-->>SMA: lock megszerezve (B)
+    SMA->>DB: SELECT story_id FROM story_fingerprints WHERE fingerprint_hash=X
+    DB-->>SMA: találat! (A által létrehozott story_id)
+    SMA->>DB: MATCH ágra vált — StorySource link a meglévő story_id-hoz; COMMIT
+```
+
+- A `fingerprint_hash` egy **durva** (nem az embedding-alapú finom hasonlóságra épülő) determinisztikus kulcs: kategória + fő entitás + dátum-bucket — ez a `story_fingerprints` táblában van tárolva ([01-data-model.md §1.5.1](./01-data-model.md#151-story_fingerprints--story-létrehozási-race-condition-elleni-védelem)).
+- A Story Merge Agent a Story-létrehozást **`pg_advisory_xact_lock`**-kal védi, a fingerprint hash-re kulcsolva, egyetlen tranzakción belül végezve a "van már ilyen fingerprintű Story?" ellenőrzést és az insertet — ez szerializálja a versengő létrehozási kísérleteket anélkül, hogy a teljes Dedup/Story Merge pipeline-t globálisan zárolná (a lock csak az azonos fingerprintű eseményekre hat).
+- Az embedding-alapú finom dedup (3.2-ben leírt `MATCH`/`AMBIGUOUS` logika) ettől függetlenül, a lock feloldása után továbbra is fut a nem-egyértelmű esetekre — a fingerprint-lock kizárólag a **race window**-t zárja le, nem helyettesíti a szemantikai dedup-ot.
+- **Verziószám-race hasonló javítása**: a `StoryVersion.version_number` nem alkalmazás-oldali `max+1` számítással készül, hanem tranzakción belüli `SELECT ... FOR UPDATE` a Story sorra, vagy Story-nkénti DB-szekvencia — így egyidejű frissítéseknél sem ütközhet vagy maradhat ki verziószám.
+
+## 3.8 Tracing és observability (review-kiegészítés)
+
+A [09-architecture-review.md §10](./09-architecture-review.md) alapján minden esemény payload-ja kiegészül egy `trace_id` mezővel (gyakorlatban azonos a `correlation_id`-vel), amit minden agent továbbad az LLM-hívásokhoz és DB-műveletekhez rendelt OpenTelemetry span-eknek. A nyers, per-agent-futás naplózás **nem** az `agent_runs` Postgres táblába megy elsődlegesen, hanem egy dedikált log/observability rendszerbe (lásd [06-deployment.md](./06-deployment.md)) — az `agent_runs` tábla csak egy vékony, auditra elégséges összegzést tart meg. Ennek indoklása: [09-architecture-review.md §6](./09-architecture-review.md#6-gyorsan-növekvő-táblák-particionálás-archiválás).

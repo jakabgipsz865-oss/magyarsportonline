@@ -230,9 +230,61 @@ confidence_score =
 
 A `confidence_score` **közvetlenül vezérli a Publish Gate döntést** (lásd [02-agents.md](./02-agents.md#publish-gate)).
 
-## 1.5 Verziókövetés és frissítési előzmény
+## 1.5 Kiegészítések a 09-architecture-review.md alapján
+
+> A következő két alfejezet a [09-architecture-review.md](./09-architecture-review.md) kritikai review nyomán került be a tervbe — nem az eredeti tervezés része volt, hanem a review talált rá kritikus rést.
+
+### 1.5.1 `story_fingerprints` — Story-létrehozási race condition elleni védelem
+
+A review §9-ben azonosított hiba: ha két forrás *egyszerre* ír ugyanarról az eseményről, a Dedup Agent két párhuzamos futása mindkettőt `NEW_STORY`-nak minősítheti, mert egyik sem látja a másik által épp létrehozás alatt álló Story-t → duplikált Story jönne létre.
+
+```
+STORY_FINGERPRINT {
+    text fingerprint_hash PK   "hashtext(category + primary_entity_id + date_bucket)"
+    uuid story_id FK
+    timestamptz created_at
+}
+```
+
+- A Dedup Agent minden `RawArticle`-re **determinisztikus fingerprint hash**-t számol (durva egyezés: kategória + fő entitás + dátum-bucket), *még az embedding-keresés előtt*.
+- A Story Merge Agent a Story-létrehozást **Postgres advisory lock**-kal védi, a fingerprint hash-re kulcsolva (`pg_advisory_xact_lock(hashtext(fingerprint))`) egy tranzakción belül: a lock alatt fut le az "van már ilyen fingerprintű Story?" ellenőrzés + insert. Két egyidejű, azonos fingerprintű kérés így szerializálódik — a második a lock feloldása után már `MATCH`-ként csatlakozik az elsőhöz `NEW_STORY` helyett.
+- A `StoryVersion.version_number` **nem** alkalmazás-oldali `max+1` számítással készül, hanem tranzakción belüli `SELECT ... FOR UPDATE` + számítással vagy Story-nkénti DB-szekvenciával — így egyidejű frissítéseknél sem ütközhet vagy maradhat ki verziószám.
+
+### 1.5.2 `story_read_model` — CQRS olvasási projekció
+
+A review §5-ben javasolt "CQRS-lite" minta: a publikus frontend **nem** a normalizált write-oldali táblákat (`stories`, `story_versions`, `story_sources`, stb.) olvassa közvetlenül, hanem egy denormalizált projekciót, amit egy könnyű, `story/published`/`story/updated.published` eseményekre feliratkozó **projector** (nem üzleti agent, tisztán infrastrukturális komponens) tart karban.
+
+```
+STORY_READ_MODEL {
+    uuid story_id PK
+    text slug UK
+    text title_hu
+    text lead_hu
+    text body_html
+    text meta_description
+    jsonb structured_data
+    jsonb sources_summary      "előre join-olt forráslista"
+    jsonb tags
+    jsonb category
+    numeric confidence_score
+    boolean is_developing
+    timestamptz published_at
+    timestamptz last_updated_at
+    jsonb version_history_summary
+}
+```
+
+- A `/api/v1/*` végpontok kizárólag ezt olvassák — a publikus olvasási forgalom így **teljesen leválik** az agentek write-terheléséről, és külön skálázható (saját olvasási replika vagy edge cache mögött).
+- Az admin/review UI továbbra is a normalizált write-oldali táblákat olvassa (ott a friss, nem-denormalizált állapot kell a döntéshez).
+- Az adatbázis-technológia **nem** változik (ugyanaz a Postgres), csak a séma egészül ki egy második, olvasás-optimalizált nézettel — ez nem igényel külön infrastruktúrát induláskor, csak fázisoltan (lásd [07-scalability.md](./07-scalability.md)).
+
+## 1.6 Verziókövetés és frissítési előzmény
 
 - Minden `StoryVersion` **immutábilis** — sosem módosul utólag, csak új verzió jön létre.
 - A `Story.current_version_id` mindig a legutolsó **publikált** verzióra mutat (nem feltétlenül a legutolsó legenerált verzióra, ha az épp review-ban van).
 - A publikus frontend a Story oldalán megjeleníti: "Frissítve: 2026.07.27 14:32 — *mit változott*" szekciót, ami a `StoryVersion.change_summary_hu` mezőből épül fel (ezt a Hungarian Writer Agent generálja minden frissítésnél: "mi az, ami új ehhez a korábbi verzióhoz képest").
 - Az URL/`slug` **soha nem változik** verziófrissítéskor — ez SEO- és linkstabilitási követelmény.
+
+## 1.7 Táblák növekedése és archiválás (review-megjegyzés)
+
+A [09-architecture-review.md §6](./09-architecture-review.md#6-gyorsan-növekvő-táblák-particionálás-archiválás) alapján: az `agent_runs` tábla **nem szolgál elsődleges observability-tárolóként** — a nyers, per-agent-futás naplózás egy külön log/observability rendszerbe kerül (lásd [06-deployment.md](./06-deployment.md)), a Postgres `agent_runs` tábla csak egy vékony, mintavételezett/aggregált nézetet tart meg, amire az Admin UI-nak és az auditnak ténylegesen szüksége van (pl. Story-nkénti utolsó agent-futás státusza). A `raw_articles` és `facts` táblák havi particionáltak, és lezárt Story-khoz tartozó, régebbi tartalmuk hideg tárolóba (Blob/S3) archiválható — részletek: [07-scalability.md](./07-scalability.md). A `story_versions` tábla **soha nem archiválható/törölhető** — ez maga a publikált termék, csak particionálva a lekérdezési teljesítmény miatt.

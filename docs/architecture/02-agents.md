@@ -78,6 +78,14 @@ Agent(event: TypedEvent, ctx: { db, llm, logger }) → { writes: DBWrite[], emit
 | **Kimenet (esemény)** | `story.facts.verified { story_id, confidence_score, risk_level, has_contradiction }` |
 | **Kritikus szabály** | A Hungarian Writer Agent **soha nem** kapja meg a nyers forrásszöveget — csak a strukturált `Fact` készletet. Ez a fő védelem hallucináció és véletlen szó szerinti átvétel ellen (lásd [feasibility-analysis.md §3](../feasibility-analysis.md)) |
 
+> **Review-kiegészítés (2026-07-27, [09-architecture-review.md §7, §8](./09-architecture-review.md)):** az alábbi három szabály a kritikai review nyomán került be, mert az eredeti tervben ezek nélkül a Fact Verification Agent lineárisan skálázódó LLM-költséget és kezeletlen prompt injection kockázatot hordozott volna 10 000 Story/nap skálán.
+
+**Extrakció-limitálás (LLM-költségkorlátozás).** Teljes LLM-extrakció **csak az első 3-5, egymástól független, legmegbízhatóbb (`reliability_tier`) forrásra** fut Story-nként. Az ezt követő, ugyanahhoz az eseményhez kapcsolódó további `RawArticle`-ök alapesetben csak egy olcsó, **nem-LLM** fingerprint-egyezés alapján növelik a `corroboration_count`-ot. Ha a gyors (nem-LLM) diff tartalmi eltérést jelez a már ismert tényekhez képest, az adott forrásra mégis lefut a teljes extrakció (mert az valódi `new_info`, nem puszta megerősítés). Ez akadályozza meg, hogy egy népszerű eseménynél (pl. 50+ szindikált forrás egy BL-döntőről) a rendszer feleslegesen 50-szörös LLM-extrakciós költséget termeljen indokolatlan pontossági nyereségért.
+
+**Prompt injection védelem.** A begyűjtött forrásszöveg **kizárólag adatként**, sosem utasításként kerül az LLM-be — explicit elhatárolt blokkban, rendszer-szintű instrukcióval, hogy a blokkon belüli szöveg semmilyen, a promptot módosító utasítást nem tartalmazhat érvényesen. A risk-osztályozó (lásd lent) kap egy **injekció-gyanú jelzőt**: ha a forrásszövegben szokatlan, utasítás-jellegű mintázat észlelhető (pl. "ignore previous instructions", rejtett formázás, meta-szintű felszólítás a modell felé), a Story automatikusan `risk_level=high`-ra kerül, függetlenül minden más tényezőtől.
+
+**Kemény szabály érzékeny kategóriákra.** Sérülés/haláleset/jogi ügy/doppingvád kategóriában **egyetlen forrás sosem elég automatikus publikáláshoz**, függetlenül a `confidence_score` értékétől — ez nem score-alapú, hanem explicit, felülírhatatlan szabály a Publish Gate-ben (lásd [§2.7](#publish-gate)), mert egy rosszindulatú vagy téves egyetlen forrás piacbefolyásoló vagy hírnévrontó hamis hírt okozhatna.
+
 ---
 
 ## 2.5 Hungarian Writer Agent
@@ -93,6 +101,8 @@ Agent(event: TypedEvent, ctx: { db, llm, logger }) → { writes: DBWrite[], emit
 | **Kimenet (DB)** | Új `StoryVersion` (`version_number+1`, `fact_consistency_score`) |
 | **Kimenet (esemény)** | `story.content.drafted { story_id, story_version_id, fact_consistency_score }` |
 | **Modellválasztás** | Extrakció (2.4) és risk-előszűrés: gyors/olcsó modell; végső magyar szövegezés: erősebb modell (stílus, olvashatóság, szerkesztői minőség) — költségoptimalizált modell-tiering, lásd [07-scalability.md](./07-scalability.md) |
+
+> **Review-kiegészítés ([09-architecture-review.md §7](./09-architecture-review.md)):** `is_developing=true` (élő, gyorsan fejlődő) Story-knál a Fact Verification → Writer lánc **nem** fut le minden egyes beérkező `new_info` eseményre külön-külön — élő meccsnél percek alatt több frissítés is jöhetne, ami túl gyakori, "villódzó" újraírást és felesleges LLM-költséget okozna. Ehelyett egy **60-120 másodperces összegyűjtési ablak** (debounce) alkalmazandó: az ablakon belül érkező `new_info` események összegyűlnek, és a Writer csak az ablak lezárultával, az összesített változásokra fut egyszer. Ez egyszerre csökkenti a költséget és javítja a végfelhasználói szöveg minőségét.
 
 ---
 
@@ -117,7 +127,7 @@ Agent(event: TypedEvent, ctx: { db, llm, logger }) → { writes: DBWrite[], emit
 | | |
 |---|---|
 | **Trigger** | `story.seo.ready` |
-| **Szabály** | `risk_level=low` **és** `confidence_score ≥ 0.65` **és** `has_contradiction=false` → **auto-publish** (`story.publish.approved`); minden más eset → `review_queue` (`story.publish.review_required`) |
+| **Szabály** | `risk_level=low` **és** `confidence_score ≥ 0.65` **és** `has_contradiction=false` **és** *(nincs érzékeny kategória + egyetlen forrás kombináció, lásd [§2.4 kemény szabály](#24--fact-verification-agent))* → **auto-publish** (`story.publish.approved`); minden más eset → `review_queue` (`story.publish.review_required`) |
 | **Kimenet (DB)** | `Story.status='published'` + `StoryVersion.is_published=true`, vagy `ReviewQueueItem` létrehozása (`status='pending'`) |
 | **Kimenet (esemény)** | `story.published { story_id, story_version_id }` **vagy** `story.review.requested { story_id, reason }` |
 | **Admin jóváhagyás** | Az Admin Review UI-ból (`04-api-spec.md`) történő jóváhagyás ugyanazt a `story.published` eseményt váltja ki, `reviewed_by` mezővel |
@@ -138,6 +148,7 @@ Agent(event: TypedEvent, ctx: { db, llm, logger }) → { writes: DBWrite[], emit
 | **Kimenet (esemény)** | `social.posted { story_id, platform, external_post_id }` |
 | **Retrakció kezelése** | Ha egy `Story` állapota `retracted`-re vált, ez az agent (retrakciós eseményre feliratkozva) megkísérli törölni/szerkeszteni a korábbi posztokat, ahol a platform API ezt engedi, és minden esetben logolja, ha nem sikerült (Monitoring riasztás — "retrakció közösségi médiában nem teljes") |
 | **Rate limit kezelés** | Platformonkénti queue + throttling, API-tier korlátok figyelembevételével (lásd [feasibility-analysis.md §8](../feasibility-analysis.md)) |
+| **Idempotencia (review-kiegészítés, [09-architecture-review.md §9](./09-architecture-review.md#9-race-condition-locking-idempotencia))** | Mivel a Facebook/X API hívás önmagában nem idempotens, a `SocialPost` sor `status='posting'` állapotban, `UNIQUE(story_version_id, platform)` constraint-tel **előbb jön létre**, mint hogy a külső API-hívás megtörténne — így egy Inngest-retry a hívás előtt ellenőrzi, hogy nem történt-e már (részleges) posztolás, elkerülve a duplikált közösségi posztot |
 
 ---
 
@@ -152,6 +163,12 @@ Agent(event: TypedEvent, ctx: { db, llm, logger }) → { writes: DBWrite[], emit
 | **Kimenet** | Riasztások, dashboard-adat (Admin UI-ban megjelenítve), napi jelentés |
 | **Kill-switch** | Az agent felelős a globális "vészleállító" flag figyeléséért is — ha `system_config.kill_switch=true`, egyetlen agent sem dolgoz fel új eseményt (csak a queue-ban gyűlnek), amíg emberi feloldás nem történik |
 | **Nem publikál, nem generál tartalmat** | Ez az egyetlen agent, aminek **nincs** írási joga a `Story`/`StoryVersion` táblákra — tisztán megfigyelő és riasztó szerepkör, hogy a megfigyelés sose keveredhessen a tartalom-előállítással |
+
+> **Review-kiegészítés ([09-architecture-review.md §3, §8](./09-architecture-review.md)):** a kritikai review két új felelősséget azonosított, amik nélkül a Publish Gate hibája (pl. hibás risk/confidence-számítás) tömegesen engedhetne ki hibás tartalmat, mielőtt bárki észrevenné, illetve egy hibás retry-ciklus elszabaduló LLM-költséget okozhatna.
+
+**Post-publish sampling QA.** Az auto-publikált Story-k egy véletlenszerűen mintavételezett hányada (pl. napi Story-mennyiségtől függő %, alacsonyabb volumennél magasabb mintaarány) egy **aszinkron, nem blokkoló** másodlagos LLM-ellenőrzésen esik át, ami a publikált szöveget visszaveti a `Fact`-készletre és a Publish Gate döntési logikájára — ha rendszerszintű eltérést (pl. a risk-osztályozó szisztematikusan alulbecsül egy kategóriát) talál, azonnali riasztás megy, és a Publish Gate küszöbei ideiglenesen szigoríthatók (`FORCE_REVIEW_MODE` kategóriaszinten). Ez a védelem pótolja azt, hogy emberi reviewer fizikailag nem tudja átnézni a teljes auto-publikált mennyiséget 10 000 Story/nap skálán.
+
+**Automatikus cost circuit breaker.** A napi összesített LLM-költség (`agent_runs`/observability-log alapján számolva) egy konfigurált küszöb felett **automatikusan** aktiválja a kill-switch-et — ez nem csak manuálisan indítható vészleállítás, hanem a Monitoring & Audit Agent saját felelőssége, védelemként egy hibás retry-ciklus vagy rosszindulatú, gyorsan változó forrás által okozott elszabaduló költség ellen.
 
 ---
 

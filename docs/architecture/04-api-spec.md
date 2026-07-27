@@ -75,6 +75,10 @@ SEO és RSS-disztribúció.
 
 **Cache-stratégia:** minden `GET /api/v1/*` végpont Vercel ISR/Edge Cache mögött, `story/published` eseményre on-demand revalidate hívással (lásd [06-deployment.md](./06-deployment.md)).
 
+**Adatforrás (review-kiegészítés, [09-architecture-review.md §5](./09-architecture-review.md#5-cqrs-és-event-sourcing-alkalmazhatósága)):** a `/api/v1/*` végpontok kizárólag a `story_read_model` CQRS-projekciót olvassák ([01-data-model.md §1.5.2](./01-data-model.md#152-story_read_model--cqrs-olvasási-projekció)), **nem** a normalizált write-oldali táblákat közvetlenül — ez választja le a publikus olvasási forgalmat az agentek write-terheléséről.
+
+**Rate limiting (review-kiegészítés, [09-architecture-review.md §8](./09-architecture-review.md#8-biztonsági-kockázatok)):** minden `/api/v1/*` végpont Vercel Edge Middleware + Upstash Ratelimit mögött fut (IP-alapú, pl. 100 kérés/perc/IP a listázó végpontokra) — ez az eredeti tervből hiányzott, és scraping/DoS elleni alapvédelem nélkül a publikus API könnyen visszaélhető lett volna.
+
 ---
 
 ## 4.2 Admin API — `/api/admin` *(session-auth, NextAuth)*
@@ -140,5 +144,5 @@ Vercel Cron hívja forrásonként (vagy egy gyűjtő cron, ami az aktív forrás
 | Réteg | Auth | Írás/olvasás |
 |---|---|---|
 | `/api/v1/*` | nincs (publikus) | csak olvasás |
-| `/api/admin/*` | NextAuth session + role=`editor`/`admin` | olvasás + korlátozott írás (review-döntések) |
+| `/api/admin/*` | NextAuth session + role=`editor`/`admin` + **kötelező MFA** (review-kiegészítés, [09-architecture-review.md §8](./09-architecture-review.md#8-biztonsági-kockázatok)) | olvasás + korlátozott írás (review-döntések) |
 | `/api/internal/*`, `/api/inngest` | service token / Inngest signing key | agent-írások, nem emberi hozzáférés |

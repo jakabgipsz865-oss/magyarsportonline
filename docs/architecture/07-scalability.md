@@ -50,7 +50,33 @@ A legnagyobb költségtényező skálázáskor az LLM-hívások száma. Stratég
 - **Dead-letter monitorozás**: nagy skálán elkerülhetetlen, hogy időnként egy-egy esemény véglegesen elbukjon (pl. tartósan elérhetetlen forrás) — ezeket a Monitoring Agent gyűjti, nem vesznek el nyomtalanul.
 - **Batch-elhető lépések**: ha a volumen indokolja, a dedup embedding-generálás és a risk-előszűrés batch API-hívásokkal (ha az LLM-szolgáltató kínál batch endpointot) tovább csökkenthető költséggel/late­ncy trade-off mellett — ez a 100+ forrásos fázisban érdemes bevezetni, nem induláskor.
 
-## 7.6 Mikor kell architektúrát váltani (nem csak paramétert hangolni)
+## 7.6 Story/nap-terhelés mint külön dimenzió (review-kiegészítés)
+
+A [09-architecture-review.md §1](./09-architecture-review.md#1-skálázhatóság-100--10-000-storynap) rámutatott, hogy a fenti forrásszám-alapú fázisolás **nem egyenértékű** a Story/nap-terheléssel — sportesemények miatt a terhelés erősen tüskés (egy nagy torna napja 50-100×-os csúcsot hozhat pár perces ablakban). 10 000 Story/nap skálán a következő konkrét beavatkozások szükségesek, amik az eredeti tervből hiányoztak:
+
+**Dedup ANN-keresés előszűrése.** A globális 72 órás embedding-ablak nagy Story/nap-terhelésnél százezres `RawArticle`-halmazzá nő, ami lassítja és pontatlanabbá teszi a vektorkeresést (más sportágak/események zaja). **Javítás:** a vektorkeresés előtt kötelező **metaadat-alapú előszűrés** (kategória + fő entitás egyezés), és csak az így leszűkített halmazon fut a drága ANN-keresés — ez nagyságrendekkel csökkenti a keresési teret és javítja a pontosságot.
+
+**Extrakció-limitálás (a legnagyobb LLM-költségtényező javítása).** Lásd részletesen [02-agents.md §2.4](./02-agents.md#24--fact-verification-agent): teljes LLM-extrakció csak Story-nkénti első 3-5 független forrásra fut, a többi csak olcsó fingerprint-alapú megerősítést ad. Ez a **legnagyobb egyedi LLM-költségcsökkentő beavatkozás**, mert wire-service szindikációnál (egy esemény, 50+ forrás) az eredeti terv lineárisan skálázódó, indokolatlan költséget termelt volna.
+
+**Debounce élő Story-knál.** Lásd [02-agents.md §2.5](./02-agents.md#25--hungarian-writer-agent): `is_developing=true` Story-knál 60-120 mp-es összegyűjtési ablak a Writer-újraírás előtt, hogy percenkénti mikro-frissítések ne váltsanak ki külön-külön LLM-hívást.
+
+**Prompt caching.** A promptok statikus (rendszerutasítás, sémaleírás) és dinamikus (aktuális `Fact`-adatok) részét explicit szét kell választani a prompt-sablonokban ([05-repo-structure.md](./05-repo-structure.md) `prompts/` konvenció), a statikus részt LLM-szolgáltatói prompt-gyorsítótárazással (pl. Anthropic prompt caching) ellátva — nagy, ismétlődő system-prompt mellett ez jelentős, közvetlen költségcsökkentés minden agent LLM-hívásánál, extra architekturális komplexitás nélkül.
+
+**CQRS read-model bevezetése.** Lásd [01-data-model.md §1.5.2](./01-data-model.md#152-story_read_model--cqrs-olvasási-projekció): a publikus olvasási forgalom egy denormalizált `story_read_model` projekcióból szolgál ki, leválasztva az agentek write-terheléséről — nagy Story/nap-terhelésnél ez akadályozza meg, hogy a sok olvasó (Story-nkénti oldalletöltés) versenyezzen az írási kapacitásért ugyanazon a táblákon.
+
+## 7.7 Konkrét archiválási szabályok táblánként (review-kiegészítés)
+
+A [09-architecture-review.md §6](./09-architecture-review.md#6-gyorsan-növekvő-táblák-particionálás-archiválás) alapján, kiegészítve a [01-data-model.md §1.7](./01-data-model.md#17-táblák-növekedése-és-archiválás-review-megjegyzés) rövid összefoglalóját:
+
+| Tábla | Particionálás | Retention/archiválás | Indoklás |
+|---|---|---|---|
+| `agent_runs` | havi (a megmaradó vékony összegzésre) | **nem ez az elsődleges observability-tároló** — a nyers naplózás külön log-rendszerbe kerül ([06-deployment.md §6.8](./06-deployment.md#68-observability-stack-review-kiegészítés)) | 10 000 Story/nap × ~9 agent-lépés milliós sor/nap lenne, ami megölné az OLTP write-teljesítményt |
+| `raw_articles` | havi | 12 hónap után hideg tárolóba (Blob/S3, tömörített JSON), csak metaadat+embedding-hivatkozás marad hot állapotban | a dedup-hoz csak a friss (72h) embedding kell aktívan kereshető állapotban |
+| `facts` | havi | lezárt (`is_developing=false`, nincs frissítés N napja) Story-k `Fact`-jei archiválhatók | a végleges tudás úgyis a `StoryVersion.body_hu`/`structured_data`-ban van lefagyasztva |
+| `story_versions` | havi | **nincs retention/törlés** — ez maga a publikált termék | örökre megőrzendő, csak a lekérdezési teljesítmény miatt particionált |
+| `story_read_model` | nincs szükség (kis, denormalizált, mindig friss) | nincs | tisztán vetített állapot, nem történeti adat |
+
+## 7.8 Mikor kell architektúrát váltani (nem csak paramétert hangolni)
 
 | Jel | Beavatkozás |
 |---|---|

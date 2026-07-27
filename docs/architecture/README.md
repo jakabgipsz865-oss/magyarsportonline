@@ -17,7 +17,10 @@ Ez a dokumentumsorozat a magyarsportonline.hu **Story-alapú, event-driven, AI A
 | [05-repo-structure.md](./05-repo-structure.md) | GitHub monorepo struktúra |
 | [06-deployment.md](./06-deployment.md) | Vercel deployment terv, környezetek, CI/CD |
 | [07-scalability.md](./07-scalability.md) | Skálázhatósági terv (1 forrástól 300+ forrásig) |
-| [08-roadmap.md](./08-roadmap.md) | 100 lépéses fejlesztési roadmap |
+| [08-roadmap.md](./08-roadmap.md) | 100+ lépéses fejlesztési roadmap |
+| [09-architecture-review.md](./09-architecture-review.md) | **Senior architektúra-review** — kritikai elemzés, skálázhatósági/biztonsági/race-condition javítások implementáció előtt |
+
+> **Státusz:** a terv átesett egy senior-szintű architektúra-review-n ([09-architecture-review.md](./09-architecture-review.md)), aminek megállapításai (race condition javítás, LLM-költségkorlátozás, observability-log leválasztása az OLTP-ről, prompt injection védelem, CQRS read-model, backup/DR terv, stb.) már be vannak építve az alábbi 01–08 dokumentumokba. Implementáció csak a review 🔴 (kritikus) pontjainak lezárása után indulhat — lásd a roadmap [Fázis 13](./08-roadmap.md#fázis-13--production-hardening-a-review-alapján-101–116).
 
 ## Alapelvek
 
