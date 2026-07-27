@@ -11,7 +11,15 @@ import { runIngestPipeline } from "../../../../../lib/pipeline";
  *
  * GET és POST ugyanazt csinálja: a Vercel Cron GET-tel hív, a kézi/CI
  * indítás (GitHub Actions ütemezett workflow, curl) POST-tal.
+ *
+ * maxDuration = 60: a Vercel Hobby csomagon engedélyezett maximum — egy
+ * valódi LLM-providerrel (nem No-LLM fallback) a fact-verification + writer
+ * + self-check lánc cikkenként több valódi hálózati kör, ezért a
+ * runIngestPipeline DEFAULT_MAX_NEW_ARTICLES_PER_RUN limitje mellett is
+ * szükséges a lehető legnagyobb function-időkeret.
  */
+export const maxDuration = 60;
+
 async function handleDispatch(request: NextRequest): Promise<NextResponse> {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${env.CRON_SECRET}`) {

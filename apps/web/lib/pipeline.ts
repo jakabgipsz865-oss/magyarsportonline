@@ -155,6 +155,18 @@ export function buildDispatcher(repos: Repositories = createRepositories()): InP
  * `source/article.ingested`'s handler chain-reacts through every
  * `dispatcher.on` registration above before `runSourceIngest` returns.
  */
+/**
+ * A real LLM provider call chain (fact verification + writing + self-check,
+ * up to 3 sequential network round-trips per article) can take long enough
+ * per article that processing an entire RSS backlog in one synchronous HTTP
+ * request risks exceeding the serverless function's execution time limit —
+ * a risk that didn't exist while every call fell back instantly to the
+ * deterministic No-LLM client. Capping new articles per run keeps each
+ * ingest request bounded; anything left over is picked up by the next
+ * scheduled run (URLs already ingested are never reprocessed either way).
+ */
+const DEFAULT_MAX_NEW_ARTICLES_PER_RUN = 8;
+
 export async function runIngestPipeline(): Promise<
   Awaited<ReturnType<typeof sourceIngest.runSourceIngest>>
 > {
@@ -168,6 +180,7 @@ export async function runIngestPipeline(): Promise<
     dispatcher,
     adapters: { rss: new sourceIngest.RssSourceAdapter() },
     logger: getLogger(),
+    maxNewArticlesPerRun: DEFAULT_MAX_NEW_ARTICLES_PER_RUN,
   });
 }
 
@@ -192,8 +205,12 @@ export async function reprocessNoLlmStories(): Promise<{ reprocessedStoryIds: st
   const dispatcher = buildDispatcher(repos);
   const logger = getLogger();
 
-  const storyIds =
+  // Same per-request time-budget reasoning as DEFAULT_MAX_NEW_ARTICLES_PER_RUN
+  // above — each reprocessed Story is another real writer + self-check call
+  // chain. Remaining candidates stay picked up by the next call.
+  const allStoryIds =
     await repos.storyVersionRepository.listStoryIdsWithLatestModel(NO_LLM_MODEL_LABEL);
+  const storyIds = allStoryIds.slice(0, DEFAULT_MAX_NEW_ARTICLES_PER_RUN);
 
   for (const storyId of storyIds) {
     const story = await repos.storyRepository.getById(storyId);
