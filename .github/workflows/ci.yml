@@ -13,6 +13,31 @@ jobs:
   lint-typecheck-test-build:
     name: Lint, typecheck, test, build
     runs-on: ubuntu-latest
+
+    # pgvector/pgvector:pg16 — same image family as the local dev setup in
+    # CONTRIBUTING.md (Postgres 16 + pgvector), so the DB-integration tests
+    # in packages/db and packages/agents (real Postgres, real advisory
+    # locks, real migrations) run in CI instead of silently skipping via
+    # their `describe.skipIf(!databaseUrl)` guard.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: msol
+          POSTGRES_PASSWORD: msol_ci_password
+          POSTGRES_DB: msol_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://msol:msol_ci_password@localhost:5432/msol_ci
+      TEST_DATABASE_URL: postgresql://msol:msol_ci_password@localhost:5432/msol_ci
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,6 +71,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Run MVP demo end-to-end
+        run: pnpm demo
+
       # A docs/architecture/06-deployment.md §6.4 egy további CI-lépést ír elő:
       # "DB migráció dry-run Neon preview branch ellen". Ez Neon-projekt és
       # valódi GitHub Secrets (pl. NEON_API_KEY) megléte nélkül nem
@@ -53,3 +81,5 @@ jobs:
       # projekt létrehozása, docs/architecture/08-roadmap.md) után kell
       # hozzáadni, amikor van tényleges Neon-projekt és hitelesítő adat.
       # Szándékosan nem került be egy hamis/hibázó placeholder lépésként.
+      # A fenti pgvector service container a CI-teszteléshez elegendő, de
+      # NEM helyettesíti a Neon preview branch dry-run-t.
