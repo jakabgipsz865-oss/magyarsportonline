@@ -1,0 +1,44 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      // Turborepo 2.x strict env mode only forwards env vars listed here to
+      // the task's child process (and includes them in the cache hash) —
+      // without this, apps/web/lib/env.ts's validation fails even when
+      // these are set in the actual shell/CI/Vercel environment, because
+      // `next build` never sees them (docs/architecture/06-deployment.md §6.6).
+      "env": ["DATABASE_URL", "LLM_PROVIDER", "ANTHROPIC_API_KEY", "CRON_SECRET"]
+    },
+    // apps/web's build now runs `db:migrate` as a real side effect against
+    // whatever DATABASE_URL it's given (ADR 0007) — caching this task's
+    // success would let a hash-identical rebuild against a freshly
+    // provisioned/reset database (e.g. a new Neon branch, or a Preview
+    // pointed at an empty DB) replay a stale "success" without the
+    // migration actually running again, silently leaving the schema
+    // missing. Verified: with caching on, a `turbo run build` against a
+    // truncated-schema DB replayed cached logs claiming success while the
+    // DB stayed empty; only `cache: false` makes every invocation actually
+    // re-run the migration.
+    "@magyarsportonline/web#build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**"],
+      "env": ["DATABASE_URL", "LLM_PROVIDER", "ANTHROPIC_API_KEY", "CRON_SECRET"],
+      "cache": false
+    },
+    "lint": {
+      "dependsOn": ["^build"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}
