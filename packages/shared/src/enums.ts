@@ -43,3 +43,13 @@ export type ReviewQueueReason = (typeof REVIEW_QUEUE_REASONS)[number];
 
 export const REVIEW_QUEUE_STATUSES = ["pending", "approved", "rejected", "edited"] as const;
 export type ReviewQueueStatus = (typeof REVIEW_QUEUE_STATUSES)[number];
+
+export const FACT_TYPES = [
+  "score",
+  "quote",
+  "injury_status",
+  "transfer_status",
+  "event_time",
+  "other",
+] as const;
+export type FactType = (typeof FACT_TYPES)[number];

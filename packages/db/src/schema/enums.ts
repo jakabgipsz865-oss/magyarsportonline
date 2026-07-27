@@ -1,4 +1,5 @@
 import {
+  FACT_TYPES,
   REVIEW_QUEUE_REASONS,
   REVIEW_QUEUE_STATUSES,
   RISK_LEVELS,
@@ -46,14 +47,7 @@ export const storyEntityRoleEnum = pgEnum("story_entity_role", [
   "opponent",
   "mentioned",
 ]);
-export const factTypeEnum = pgEnum("fact_type", [
-  "score",
-  "quote",
-  "injury_status",
-  "transfer_status",
-  "event_time",
-  "other",
-]);
+export const factTypeEnum = pgEnum("fact_type", FACT_TYPES);
 export const socialPlatformEnum = pgEnum("social_platform", ["facebook", "threads", "x"]);
 export const socialPostStatusEnum = pgEnum("social_post_status", [
   "queued",
