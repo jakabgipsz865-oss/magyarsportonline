@@ -88,3 +88,49 @@ jobs:
       # projekt létrehozása, docs/architecture/08-roadmap.md) után kell
       # hozzáadni, amikor van tényleges Neon-projekt és hitelesítő adat.
       # Szándékosan nem került be egy hamis/hibázó placeholder lépésként.
+
+  # A production publikus végpontjainak próbája minden main-push után.
+  # Szándékosan continue-on-error: a deploy/env-hiány diagnosztikai jel,
+  # nem a kód hibája — a log adja a production állapotképét. (Külön
+  # workflow_dispatch smoke workflow is létezik: production-smoke.yml,
+  # de az csak azután indítható kézzel, hogy a repo default branche main.)
+  production-smoke-public:
+    name: Production smoke (public endpoints)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 12
+    steps:
+      - name: Probe production public endpoints
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+        run: |
+          BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
+          echo "Target: $BASE"
+          # Megvárjuk, míg a most pusholt commit Vercel production deploya kifut
+          # (a V1-et az /rss.xml megléte jelzi) — max ~6 perc.
+          deployed=no
+          for i in $(seq 1 24); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$BASE/rss.xml" || echo 000)
+            if [ "$code" = "200" ]; then deployed=yes; break; fi
+            echo "  waiting for V1 production deploy... (/rss.xml -> $code)"
+            sleep 15
+          done
+          echo "V1 deployed on production: $deployed"
+          FAILURES=0
+          check() {
+            local name="$1" url="$2" expected="$3" code
+            code=$(curl -sS -o /tmp/b -w '%{http_code}' --max-time 60 "$url" || echo 000)
+            if [ "$code" = "$expected" ]; then echo "PASS  $name ($code)"; else
+              echo "FAIL  $name (got $code, expected $expected)"; head -c 300 /tmp/b; echo; FAILURES=$((FAILURES+1)); fi
+          }
+          check "home"        "$BASE/"               200
+          check "api stories" "$BASE/api/v1/stories" 200
+          check "rss.xml"     "$BASE/rss.xml"        200
+          check "sitemap.xml" "$BASE/sitemap.xml"    200
+          check "robots.txt"  "$BASE/robots.txt"     200
+          check "cron auth"   "$BASE/api/internal/cron/dispatch-ingest" 401
+          admin=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 60 "$BASE/admin/review" || echo 000)
+          echo "admin/review status: $admin (401 = ADMIN_SECRET beállítva; 503 = hiányzik)"
+          echo "FAILURES=$FAILURES"
+          exit $([ "$FAILURES" -eq 0 ] && echo 0 || echo 1)
