@@ -1,0 +1,41 @@
+# Gyakori (30 percenkénti) automatikus ingest a production ellen.
+#
+# A Vercel-oldali cron (apps/web/vercel.json) szándékosan csak napi egy
+# futásra van állítva, mert a Vercel Hobby csomag ennél gyakoribb cront nem
+# enged (a deploy elbukna) — ez a workflow adja a valódi, hírportálhoz illő
+# gyakoriságot, Vercel-csomagtól függetlenül.
+#
+# Előfeltétel (repo Settings → Secrets and variables → Actions):
+#   PRODUCTION_URL  — pl. https://magyarsportonline-web.vercel.app
+#   CRON_SECRET     — ugyanaz az érték, mint a Vercel env-ben
+# Amíg ezek nincsenek beállítva, a workflow csendben (sikeresen) kilép.
+name: Scheduled ingest
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  dispatch-ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Call dispatch-ingest endpoint
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$PRODUCTION_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "PRODUCTION_URL / CRON_SECRET secrets not configured — skipping."
+            exit 0
+          fi
+          http_code=$(curl -sS -o /tmp/body.json -w '%{http_code}' \
+            --max-time 300 --retry 2 --retry-delay 5 \
+            -X POST "$PRODUCTION_URL/api/internal/cron/dispatch-ingest" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          echo "HTTP $http_code"
+          cat /tmp/body.json
+          test "$http_code" = "200"
