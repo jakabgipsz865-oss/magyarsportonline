@@ -46,4 +46,42 @@ export class LlmUsageRepository {
       .where(gte(llmUsage.occurredAt, since));
     return row ? Number(row.total) : 0;
   }
+
+  /**
+   * Provider/model bontású összesítés a megadott időpont óta (vagy a teljes
+   * táblára, ha nincs `since`) — a Content Quality & Reliability Hardening
+   * sprint minőségi validációjának Neuron-/token-fogyasztási mutatóihoz.
+   */
+  async summarizeSince(since?: Date): Promise<
+    Array<{
+      provider: string;
+      model: string;
+      calls: number;
+      inputTokens: number;
+      outputTokens: number;
+      costUsd: number;
+    }>
+  > {
+    const rows = await this.db
+      .select({
+        provider: llmUsage.provider,
+        model: llmUsage.model,
+        calls: sql<string>`count(*)`,
+        inputTokens: sql<string>`coalesce(sum(${llmUsage.inputTokens}), 0)`,
+        outputTokens: sql<string>`coalesce(sum(${llmUsage.outputTokens}), 0)`,
+        costUsd: sql<string>`coalesce(sum(${llmUsage.costUsd}), 0)`,
+      })
+      .from(llmUsage)
+      .where(since ? gte(llmUsage.occurredAt, since) : sql`true`)
+      .groupBy(llmUsage.provider, llmUsage.model);
+
+    return rows.map((row) => ({
+      provider: row.provider,
+      model: row.model,
+      calls: Number(row.calls),
+      inputTokens: Number(row.inputTokens),
+      outputTokens: Number(row.outputTokens),
+      costUsd: Number(row.costUsd),
+    }));
+  }
 }

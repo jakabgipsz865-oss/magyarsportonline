@@ -20,12 +20,14 @@ export interface Emitter {
 
 export interface PublishGateDeps {
   storyRepository: Pick<StoryRepository, "getById" | "publish" | "updateStatus">;
-  storyVersionRepository: Pick<StoryVersionRepository, "markPublished">;
+  storyVersionRepository: Pick<StoryVersionRepository, "markPublished" | "getById">;
   factRepository: Pick<FactRepository, "listByStoryId">;
   reviewQueueRepository: Pick<ReviewQueueRepository, "insert">;
   agentRunRepository: AgentRunRecorder;
   dispatcher: Emitter;
   logger: Logger;
+  /** Content Quality & Reliability Hardening sprint operational kill switch (apps/web/lib/env.ts FORCE_REVIEW_MODE) — when true, nothing auto-publishes. */
+  forceReviewMode: boolean;
 }
 
 type Trigger = Extract<SportsNewsEvent, { type: "story/seo.ready" }>;
@@ -58,7 +60,19 @@ export async function handleStorySeoReady(deps: PublishGateDeps, event: Trigger)
       // Missing risk_level (shouldn't happen post-Fact-Verification) is treated conservatively.
       const riskLevel = story.riskLevel ?? "high";
 
-      const decision = decidePublish({ riskLevel, confidenceScore, hasContradiction });
+      const version = await deps.storyVersionRepository.getById(event.payload.story_version_id);
+      const hasQualityIssues =
+        version !== null &&
+        Array.isArray(version.qualityIssues) &&
+        version.qualityIssues.length > 0;
+
+      const decision = decidePublish({
+        riskLevel,
+        confidenceScore,
+        hasContradiction,
+        hasQualityIssues,
+        forceReviewMode: deps.forceReviewMode,
+      });
 
       if (decision.autoPublish) {
         const publishedAt = new Date();

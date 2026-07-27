@@ -7,6 +7,10 @@ export interface PublishDecisionInput {
   riskLevel: RiskLevel;
   confidenceScore: number;
   hasContradiction: boolean;
+  /** Hungarian Writer's Content Quality Gate found unfixed issues (empty/English/source-verbatim title, lead or body) — never auto-publish this, regardless of confidence/risk. */
+  hasQualityIssues?: boolean;
+  /** Operational kill switch (Content Quality & Reliability Hardening sprint): route every decision to review, no matter how confident — see apps/web/lib/env.ts FORCE_REVIEW_MODE. */
+  forceReviewMode?: boolean;
 }
 
 export type PublishDecision =
@@ -30,6 +34,12 @@ export type PublishDecision =
  * toggle for going live, not applicable to local dev/demo runs.
  */
 export function decidePublish(input: PublishDecisionInput): PublishDecision {
+  if (input.forceReviewMode) {
+    return { autoPublish: false, reason: "force_review_mode" };
+  }
+  if (input.hasQualityIssues) {
+    return { autoPublish: false, reason: "content_quality_failed" };
+  }
   if (input.riskLevel !== "low") {
     return { autoPublish: false, reason: "high_risk" };
   }

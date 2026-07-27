@@ -1,6 +1,11 @@
 import type { Fact, NewStoryVersionInput, StoryVersion } from "@magyarsportonline/db";
 import { createEventEnvelope } from "@magyarsportonline/events";
-import { FakeLlmClient, NO_LLM_MODEL_LABEL, NoLlmClient } from "@magyarsportonline/llm";
+import {
+  FakeLlmClient,
+  MODEL_TIERS,
+  NO_LLM_MODEL_LABEL,
+  NoLlmClient,
+} from "@magyarsportonline/llm";
 import { createLogger } from "@magyarsportonline/observability";
 import { describe, expect, it, vi } from "vitest";
 import { handleStoryFactsVerified, type HungarianWriterDeps } from "./index";
@@ -63,6 +68,7 @@ function buildDeps(overrides?: {
             promptVersion: "hungarian-writer@0.1.0",
             factConsistencyScore: "1.000",
             isPublished: true,
+            qualityIssues: null,
             createdAt: new Date(),
           }
         : null;
@@ -90,6 +96,7 @@ function buildDeps(overrides?: {
             promptVersion: input.promptVersion,
             factConsistencyScore: String(input.factConsistencyScore),
             isPublished: false,
+            qualityIssues: input.qualityIssues ?? null,
             createdAt: new Date(),
           };
         },
@@ -147,11 +154,17 @@ function queueGeneration(
   });
 }
 
-function queueSelfCheck(llm: FakeLlmClient, consistent: boolean, score: number) {
+function queueSelfCheck(
+  llm: FakeLlmClient,
+  consistent: boolean,
+  score: number,
+  isFallback?: boolean,
+) {
   llm.queueJson({
     data: { consistent, fact_consistency_score: score, issues: consistent ? [] : ["hiba"] },
     inputTokens: 5,
     outputTokens: 5,
+    isFallback,
   });
 }
 
@@ -251,6 +264,81 @@ describe("handleStoryFactsVerified", () => {
         isAiGenerated: false,
       }),
     ]);
+  });
+
+  it("still labels real AI-generated content as isAiGenerated:true even when the self-check step itself falls back", async () => {
+    // Regression test for the reported labeling bug: generation succeeds via
+    // a real provider call, but the *separate* self-check validation call
+    // falls back to No-LLM (e.g. a transient provider error on just that
+    // call). The actual title/lead/body still came from real AI — only the
+    // self-check's own isFallback must never flip that.
+    const deps = buildDeps();
+    queueGeneration(deps.llm, { title_hu: "Valódi cím" });
+    queueSelfCheck(deps.llm, true, 1, true);
+
+    await handleStoryFactsVerified(deps, triggerEvent());
+
+    expect(deps.createNextVersionCalls).toEqual([
+      expect.objectContaining({
+        titleHu: "Valódi cím",
+        generatedByModel: MODEL_TIERS.writing,
+        isAiGenerated: true,
+      }),
+    ]);
+  });
+
+  it("attempts one targeted fix-up call when the Content Quality Gate flags the first draft, and clears qualityIssues once the fix succeeds", async () => {
+    const deps = buildDeps();
+    const englishTitle = "England beat France in a ten goal thriller for third place";
+    queueGeneration(deps.llm, { title_hu: englishTitle });
+    queueSelfCheck(deps.llm, true, 1);
+    // The fix-up call (targeted regeneration)
+    queueGeneration(deps.llm, {
+      title_hu: "Anglia nyerte a harmadik helyet egy tíz gólos csatában",
+    });
+    queueSelfCheck(deps.llm, true, 1);
+
+    await handleStoryFactsVerified(deps, triggerEvent());
+
+    expect(deps.llm.jsonRequests).toHaveLength(4);
+    expect(deps.createNextVersionCalls).toEqual([
+      expect.objectContaining({
+        titleHu: "Anglia nyerte a harmadik helyet egy tíz gólos csatában",
+        isAiGenerated: true,
+        qualityIssues: [],
+      }),
+    ]);
+  });
+
+  it("keeps isAiGenerated:true but records qualityIssues when the fix-up attempt still fails", async () => {
+    const deps = buildDeps();
+    const englishTitle = "England beat France in a ten goal thriller for third place";
+    queueGeneration(deps.llm, { title_hu: englishTitle });
+    queueSelfCheck(deps.llm, true, 1);
+    // The fix-up call still returns English — quality gate fails again.
+    queueGeneration(deps.llm, { title_hu: englishTitle });
+    queueSelfCheck(deps.llm, true, 1);
+
+    await handleStoryFactsVerified(deps, triggerEvent());
+
+    expect(deps.llm.jsonRequests).toHaveLength(4);
+    expect(deps.createNextVersionCalls).toEqual([
+      expect.objectContaining({
+        titleHu: englishTitle,
+        isAiGenerated: true,
+        qualityIssues: [{ field: "title", kind: "looks_english" }],
+      }),
+    ]);
+  });
+
+  it("never attempts a quality fix-up for a No-LLM passthrough (nothing real to fix)", async () => {
+    const deps = buildDeps();
+    deps.llm = new NoLlmClient() as unknown as FakeLlmClient;
+
+    await handleStoryFactsVerified(deps, triggerEvent());
+
+    // Only the original generation dispatch happened — no extra fix-up call.
+    expect(deps.createNextVersionCalls).toHaveLength(1);
   });
 
   it("throws when the Story cannot be found", async () => {

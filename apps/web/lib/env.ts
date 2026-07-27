@@ -80,6 +80,19 @@ export const env = createEnv({
     // JSON-LD, RSS). Vercel-en alapértelmezésként a production URL.
     SITE_URL: z.string().url().default("https://magyarsportonline-web.vercel.app"),
 
+    // Content Quality & Reliability Hardening sprint operational kill switch
+    // (packages/agents/publish-gate/rule.ts, roadmap Fázis 9 "soft launch"
+    // FORCE_REVIEW_MODE-ja, most bevezetve): amíg "true" (az alapértelmezés,
+    // NEM igényel Vercel env-beállítást), a Publish Gate MINDEN Story-t
+    // review queue-ba küld, függetlenül a confidence/risk/quality
+    // eredményétől — auto-publish nincs. Csak explicit
+    // FORCE_REVIEW_MODE=false esetén tér vissza a normál, confidence-alapú
+    // döntéshez.
+    FORCE_REVIEW_MODE: z
+      .enum(["true", "false"])
+      .default("true")
+      .transform((value) => value === "true"),
+
     // Wired: /api/internal/cron/dispatch-ingest — Vercel Cron "Authorization: Bearer $CRON_SECRET" konvenció (docs/architecture/04-api-spec.md §4.3, 06-deployment.md §6.5).
     CRON_SECRET: z.string().min(1),
 

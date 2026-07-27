@@ -35,9 +35,33 @@ function fact(isContradicted: boolean) {
   };
 }
 
+function version(qualityIssues: unknown[] | null = null) {
+  return {
+    id: "v1",
+    storyId: "story-1",
+    versionNumber: 1,
+    titleHu: "Cím",
+    leadHu: "Lead",
+    bodyHu: "Törzs",
+    metaDescription: null,
+    seoTags: null,
+    structuredData: null,
+    changeSummaryHu: null,
+    generatedByModel: "claude-sonnet-5",
+    isAiGenerated: true,
+    promptVersion: "hungarian-writer@0.1.0",
+    factConsistencyScore: "1.000",
+    isPublished: false,
+    qualityIssues,
+    createdAt: new Date(),
+  };
+}
+
 function buildDeps(overrides?: {
   story?: ReturnType<typeof story>;
   facts?: ReturnType<typeof fact>[];
+  version?: ReturnType<typeof version>;
+  forceReviewMode?: boolean;
 }): PublishGateDeps & {
   emitted: unknown[];
   reviewQueueInserts: unknown[];
@@ -55,7 +79,11 @@ function buildDeps(overrides?: {
         statusUpdates.push({ storyId, status });
       }),
     },
-    storyVersionRepository: { markPublished: vi.fn(async () => undefined) },
+    storyVersionRepository: {
+      markPublished: vi.fn(async () => undefined),
+      getById: vi.fn(async () => overrides?.version ?? version()),
+    },
+    forceReviewMode: overrides?.forceReviewMode ?? false,
     factRepository: { listByStoryId: vi.fn(async () => overrides?.facts ?? [fact(false)]) },
     reviewQueueRepository: {
       insert: vi.fn(async (input: unknown) => {
@@ -129,6 +157,30 @@ describe("handleStorySeoReady", () => {
     expect(deps.reviewQueueInserts).toEqual([
       { storyId: "story-1", storyVersionId: "v1", reason: "contradiction" },
     ]);
+  });
+
+  it("routes to review with reason force_review_mode when the operational kill switch is on, even for an otherwise-publishable story", async () => {
+    const deps = buildDeps({ forceReviewMode: true });
+
+    await handleStorySeoReady(deps, triggerEvent());
+
+    expect(deps.reviewQueueInserts).toEqual([
+      { storyId: "story-1", storyVersionId: "v1", reason: "force_review_mode" },
+    ]);
+    expect(deps.storyRepository.publish).not.toHaveBeenCalled();
+  });
+
+  it("routes to review with reason content_quality_failed when the version has unresolved Content Quality Gate issues", async () => {
+    const deps = buildDeps({
+      version: version([{ field: "title", kind: "looks_english" }]),
+    });
+
+    await handleStorySeoReady(deps, triggerEvent());
+
+    expect(deps.reviewQueueInserts).toEqual([
+      { storyId: "story-1", storyVersionId: "v1", reason: "content_quality_failed" },
+    ]);
+    expect(deps.storyRepository.publish).not.toHaveBeenCalled();
   });
 
   it("throws when the Story cannot be found", async () => {
