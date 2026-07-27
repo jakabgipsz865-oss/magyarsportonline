@@ -38,3 +38,38 @@ main {
 a {
   color: var(--color-accent);
 }
+
+.story-meta {
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+.story-lead {
+  font-size: 1.1rem;
+}
+
+.story-list {
+  list-style: none;
+  padding: 0;
+}
+
+.story-list li {
+  padding: 1rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-fg) 15%, transparent);
+}
+
+.timeline {
+  list-style: none;
+  padding: 0;
+  border-left: 2px solid var(--color-accent);
+}
+
+.timeline li {
+  padding: 0 0 1rem 1rem;
+  margin-left: -1px;
+}
+
+.timeline-version {
+  font-weight: 700;
+  color: var(--color-accent);
+}

@@ -47,6 +47,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@magyarsportonline/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@magyarsportonline/shared':
         specifier: workspace:*
         version: link:../../packages/shared

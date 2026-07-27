@@ -12,19 +12,17 @@ import { z } from "zod";
  * back to something that looks like it works
  * (docs/architecture/06-deployment.md §6.6).
  *
- * Fázis 0 scope note: none of these are wired to real functionality yet
- * (no DB queries, no LLM calls, no Inngest events are triggered by
- * apps/web today), so nothing in this schema is `required()` yet — that
- * would make `pnpm build`/`pnpm dev` fail in every environment that hasn't
- * provisioned Neon/Anthropic/Inngest/Meta/X credentials, which is not yet
- * true for anyone at this phase. Each variable's roadmap phase is noted
- * below; tightening a variable to required is that phase's responsibility,
- * not Fázis 0's — see docs/adr/0004-phase-0-env-vars-optional.md.
+ * Fázis 0-ban egyik változó sem volt `required()` (lásd
+ * docs/adr/0004-phase-0-env-vars-optional.md) — az ADR saját maga mondta ki
+ * a következményt: "minden változó a saját roadmap-fázisában válik
+ * kötelezővé, amikor ténylegesen bekötésre kerül". A `DATABASE_URL` az MVP
+ * pipeline-nal (Story oldal, `apps/web/lib/stories.ts`) ténylegesen
+ * bekötésre került, ezért itt már kötelező — hiányában a build/dev/start
+ * azonnal, egyértelmű hibával áll le, nem egy request közepén derül ki.
  */
 export const env = createEnv({
   server: {
-    // Fázis 1+ (packages/db kliens bekötése apps/web-be)
-    DATABASE_URL: z.string().url().optional(),
+    DATABASE_URL: z.string().url(),
 
     // Fázis 6+ (Hungarian Writer Agent és a többi LLM-hívó agent)
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
