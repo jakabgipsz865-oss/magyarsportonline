@@ -1,5 +1,5 @@
 import pino from "pino";
-import type { AgentLogContext } from "./context.js";
+import type { AgentLogContext } from "./context";
 
 /**
  * Deliberately narrow interface — callers only ever get `info`/`warn`/

@@ -1,6 +1,6 @@
 import { Writable } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { createAgentLogger, createLogger } from "./logger.js";
+import { createAgentLogger, createLogger } from "./logger";
 
 function createCapturingDestination() {
   const lines: string[] = [];
