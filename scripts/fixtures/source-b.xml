@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Demo Sport Extra</title>
+    <link>https://demo-sport-extra.example</link>
+    <description>Demo RSS forrás az MVP end-to-end demonstraciohoz (docs/architecture/08-roadmap.md).</description>
+    <item>
+      <title>Nyilatkozott a Duna FC vezetoedzoje a Tisza SE elleni 2-1-es gyozelem utan</title>
+      <link>https://demo-sport-extra.example/hirek/duna-fc-edzo-nyilatkozat</link>
+      <guid>https://demo-sport-extra.example/hirek/duna-fc-edzo-nyilatkozat</guid>
+      <pubDate>Mon, 27 Jul 2026 17:42:00 GMT</pubDate>
+      <description>
+        A Duna FC 2-1-re gyozott a Tisza SE ellen a nyari felkeszulesi torna
+        merkozeset. A talalkozo utan Kovacs Andras, a Duna FC vezetoedzoje ugy
+        nyilatkozott: "Elegedett vagyok a csapat hozzaallasaval, meg felkeszules
+        alatt vagyunk, de mar most latszik az iram." Vegeredmeny: Duna FC 2-1
+        Tisza SE.
+      </description>
+    </item>
+  </channel>
+</rss>

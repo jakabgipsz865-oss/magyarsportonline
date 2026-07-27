@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Demo Sporthír Ügynökség</title>
+    <link>https://demo-sporthir-ugynokseg.example</link>
+    <description>Demo RSS forrás az MVP end-to-end demonstrációhoz (docs/architecture/08-roadmap.md).</description>
+    <item>
+      <title>Duna FC 2-1-re legyozte a Tisza SE-t a nyari felkeszulesi tornan</title>
+      <link>https://demo-sporthir-ugynokseg.example/hirek/duna-fc-tisza-se-2-1</link>
+      <guid>https://demo-sporthir-ugynokseg.example/hirek/duna-fc-tisza-se-2-1</guid>
+      <pubDate>Mon, 27 Jul 2026 17:00:00 GMT</pubDate>
+      <description>
+        A Duna FC 2-1-re gyozott a Tisza SE ellen a nyari felkeszulesi torna
+        elso fordulojaban. A hazai csapat mar a 12. percben vezetest szerzett,
+        a Tisza SE a masodik felidoben egyenlitett, de a Duna FC a 78. percben
+        eldontotte a merkozest. Vegeredmeny: Duna FC 2-1 Tisza SE.
+      </description>
+    </item>
+  </channel>
+</rss>
