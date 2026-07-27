@@ -13,6 +13,28 @@ jobs:
   lint-typecheck-test-build:
     name: Lint, typecheck, test, build
     runs-on: ubuntu-latest
+
+    # ADR 0007 óta az apps/web build ténylegesen migrál (`db:migrate` a
+    # `next build` előtt fut) — a korábbi, kizárólag séma-validációra szánt
+    # DATABASE_URL placeholder emiatt ECONNREFUSED-dal elbukott, mert semmi
+    # nem hallgatott a localhost:5432-n. A pgvector kiterjesztést maga a
+    # migráció hozza létre (0000_*.sql: `CREATE EXTENSION IF NOT EXISTS
+    # vector`), a service image csak az üres Postgres szervert adja.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,10 +66,14 @@ jobs:
         run: pnpm test
 
       - name: Build
-        # apps/web/lib/env.ts validates these at module load — `next build`
-        # only needs schema-valid placeholders (no DB/LLM call happens
-        # during a build), never real credentials. Real secrets are Vercel
-        # Environment Variables, set separately per environment
+        # apps/web/lib/env.ts validates DATABASE_URL/CRON_SECRET at module
+        # load, and (ADR 0007) the build now actually runs `db:migrate`
+        # against DATABASE_URL before `next build` — so this must point at
+        # the real `postgres` service above, not a placeholder. The `ci`
+        # user/password/db here match the service's POSTGRES_* env exactly.
+        # ANTHROPIC_API_KEY stays a placeholder (LLM_PROVIDER defaults to
+        # "none", never called). Real secrets are Vercel Environment
+        # Variables, set separately per environment
         # (docs/architecture/06-deployment.md §6.6) — CI never sees them.
         run: pnpm build
         env:
