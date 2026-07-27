@@ -148,6 +148,11 @@ jobs:
             -X POST "$BASE/api/internal/cron/dispatch-ingest" -H "Authorization: Bearer $CRON_SECRET" || echo 000)
           echo "ingest: HTTP $code"; cat /tmp/ingest.json; echo
 
+          echo "== Korábbi No-LLM Story-k biztonságos újrafeldolgozása a most javított Cloudflare-providerrel =="
+          code=$(curl -sS -o /tmp/reprocess.json -w '%{http_code}' --max-time 280 \
+            -X POST "$BASE/api/internal/reprocess-no-llm" -H "Authorization: Bearer $CRON_SECRET" || echo 000)
+          echo "reprocess: HTTP $code"; cat /tmp/reprocess.json; echo
+
           echo "== Publikus Story API (csak a ténylegesen publikáltak — auto-publish ellenőrzés) =="
           curl -sS --max-time 30 "$BASE/api/v1/stories?limit=20" | tee /tmp/stories.json; echo
 

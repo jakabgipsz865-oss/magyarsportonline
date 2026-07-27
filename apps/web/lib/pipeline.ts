@@ -8,7 +8,12 @@ import {
   sourceIngest,
   storyMerge,
 } from "@magyarsportonline/agents";
-import { createInProcessDispatcher, type InProcessDispatcher } from "@magyarsportonline/events";
+import {
+  createEventEnvelope,
+  createInProcessDispatcher,
+  type InProcessDispatcher,
+} from "@magyarsportonline/events";
+import { NO_LLM_MODEL_LABEL } from "@magyarsportonline/llm";
 import { createRepositories, type Repositories } from "./db";
 import { getLlmClient } from "./llm";
 import { getLogger } from "./logger";
@@ -164,4 +169,67 @@ export async function runIngestPipeline(): Promise<
     adapters: { rss: new sourceIngest.RssSourceAdapter() },
     logger: getLogger(),
   });
+}
+
+/**
+ * Entry point for `/api/internal/reprocess-no-llm`: finds every Story whose
+ * *latest* version is still the deterministic `NoLlmClient` passthrough
+ * (`NO_LLM_MODEL_LABEL`) and re-emits `story/facts.verified` for it — this
+ * re-runs Hungarian Writer → SEO → Publish Gate with whichever LLM provider
+ * is *currently* configured, without touching Fact Verification (the
+ * underlying facts haven't changed, only the writer's ability to translate
+ * them has). Safe/additive: `createNextVersion` never overwrites a prior
+ * version, so a story already re-written via corroboration is untouched
+ * (`listStoryIdsWithLatestModel` only matches the *latest* version).
+ *
+ * One-off operational tool for the situation where a misconfigured
+ * `CLOUDFLARE_API_TOKEN` (or similar) got fixed after articles had already
+ * been ingested and fallen back to No-LLM — not part of the regular
+ * ingest/publish flow.
+ */
+export async function reprocessNoLlmStories(): Promise<{ reprocessedStoryIds: string[] }> {
+  const repos = createRepositories();
+  const dispatcher = buildDispatcher(repos);
+  const logger = getLogger();
+
+  const storyIds =
+    await repos.storyVersionRepository.listStoryIdsWithLatestModel(NO_LLM_MODEL_LABEL);
+
+  for (const storyId of storyIds) {
+    const story = await repos.storyRepository.getById(storyId);
+    if (!story || story.riskLevel === null) {
+      // Shouldn't happen post-Fact-Verification — skip defensively rather than crash the whole batch.
+      logger.warn(
+        { storyId },
+        "reprocess-no-llm: story missing or never risk-classified, skipping",
+      );
+      continue;
+    }
+
+    const facts = await repos.factRepository.listByStoryId(storyId);
+    const hasContradiction = facts.some((fact) => fact.isContradicted);
+    const correlationId = crypto.randomUUID();
+
+    // dispatcher.emit (not a direct handler call) so the same registered
+    // wiring as a normal ingest run carries this through
+    // hungarian-writer → seo → publish-gate → (if auto-published) the
+    // read-model projector.
+    await dispatcher.emit({
+      ...createEventEnvelope({ correlationId }),
+      type: "story/facts.verified",
+      payload: {
+        story_id: storyId,
+        confidence_score: Number(story.confidenceScore),
+        risk_level: story.riskLevel,
+        // Not persisted on Story and not read by any current handler
+        // (hungarian-writer/seo/publish-gate all key off risk_level, not
+        // this flag) — false is safe here; we're re-writing from the
+        // already-verified Fact set, not re-scanning raw text.
+        prompt_injection_suspected: false,
+        has_contradiction: hasContradiction,
+      },
+    });
+  }
+
+  return { reprocessedStoryIds: storyIds };
 }
