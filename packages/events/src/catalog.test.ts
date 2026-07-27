@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createEventEnvelope } from "./envelope.js";
+import { createEventEnvelope } from "./envelope";
 import {
   parseEvent,
   parseEventOfType,
   storyFactsVerifiedEvent,
   storyPublishedEvent,
-} from "./catalog.js";
+} from "./catalog";
 
 const STORY_ID = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
 const VERSION_ID = "9b2e6f2a-6b8e-4e3e-9b7a-2f4a9c1d0e11";

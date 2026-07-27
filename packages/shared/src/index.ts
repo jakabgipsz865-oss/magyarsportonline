@@ -1,2 +1,2 @@
-export * from "./id.js";
-export * from "./enums.js";
+export * from "./id";
+export * from "./enums";

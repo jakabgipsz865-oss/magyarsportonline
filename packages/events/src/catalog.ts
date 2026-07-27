@@ -1,6 +1,6 @@
 import { RISK_LEVELS, REVIEW_QUEUE_REASONS } from "@magyarsportonline/shared";
 import { z } from "zod";
-import { eventEnvelopeSchema } from "./envelope.js";
+import { eventEnvelopeSchema } from "./envelope";
 
 /**
  * Event catalog per docs/architecture/03-event-flow.md §3.2, extended with
@@ -187,9 +187,7 @@ export const sportsNewsEventSchema = z.discriminatedUnion("type", [
 
 export type SportsNewsEvent = z.infer<typeof sportsNewsEventSchema>;
 
-export type EventPayload<T extends EventType> = z.infer<
-  (typeof eventCatalog)[T]
->["payload"];
+export type EventPayload<T extends EventType> = z.infer<(typeof eventCatalog)[T]>["payload"];
 
 /** Validates an unknown value against the full event catalog. */
 export function parseEvent(value: unknown): SportsNewsEvent {

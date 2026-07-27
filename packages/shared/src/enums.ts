@@ -26,8 +26,7 @@ export const STORY_SOURCE_CONTRIBUTION_TYPES = [
   "contradiction",
   "possible_duplicate",
 ] as const;
-export type StorySourceContributionType =
-  (typeof STORY_SOURCE_CONTRIBUTION_TYPES)[number];
+export type StorySourceContributionType = (typeof STORY_SOURCE_CONTRIBUTION_TYPES)[number];
 
 export const SOURCE_RELIABILITY_TIERS = ["A", "B", "C"] as const;
 export type SourceReliabilityTier = (typeof SOURCE_RELIABILITY_TIERS)[number];
@@ -42,10 +41,5 @@ export const REVIEW_QUEUE_REASONS = [
 ] as const;
 export type ReviewQueueReason = (typeof REVIEW_QUEUE_REASONS)[number];
 
-export const REVIEW_QUEUE_STATUSES = [
-  "pending",
-  "approved",
-  "rejected",
-  "edited",
-] as const;
+export const REVIEW_QUEUE_STATUSES = ["pending", "approved", "rejected", "edited"] as const;
 export type ReviewQueueStatus = (typeof REVIEW_QUEUE_STATUSES)[number];

@@ -21,13 +21,7 @@ export const baseConfig = [
   },
   eslintConfigPrettier,
   {
-    ignores: [
-      "**/dist/**",
-      "**/.next/**",
-      "**/.turbo/**",
-      "**/node_modules/**",
-      "**/coverage/**",
-    ],
+    ignores: ["**/dist/**", "**/.next/**", "**/.turbo/**", "**/node_modules/**", "**/coverage/**"],
   },
 ];
 

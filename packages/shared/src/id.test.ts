@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asUuid, isUuid } from "./id.js";
+import { asUuid, isUuid } from "./id";
 
 describe("isUuid", () => {
   it("accepts a valid v4 UUID", () => {

@@ -22,9 +22,11 @@ export default function ImpresszumPage(): ReactNode {
     <main>
       <h1>Impresszum</h1>
       <p>
-        <strong>Ez az oldal jelenleg fejlesztés alatt áll, a lenti adatok
-        kitöltendő helyőrzők.</strong> Éles publikálás előtt a tényleges
-        üzemeltetőnek/kiadónak hiteles adatokkal kell kiegészítenie.
+        <strong>
+          Ez az oldal jelenleg fejlesztés alatt áll, a lenti adatok kitöltendő helyőrzők.
+        </strong>{" "}
+        Éles publikálás előtt a tényleges üzemeltetőnek/kiadónak hiteles adatokkal kell
+        kiegészítenie.
       </p>
       <dl>
         <dt>Kiadó neve</dt>
@@ -39,9 +41,8 @@ export default function ImpresszumPage(): ReactNode {
         <dd>[KITÖLTENDŐ: e-mail elérhetőség]</dd>
       </dl>
       <p>
-        A tartalmak előállításában AI-alapú, automatizált rendszer vesz
-        részt, forrásmegjelöléssel és emberi felügyeleti eljárással — lásd a{" "}
-        <code>docs/feasibility-analysis.md</code> és{" "}
+        A tartalmak előállításában AI-alapú, automatizált rendszer vesz részt, forrásmegjelöléssel
+        és emberi felügyeleti eljárással — lásd a <code>docs/feasibility-analysis.md</code> és{" "}
         <code>docs/architecture/</code> dokumentációt.
       </p>
     </main>

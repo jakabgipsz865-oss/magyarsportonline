@@ -1,2 +1,2 @@
-export * from "./envelope.js";
-export * from "./catalog.js";
+export * from "./envelope";
+export * from "./catalog";
