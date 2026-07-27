@@ -114,10 +114,20 @@ jobs:
                   print(f"   EN leiras: {d[:200]}")
           PYEOF
 
-          echo "== Seed / setup =="
-          code=$(curl -sS -o /tmp/setup.json -w '%{http_code}' --max-time 120 \
-            -X POST "$BASE/api/internal/setup" -H "Authorization: Bearer $CRON_SECRET" || echo 000)
-          echo "setup: HTTP $code"; cat /tmp/setup.json; echo
+          echo "== Seed / setup (a friss production deploy kigördülésére várva, max ~6 perc) =="
+          for i in $(seq 1 24); do
+            code=$(curl -sS -o /tmp/setup.json -w '%{http_code}' --max-time 120 \
+              -X POST "$BASE/api/internal/setup" -H "Authorization: Bearer $CRON_SECRET" || echo 000)
+            echo "  [$i] setup: HTTP $code"; cat /tmp/setup.json; echo
+            provider=$(python3 -c "import json;print(json.load(open('/tmp/setup.json')).get('llmProvider','?'))" 2>/dev/null || echo "?")
+            echo "  llmProvider=$provider"
+            if [ "$code" = "200" ] && [ "$provider" = "cloudflare" ]; then
+              echo "PASS  a friss deploy él, LLM_PROVIDER=cloudflare aktív"
+              break
+            fi
+            echo "  meg nem a friss deploy (llmProvider=$provider) — várakozás 15s..."
+            sleep 15
+          done
 
           echo "== Valódi BBC RSS ingest =="
           code=$(curl -sS -o /tmp/ingest.json -w '%{http_code}' --max-time 280 \
