@@ -15,7 +15,13 @@ import { reprocessNoLlmStories } from "../../../../lib/pipeline";
  *
  * Auth: same `Bearer CRON_SECRET` convention as `/api/internal/setup` and
  * `/api/internal/cron/dispatch-ingest` — never publicly callable.
+ *
+ * maxDuration = 60: the Vercel Hobby-plan maximum — real writer/self-check
+ * calls per story are genuine sequential network round-trips, hence also
+ * capping how many stories `reprocessNoLlmStories` reprocesses per call.
  */
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${env.CRON_SECRET}`) {

@@ -22,6 +22,17 @@ export interface SourceIngestDeps {
   /** One adapter per `Source.type` — a source whose type has no registered adapter is skipped with an error, not silently ignored. */
   adapters: Partial<Record<Source["type"], SourceAdapter>>;
   logger: Logger;
+  /**
+   * Caps how many *new* articles a single call processes per source, per run.
+   * Each new article's downstream pipeline (dedup → merge → fact
+   * verification → writing → SEO → publish gate) runs synchronously, in the
+   * same request — with a real LLM provider this is several sequential
+   * network calls per article, which can exceed a serverless function's
+   * execution time limit for a large batch. Leftover new articles are picked
+   * up by the next scheduled ingest run (already-ingested URLs are never
+   * re-processed either way). `undefined` (the default) means no cap.
+   */
+  maxNewArticlesPerRun?: number | undefined;
 }
 
 export interface SourceIngestResult {
@@ -88,6 +99,14 @@ async function ingestOneSource(
   let ingestedCount = 0;
 
   for (const article of articles) {
+    if (deps.maxNewArticlesPerRun !== undefined && ingestedCount >= deps.maxNewArticlesPerRun) {
+      log.info(
+        { sourceId: source.id, cap: deps.maxNewArticlesPerRun },
+        "reached maxNewArticlesPerRun for this run, remaining new articles deferred to the next ingest",
+      );
+      break;
+    }
+
     const existing = await deps.rawArticleRepository.findBySourceUrl(article.sourceUrl);
     if (existing) {
       continue;
