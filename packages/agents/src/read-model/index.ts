@@ -9,13 +9,36 @@ export interface ReadModelInput {
   correlationId: string;
 }
 
+const HTML_ESCAPE_MAP: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+
+/**
+ * The frontend renders `body_html` via `dangerouslySetInnerHTML` (it's a
+ * trusted, server-generated field, not raw user input — see
+ * apps/web/app/hir/[slug]/page.tsx). That trust boundary only holds if this
+ * function actually escapes its input: `bodyHu` can contain a verbatim
+ * "quote" Fact payload lifted from a source article
+ * (docs/architecture/02-agents.md §2.5), and a malicious/compromised source
+ * could put HTML/script-like text inside a quote. Escaping here, not at
+ * render time, keeps the read-model itself safe regardless of how it's
+ * eventually rendered.
+ */
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (char) => HTML_ESCAPE_MAP[char] ?? char);
+}
+
 /** Minimal, safe paragraph wrap — not a full markdown/rich-text pipeline (out of MVP scope). */
-function toBodyHtml(bodyHu: string): string {
+export function toBodyHtml(bodyHu: string): string {
   return bodyHu
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
     .filter((paragraph) => paragraph.length > 0)
-    .map((paragraph) => `<p>${paragraph}</p>`)
+    .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
     .join("\n");
 }
 
