@@ -1,0 +1,27 @@
+{
+  "name": "magyarsportonline",
+  "private": true,
+  "version": "0.0.0",
+  "description": "AI-first, Story-alapú sporthír-platform monorepo",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@magyarsportonline/config": "workspace:*",
+    "prettier": "3.4.2",
+    "turbo": "2.3.3",
+    "typescript": "5.7.3"
+  }
+}

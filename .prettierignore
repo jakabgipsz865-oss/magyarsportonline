@@ -1,0 +1,10 @@
+node_modules
+.next
+.turbo
+dist
+coverage
+pnpm-lock.yaml
+
+# Már meglévő, kézzel írt tervdokumentáció — a Fázis 0 nem formázza át
+# újra ezeket, hogy elkerüljük az irreleváns, tartalom nélküli diffet.
+docs/**/*.md
