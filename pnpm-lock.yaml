@@ -23,6 +23,21 @@ importers:
 
   apps/web:
     dependencies:
+      '@magyarsportonline/agents':
+        specifier: workspace:*
+        version: link:../../packages/agents
+      '@magyarsportonline/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@magyarsportonline/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@magyarsportonline/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
+      '@magyarsportonline/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
       '@magyarsportonline/shared':
         specifier: workspace:*
         version: link:../../packages/shared

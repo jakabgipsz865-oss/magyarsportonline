@@ -13,6 +13,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@magyarsportonline/agents": "workspace:*",
+    "@magyarsportonline/db": "workspace:*",
+    "@magyarsportonline/events": "workspace:*",
+    "@magyarsportonline/llm": "workspace:*",
+    "@magyarsportonline/observability": "workspace:*",
     "@magyarsportonline/shared": "workspace:*",
     "@t3-oss/env-nextjs": "0.11.1",
     "next": "15.1.4",

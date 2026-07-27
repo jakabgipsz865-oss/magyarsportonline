@@ -12,24 +12,25 @@ import { z } from "zod";
  * back to something that looks like it works
  * (docs/architecture/06-deployment.md §6.6).
  *
- * Fázis 0 scope note: none of these are wired to real functionality yet
- * (no DB queries, no LLM calls, no Inngest events are triggered by
- * apps/web today), so nothing in this schema is `required()` yet — that
- * would make `pnpm build`/`pnpm dev` fail in every environment that hasn't
- * provisioned Neon/Anthropic/Inngest/Meta/X credentials, which is not yet
- * true for anyone at this phase. Each variable's roadmap phase is noted
- * below; tightening a variable to required is that phase's responsibility,
- * not Fázis 0's — see docs/adr/0004-phase-0-env-vars-optional.md.
+ * Per docs/adr/0004-phase-0-env-vars-optional.md: each variable becomes
+ * `required()` in the phase that actually wires it to real functionality,
+ * not before. `DATABASE_URL`, `ANTHROPIC_API_KEY`, and `CRON_SECRET` made
+ * that transition with the MVP end-to-end pipeline (lib/db.ts, lib/llm.ts,
+ * app/api/internal/cron/dispatch-ingest) — the remaining variables below
+ * are still ahead of their wiring and stay optional.
  */
 export const env = createEnv({
   server: {
-    // Fázis 1+ (packages/db kliens bekötése apps/web-be)
-    DATABASE_URL: z.string().url().optional(),
+    // Wired: packages/db kliens (lib/db.ts).
+    DATABASE_URL: z.string().url(),
 
-    // Fázis 6+ (Hungarian Writer Agent és a többi LLM-hívó agent)
-    ANTHROPIC_API_KEY: z.string().min(1).optional(),
+    // Wired: Fact Verification / Hungarian Writer agentek (packages/llm, lib/llm.ts).
+    ANTHROPIC_API_KEY: z.string().min(1),
 
-    // Fázis 2+ (event bus bekötése)
+    // Wired: /api/internal/cron/dispatch-ingest — Vercel Cron "Authorization: Bearer $CRON_SECRET" konvenció (docs/architecture/04-api-spec.md §4.3, 06-deployment.md §6.5).
+    CRON_SECRET: z.string().min(1),
+
+    // Fázis 2+ (a jelenlegi in-process dispatcher helyett valódi Inngest-kötés, lásd docs/adr/0005-mvp-end-to-end-scope-cuts.md)
     INNGEST_EVENT_KEY: z.string().min(1).optional(),
     INNGEST_SIGNING_KEY: z.string().min(1).optional(),
 
