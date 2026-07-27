@@ -30,6 +30,8 @@ export interface SelfCheckResult {
   consistent: boolean;
   factConsistencyScore: number;
   issues: string[];
+  /** true, ha ez a válasz egy LLM-hiba miatti fallback-válaszból származik — lásd generation.ts GeneratedContent.isFallback. */
+  isFallback: boolean;
 }
 
 const SYSTEM_PROMPT = `Tényellenőr vagy. A felhasználói üzenet egy JSON "facts" tömböt és egy legenerált magyar nyelvű "title_hu"/"lead_hu"/"body_hu" hírszöveget tartalmaz. Ellenőrizd MONDATRÓL MONDATRA, hogy a szöveg minden állítása alátámasztható-e a "facts" tömbben szereplő tényekkel.
@@ -66,5 +68,6 @@ export async function selfCheckContent(
     consistent: parsed.consistent,
     factConsistencyScore: parsed.fact_consistency_score,
     issues: parsed.issues,
+    isFallback: result.isFallback ?? false,
   };
 }

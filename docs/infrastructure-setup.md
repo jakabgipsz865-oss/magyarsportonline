@@ -27,7 +27,9 @@ cp apps/web/.env.example apps/web/.env.local
 | Változó            | Kötelező | Forrás                                                                             |
 | ------------------ | -------- | ----------------------------------------------------------------------------------- |
 | `DATABASE_URL`     | igen     | Neon konzol → Project → Connection Details ("Pooled connection" ajánlott)           |
-| `LLM_PROVIDER`     | nem (alapértelmezés: `none`) | `none` vagy `anthropic` — lásd lent                             |
+| `LLM_PROVIDER`     | nem (alapértelmezés: `none`) | `none`, `gemini` vagy `anthropic` — lásd lent                       |
+| `GEMINI_API_KEY`   | csak ha `LLM_PROVIDER=gemini` | Google AI Studio → aistudio.google.com/apikey (ingyenes tier)     |
+| `GEMINI_MODEL`     | nem (alapértelmezés: `gemini-2.0-flash-lite`) | csak `LLM_PROVIDER=gemini` esetén releváns          |
 | `ANTHROPIC_API_KEY` | csak ha `LLM_PROVIDER=anthropic` | Anthropic Console → API Keys                                |
 | `CRON_SECRET`      | igen     | tetszőleges, magad generált titkos érték (pl. `openssl rand -hex 32`)               |
 
@@ -36,7 +38,7 @@ cp apps/web/.env.example apps/web/.env.local
 Alapértelmezetten (`LLM_PROVIDER=none`, vagy a változó hiánya) a pipeline a
 determinisztikus **`NoLlmClient`** adaptert használja
 (`packages/llm/src/no-llm-client.ts`) — nincs kimenő API-hívás, nincs
-költség, `ANTHROPIC_API_KEY` nem szükséges. Ebben a módban a Fact
+költség, semmilyen API-kulcs nem szükséges. Ebben a módban a Fact
 Verification / Hungarian Writer agentek nem generálnak AI-fordítást: az
 eredeti, angol nyelvű RSS-cím és -leírás jelenik meg változatlanul, a Story
 oldalon egyértelmű **"nem AI-fordított tartalom"** jelöléssel (lásd
@@ -45,17 +47,47 @@ Minden más — RSS ingest, deduplikáció, Story-létrehozás, Confidence Score
 Risk Classifier, Publish Gate, Timeline/verziókezelés — ettől függetlenül,
 teljes egészében működik, mert ezek eleve nem használnak LLM-et.
 
-Amikor lesz Anthropic (vagy később OpenAI) API-kereted, a váltás **egyetlen
-env-változó módosítása**, kód nélkül:
+#### `LLM_PROVIDER=gemini` — ingyenes tier teszthez (jelenlegi alapértelmezett teszt-üzemmód)
+
+```bash
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=<Google AI Studio-ban generált ingyenes kulcs>
+# GEMINI_MODEL=gemini-2.0-flash-lite   # opcionális, ez az alapértelmezés
+```
+
+A kulcs a [Google AI Studio](https://aistudio.google.com/apikey) felületén
+generálható, **nem igényel fizetős Google Cloud billing-fiókot** — a
+`gemini-2.0-flash-lite` (és a legtöbb Flash/Flash-Lite modell) ingyenes
+tierben elérhető, napi/perces kvótával.
+
+`packages/llm/src/gemini-client.ts` — raw HTTP-alapú kliens (nincs
+`@google/...` SDK-függőség), amit a `ProviderFallbackLlmClient`
+(`packages/llm/src/provider-fallback-client.ts`) csomagol be: **bármilyen
+hiba** (kvótatúllépés/429, tiltás/403, szolgáltatáshiba/5xx, hálózati hiba,
+vagy akár egy elavult `GEMINI_MODEL` miatti 400) esetén a rendszer
+automatikusan, hangosan naplózva átvált a determinisztikus No-LLM módra —
+a pipeline sosem áll le emiatt, és a Story ilyenkor helyesen
+`is_ai_generated: false`-ként, "nem AI-fordított" jelöléssel jön létre.
+Sikeres hívás esetén a token-felhasználás és a `provider: "gemini"` az
+`llm_usage` táblába kerül, `cost_usd = 0` (ingyenes tier).
+
+Ha Google időközben megváltoztatja a free-tier modellkínálatot, a
+`GEMINI_MODEL` env-változó módosítása — kód nélkül, Vercel-en egyszerű
+redeploy-jal — elég az áttéréshez.
+
+#### `LLM_PROVIDER=anthropic` — fizetős, opcionális, jelenleg nem használt
 
 ```bash
 LLM_PROVIDER=anthropic
 ANTHROPIC_API_KEY=<valódi kulcs>
 ```
 
-(`apps/web/lib/llm.ts` ekkor a valódi `AnthropicLlmClient`-et adja vissza —
-ha `LLM_PROVIDER=anthropic`, de `ANTHROPIC_API_KEY` hiányzik, az app egy
-egyértelmű hibával áll le boot-kor, nem csendes fallback-kel.)
+(`apps/web/lib/llm.ts` ekkor a valódi `AnthropicLlmClient`-et adja vissza,
+`BudgetGuardedLlmClient`-be csomagolva — ha `LLM_PROVIDER=anthropic`, de
+`ANTHROPIC_API_KEY` hiányzik, az app egy egyértelmű hibával áll le
+boot-kor, nem csendes fallback-kel.) Ez az üzemmód later, csak amikor
+valós felhasználói forgalomhoz szükséges a jobb minőségű, fizetős modell —
+egyelőre a Gemini ingyenes tier a validált teszt-útvonal.
 
 A `DATABASE_URL`-nek Neon esetén tartalmaznia kell az `sslmode=require`
 paramétert, pl. formátumban:

@@ -37,6 +37,8 @@ export interface GeneratedContent {
   leadHu: string;
   bodyHu: string;
   changeSummaryHu: string | null;
+  /** true, ha ez a tartalom egy LLM-hiba miatti fallback-válaszból (pl. Gemini kvótahiba) származik, nem valódi AI-generálásból — lásd LlmUsage.isFallback (client.ts). */
+  isFallback: boolean;
 }
 
 const SYSTEM_PROMPT = `Magyar sportújságíró vagy. Kizárólag a felhasználói üzenetben JSON-ként megadott "facts" tömbre támaszkodva írj eredeti, magyar nyelvű hírt — SOSEM fordítás, és SOSEM tartalmazhat olyan állítást, ami nincs a tények között. Ha egy infó hiányzik, ne találd ki.
@@ -72,5 +74,6 @@ export async function generateStoryVersion(
     leadHu: parsed.lead_hu,
     bodyHu: parsed.body_hu,
     changeSummaryHu: parsed.change_summary_hu,
+    isFallback: result.isFallback ?? false,
   };
 }
