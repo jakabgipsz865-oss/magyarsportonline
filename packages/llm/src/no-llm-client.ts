@@ -9,7 +9,8 @@ import type {
 /** Recorded on `StoryVersion.generated_by_model` when this adapter answered, so it's visible in the DB without cross-referencing `LLM_PROVIDER`. */
 export const NO_LLM_MODEL_LABEL = "no-llm-passthrough@1";
 
-const NOT_AI_TRANSLATED_NOTICE =
+/** Exported so a one-off DB backfill (packages/db story-version-repository.ts `backfillMislabeledAiGenerated`) can tell a genuine No-LLM row apart from a mislabeled real-AI one without duplicating this string. */
+export const NOT_AI_TRANSLATED_NOTICE =
   "Ez a tartalom még nem AI által lefordított vagy ellenőrzött szöveg — az eredeti, angol nyelvű forrásanyag jelenik meg változatlanul.";
 
 const UPDATE_CHANGE_SUMMARY =

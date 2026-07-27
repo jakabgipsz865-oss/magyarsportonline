@@ -42,4 +42,26 @@ describe("decidePublish", () => {
       decidePublish({ riskLevel: "low", confidenceScore: 0.65, hasContradiction: false }),
     ).toEqual({ autoPublish: true });
   });
+
+  it("sends unresolved Content Quality Gate issues to review even at low risk and high confidence", () => {
+    expect(
+      decidePublish({
+        riskLevel: "low",
+        confidenceScore: 0.9,
+        hasContradiction: false,
+        hasQualityIssues: true,
+      }),
+    ).toEqual({ autoPublish: false, reason: "content_quality_failed" });
+  });
+
+  it("forceReviewMode overrides every other condition, including an otherwise-clean low-risk/high-confidence story", () => {
+    expect(
+      decidePublish({
+        riskLevel: "low",
+        confidenceScore: 0.9,
+        hasContradiction: false,
+        forceReviewMode: true,
+      }),
+    ).toEqual({ autoPublish: false, reason: "force_review_mode" });
+  });
 });

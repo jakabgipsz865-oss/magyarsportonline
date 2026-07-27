@@ -12,13 +12,19 @@ import {
 } from "@magyarsportonline/llm";
 import type { Logger } from "@magyarsportonline/observability";
 import { toWriterFact } from "./facts";
-import { generateStoryVersion, type PreviousVersionContent } from "./generation";
+import {
+  generateStoryVersion,
+  regenerateWithQualityFix,
+  type PreviousVersionContent,
+} from "./generation";
+import { assessContentQuality } from "./quality-gate";
 import { selfCheckContent } from "./self-check";
 import type { AgentRunRecorder } from "../shared/with-agent-run";
 import { withAgentRun } from "../shared/with-agent-run";
 
 export * from "./facts";
 export * from "./generation";
+export * from "./quality-gate";
 export * from "./self-check";
 
 export const AGENT_VERSION = "hungarian-writer@0.1.0";
@@ -41,6 +47,7 @@ export interface HungarianWriterDeps {
   dispatcher: Emitter;
   logger: Logger;
 }
+
 
 type Trigger = Extract<SportsNewsEvent, { type: "story/facts.verified" }>;
 
@@ -93,6 +100,43 @@ export async function handleStoryFactsVerified(
         check = await selfCheckContent(deps.llm, { facts, ...generated });
       }
 
+      // Content Quality Gate (Content Quality & Reliability Hardening
+      // sprint): catches empty/still-English/source-verbatim fields that a
+      // schema-valid, non-fallback response can still have (e.g. Fact
+      // Verification's own No-LLM fallback silently poisoning `detail_hu`
+      // with English passthrough text — see no-llm-client.ts
+      // `extractionFallback`). Only worth retrying when the draft is real —
+      // a No-LLM passthrough has nothing to "fix".
+      let quality = assessContentQuality({
+        titleHu: generated.titleHu,
+        leadHu: generated.leadHu,
+        bodyHu: generated.bodyHu,
+        facts,
+      });
+      if (!quality.passed && !generated.isFallback && !(deps.llm instanceof NoLlmClient)) {
+        deps.logger.warn(
+          { correlationId: event.correlation_id, storyId: story.id, issues: quality.issues },
+          "content quality gate failed, attempting one targeted fix-up call",
+        );
+        generated = await regenerateWithQualityFix(deps.llm, {
+          facts,
+          previousVersion,
+          previousAttempt: {
+            titleHu: generated.titleHu,
+            leadHu: generated.leadHu,
+            bodyHu: generated.bodyHu,
+          },
+          issues: quality.issues,
+        });
+        check = await selfCheckContent(deps.llm, { facts, ...generated });
+        quality = assessContentQuality({
+          titleHu: generated.titleHu,
+          leadHu: generated.leadHu,
+          bodyHu: generated.bodyHu,
+          facts,
+        });
+      }
+
       const changeSummaryHu = previousVersion
         ? (generated.changeSummaryHu ?? FALLBACK_UPDATE_SUMMARY)
         : null;
@@ -104,12 +148,14 @@ export async function handleStoryFactsVerified(
       // own: a wrapping decorator (BudgetGuardedLlmClient,
       // ProviderFallbackLlmClient) is never itself a NoLlmClient instance
       // even when ITS OWN fallback branch served this exact content — so we
-      // also check the per-call `isFallback` flag those wrappers set
-      // (client.ts's `LlmUsage.isFallback`, threaded through generation.ts
-      // and self-check.ts) on the two calls that actually produced this
-      // version's title/lead/body.
-      const isAiGenerated =
-        !(deps.llm instanceof NoLlmClient) && !generated.isFallback && !check.isFallback;
+      // also check the per-call `isFallback` flag (client.ts's
+      // `LlmUsage.isFallback`, threaded through generation.ts) on the call
+      // that actually produced this version's title/lead/body. Deliberately
+      // NOT gated on the self-check step's own fallback status — self-check
+      // only validates the already-real generated content, it doesn't
+      // produce it, so its fallback status must never flip real AI content
+      // to "not AI-generated".
+      const isAiGenerated = !(deps.llm instanceof NoLlmClient) && !generated.isFallback;
 
       // `deps.llm.modelLabel` — ha a kliens (pl. GeminiLlmClient) a
       // ténylegesen hívott modellt jelzi, azt használjuk a DB-rekordban;
@@ -126,6 +172,7 @@ export async function handleStoryFactsVerified(
         isAiGenerated,
         promptVersion: AGENT_VERSION,
         factConsistencyScore: check.factConsistencyScore,
+        qualityIssues: quality.issues,
       });
 
       await deps.dispatcher.emit({

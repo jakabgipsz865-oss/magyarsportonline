@@ -13,6 +13,18 @@ export interface NewStoryVersionInput {
   isAiGenerated: boolean;
   promptVersion: string;
   factConsistencyScore: number;
+  /** Content Quality Gate findings (packages/agents/hungarian-writer/quality-gate.ts) — null/empty means no issues found. */
+  qualityIssues?: unknown[] | null;
+}
+
+export interface LatestVersionSummary {
+  storyId: string;
+  versionId: string;
+  titleHu: string;
+  leadHu: string;
+  bodyHu: string;
+  generatedByModel: string;
+  isAiGenerated: boolean;
 }
 
 /**
@@ -54,6 +66,8 @@ export class StoryVersionRepository {
           isAiGenerated: input.isAiGenerated,
           promptVersion: input.promptVersion,
           factConsistencyScore: input.factConsistencyScore.toFixed(3),
+          qualityIssues:
+            input.qualityIssues && input.qualityIssues.length > 0 ? input.qualityIssues : null,
         })
         .returning();
       if (!version) {
@@ -63,6 +77,15 @@ export class StoryVersionRepository {
       await tx.update(stories).set({ versionCount: versionNumber }).where(eq(stories.id, storyId));
       return version;
     });
+  }
+
+  async getById(versionId: string): Promise<StoryVersion | null> {
+    const [row] = await this.db
+      .select()
+      .from(storyVersions)
+      .where(eq(storyVersions.id, versionId))
+      .limit(1);
+    return row ?? null;
   }
 
   /** Latest version regardless of publish state — used for the "what changed" diff. */
@@ -133,5 +156,76 @@ export class StoryVersionRepository {
       .where(eq(storyVersions.generatedByModel, model));
 
     return rows.map((row) => row.storyId);
+  }
+
+  /**
+   * Latest version per Story with the fields needed to run the Content
+   * Quality Gate heuristics against already-stored content (packages/agents
+   * hungarian-writer/quality-gate.ts) — used to find reprocessing candidates
+   * beyond the No-LLM-labeled ones (e.g. a real provider call that produced
+   * an empty or still-English title).
+   */
+  async listLatestVersionSummaries(): Promise<LatestVersionSummary[]> {
+    const latestPerStory = this.db
+      .select({
+        storyId: storyVersions.storyId,
+        maxVersion: sql<number>`max(${storyVersions.versionNumber})`.as("max_version"),
+      })
+      .from(storyVersions)
+      .groupBy(storyVersions.storyId)
+      .as("latest");
+
+    const rows = await this.db
+      .select({
+        storyId: storyVersions.storyId,
+        versionId: storyVersions.id,
+        titleHu: storyVersions.titleHu,
+        leadHu: storyVersions.leadHu,
+        bodyHu: storyVersions.bodyHu,
+        generatedByModel: storyVersions.generatedByModel,
+        isAiGenerated: storyVersions.isAiGenerated,
+      })
+      .from(storyVersions)
+      .innerJoin(
+        latestPerStory,
+        and(
+          eq(storyVersions.storyId, latestPerStory.storyId),
+          eq(storyVersions.versionNumber, latestPerStory.maxVersion),
+        ),
+      );
+
+    return rows;
+  }
+
+  /**
+   * Idempotent correctness backfill (Content Quality & Reliability
+   * Hardening sprint): a now-fixed labeling bug in the Hungarian Writer
+   * Agent (packages/agents hungarian-writer/index.ts `isAiGenerated`) used
+   * to mark a version as `NO_LLM_MODEL_LABEL`/`isAiGenerated: false` purely
+   * because the *self-check* step fell back to No-LLM, even when the
+   * *generation* step itself produced real AI content. This detects those
+   * mislabeled rows (generated_by_model = No-LLM label, but the lead is NOT
+   * the deterministic No-LLM disclaimer text — a genuine No-LLM row always
+   * has that exact lead) and corrects both columns. Safe to run repeatedly:
+   * once corrected, a row no longer matches the WHERE clause. Never touches
+   * title_hu/lead_hu/body_hu — only the two label columns.
+   */
+  async backfillMislabeledAiGenerated(
+    correctModelLabel: string,
+    noLlmModelLabel: string,
+    noLlmDisclaimerText: string,
+  ): Promise<number> {
+    const rows = await this.db
+      .update(storyVersions)
+      .set({ isAiGenerated: true, generatedByModel: correctModelLabel })
+      .where(
+        and(
+          eq(storyVersions.generatedByModel, noLlmModelLabel),
+          sql`${storyVersions.leadHu} <> ${noLlmDisclaimerText}`,
+        ),
+      )
+      .returning({ id: storyVersions.id });
+
+    return rows.length;
   }
 }

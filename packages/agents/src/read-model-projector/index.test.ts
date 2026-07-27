@@ -36,6 +36,7 @@ function version(overrides?: Partial<Record<string, unknown>>) {
     promptVersion: "hungarian-writer@0.1.0",
     factConsistencyScore: "1.000",
     isPublished: true,
+    qualityIssues: null,
     createdAt: new Date("2026-07-27T20:55:00.000Z"),
     ...overrides,
   };

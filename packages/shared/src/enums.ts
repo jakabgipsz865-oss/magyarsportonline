@@ -38,6 +38,8 @@ export const REVIEW_QUEUE_REASONS = [
   "manual_flag",
   "single_source_sensitive_category",
   "prompt_injection_suspected",
+  "content_quality_failed",
+  "force_review_mode",
 ] as const;
 export type ReviewQueueReason = (typeof REVIEW_QUEUE_REASONS)[number];
 

@@ -58,6 +58,7 @@ function buildDeps(overrides?: {
         promptVersion: "hungarian-writer@0.1.0",
         factConsistencyScore: "1.000",
         isPublished: false,
+        qualityIssues: null,
         createdAt: new Date(),
       })),
     },

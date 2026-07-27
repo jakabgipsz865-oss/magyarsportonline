@@ -13,8 +13,9 @@ import {
   createInProcessDispatcher,
   type InProcessDispatcher,
 } from "@magyarsportonline/events";
-import { NO_LLM_MODEL_LABEL } from "@magyarsportonline/llm";
+import { MODEL_TIERS, NOT_AI_TRANSLATED_NOTICE, NO_LLM_MODEL_LABEL } from "@magyarsportonline/llm";
 import { createRepositories, type Repositories } from "./db";
+import { env } from "./env";
 import { getLlmClient } from "./llm";
 import { getLogger } from "./logger";
 
@@ -126,6 +127,7 @@ export function buildDispatcher(repos: Repositories = createRepositories()): InP
         agentRunRepository: repos.agentRunRepository,
         dispatcher,
         logger,
+        forceReviewMode: env.FORCE_REVIEW_MODE,
       },
       event,
     ),
@@ -186,19 +188,24 @@ export async function runIngestPipeline(): Promise<
 
 /**
  * Entry point for `/api/internal/reprocess-no-llm`: finds every Story whose
- * *latest* version is still the deterministic `NoLlmClient` passthrough
- * (`NO_LLM_MODEL_LABEL`) and re-emits `story/facts.verified` for it — this
- * re-runs Hungarian Writer → SEO → Publish Gate with whichever LLM provider
- * is *currently* configured, without touching Fact Verification (the
- * underlying facts haven't changed, only the writer's ability to translate
- * them has). Safe/additive: `createNextVersion` never overwrites a prior
- * version, so a story already re-written via corroboration is untouched
- * (`listStoryIdsWithLatestModel` only matches the *latest* version).
+ * *latest* version either (a) is still the deterministic `NoLlmClient`
+ * passthrough (`NO_LLM_MODEL_LABEL`), or (b) came from a real, non-fallback
+ * LLM call but still fails the Content Quality Gate (empty/still-English/
+ * source-verbatim field — see hungarian-writer/quality-gate.ts; this covers
+ * the case where Fact Verification's own No-LLM fallback silently poisoned
+ * a Fact's `detail_hu` with English passthrough text, so even a genuinely
+ * successful Writer call produced bad Hungarian) — and re-emits
+ * `story/facts.verified` for it. This re-runs Hungarian Writer → SEO →
+ * Publish Gate with whichever LLM provider is *currently* configured,
+ * without touching Fact Verification (the underlying Facts haven't
+ * changed, only the Writer's ability to translate them has). Safe/additive:
+ * `createNextVersion` never overwrites a prior version, so a Story already
+ * re-written via corroboration or a previous reprocess pass that passed
+ * quality is left untouched.
  *
- * One-off operational tool for the situation where a misconfigured
- * `CLOUDFLARE_API_TOKEN` (or similar) got fixed after articles had already
- * been ingested and fallen back to No-LLM — not part of the regular
- * ingest/publish flow.
+ * One-off operational tool for the situation where a misconfigured LLM
+ * provider (or its Fact-extraction dependency) got fixed after articles had
+ * already been ingested — not part of the regular ingest/publish flow.
  */
 export async function reprocessNoLlmStories(): Promise<{ reprocessedStoryIds: string[] }> {
   const repos = createRepositories();
@@ -208,9 +215,32 @@ export async function reprocessNoLlmStories(): Promise<{ reprocessedStoryIds: st
   // Same per-request time-budget reasoning as DEFAULT_MAX_NEW_ARTICLES_PER_RUN
   // above — each reprocessed Story is another real writer + self-check call
   // chain. Remaining candidates stay picked up by the next call.
-  const allStoryIds =
-    await repos.storyVersionRepository.listStoryIdsWithLatestModel(NO_LLM_MODEL_LABEL);
-  const storyIds = allStoryIds.slice(0, DEFAULT_MAX_NEW_ARTICLES_PER_RUN);
+  const summaries = await repos.storyVersionRepository.listLatestVersionSummaries();
+  const storyIds: string[] = [];
+  for (const summary of summaries) {
+    if (storyIds.length >= DEFAULT_MAX_NEW_ARTICLES_PER_RUN) {
+      break;
+    }
+    if (summary.generatedByModel === NO_LLM_MODEL_LABEL) {
+      storyIds.push(summary.storyId);
+      continue;
+    }
+    if (!summary.isAiGenerated) {
+      continue;
+    }
+    const facts = (await repos.factRepository.listByStoryId(summary.storyId)).map(
+      hungarianWriter.toWriterFact,
+    );
+    const quality = hungarianWriter.assessContentQuality({
+      titleHu: summary.titleHu,
+      leadHu: summary.leadHu,
+      bodyHu: summary.bodyHu,
+      facts,
+    });
+    if (!quality.passed) {
+      storyIds.push(summary.storyId);
+    }
+  }
 
   for (const storyId of storyIds) {
     const story = await repos.storyRepository.getById(storyId);
@@ -249,4 +279,33 @@ export async function reprocessNoLlmStories(): Promise<{ reprocessedStoryIds: st
   }
 
   return { reprocessedStoryIds: storyIds };
+}
+
+/**
+ * Entry point for `/api/internal/backfill-ai-labels`: idempotently corrects
+ * the `isAiGenerated`/`generatedByModel` mislabeling bug (Content Quality &
+ * Reliability Hardening sprint) where a `StoryVersion` produced by a real,
+ * successful Hungarian Writer LLM call was recorded as
+ * `NO_LLM_MODEL_LABEL`/`isAiGenerated: false` purely because the *self-check*
+ * step's own call happened to fall back to No-LLM. Detects those rows by the
+ * one signal that survives the original bug — a genuine No-LLM row's
+ * `lead_hu` is always the exact deterministic disclaimer text
+ * (`no-llm-client.ts` `NOT_AI_TRANSLATED_NOTICE`); a mislabeled real row's
+ * `lead_hu` is real generated Hungarian text and never matches it verbatim.
+ * Only touches the two label columns — title/lead/body are never rewritten
+ * here (that's what `reprocessNoLlmStories`'s Content Quality Gate path is
+ * for). Safe to call repeatedly: once corrected, a row stops matching.
+ */
+export async function backfillMislabeledAiGenerated(): Promise<{ correctedCount: number }> {
+  const repos = createRepositories();
+  const llm = getLlmClient();
+  const correctModelLabel = llm.modelLabel ?? MODEL_TIERS.writing;
+
+  const correctedCount = await repos.storyVersionRepository.backfillMislabeledAiGenerated(
+    correctModelLabel,
+    NO_LLM_MODEL_LABEL,
+    NOT_AI_TRANSLATED_NOTICE,
+  );
+
+  return { correctedCount };
 }

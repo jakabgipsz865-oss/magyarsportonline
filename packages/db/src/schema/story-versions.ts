@@ -37,6 +37,11 @@ export const storyVersions = pgTable(
     // NoLlmClient passthrough) — surfaced through story_read_model so the
     // frontend can show an explicit "not yet AI-translated" notice.
     isAiGenerated: boolean("is_ai_generated").notNull().default(true),
+    // Content Quality Gate findings (packages/agents/hungarian-writer/quality-gate.ts)
+    // for this version's title_hu/lead_hu/body_hu — null means the gate
+    // found no issues (or predates the gate). Never blocks writing the
+    // version itself; audit trail + Publish Gate input only.
+    qualityIssues: jsonb("quality_issues"),
     promptVersion: text("prompt_version").notNull(),
     factConsistencyScore: numeric("fact_consistency_score", {
       precision: 4,
