@@ -1,8 +1,23 @@
-import type { ReviewQueueReason } from "@magyarsportonline/shared";
+import { asc, eq } from "drizzle-orm";
+import type { ReviewQueueReason, ReviewQueueStatus, RiskLevel } from "@magyarsportonline/shared";
 import type { Database } from "../client";
-import { reviewQueueItems } from "../schema/index";
+import { reviewQueueItems, stories, storyVersions } from "../schema/index";
 
 export type ReviewQueueItem = typeof reviewQueueItems.$inferSelect;
+
+/** A review felület listanézetéhez szükséges, joinolt olvasási alak. */
+export interface PendingReviewItem {
+  id: string;
+  storyId: string;
+  storyVersionId: string;
+  reason: ReviewQueueReason;
+  createdAt: Date;
+  titleHu: string;
+  leadHu: string;
+  confidenceScore: string | null;
+  riskLevel: RiskLevel | null;
+  slug: string | null;
+}
 
 /** Bounded-context repository for the Publish Gate (docs/architecture/02-agents.md §2.7). */
 export class ReviewQueueRepository {
@@ -24,6 +39,51 @@ export class ReviewQueueRepository {
     if (!row) {
       throw new Error("ReviewQueueItem insert returned no row");
     }
+    return row;
+  }
+
+  async getById(id: string): Promise<ReviewQueueItem | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(reviewQueueItems)
+      .where(eq(reviewQueueItems.id, id))
+      .limit(1);
+    return row;
+  }
+
+  /** Nyitott (pending) tételek a Story/verzió megjelenítési mezőivel, legrégebbi elöl. */
+  async listPending(): Promise<PendingReviewItem[]> {
+    return this.db
+      .select({
+        id: reviewQueueItems.id,
+        storyId: reviewQueueItems.storyId,
+        storyVersionId: reviewQueueItems.storyVersionId,
+        reason: reviewQueueItems.reason,
+        createdAt: reviewQueueItems.createdAt,
+        titleHu: storyVersions.titleHu,
+        leadHu: storyVersions.leadHu,
+        confidenceScore: stories.confidenceScore,
+        riskLevel: stories.riskLevel,
+        slug: stories.slug,
+      })
+      .from(reviewQueueItems)
+      .innerJoin(stories, eq(reviewQueueItems.storyId, stories.id))
+      .innerJoin(storyVersions, eq(reviewQueueItems.storyVersionId, storyVersions.id))
+      .where(eq(reviewQueueItems.status, "pending"))
+      .orderBy(asc(reviewQueueItems.createdAt));
+  }
+
+  /** Lezárja a tételt (approved/rejected/edited) — a Story státuszváltása a hívó felelőssége. */
+  async resolve(
+    id: string,
+    status: Exclude<ReviewQueueStatus, "pending">,
+    reviewNote?: string,
+  ): Promise<ReviewQueueItem | undefined> {
+    const [row] = await this.db
+      .update(reviewQueueItems)
+      .set({ status, reviewNote: reviewNote ?? null, resolvedAt: new Date() })
+      .where(eq(reviewQueueItems.id, id))
+      .returning();
     return row;
   }
 }
