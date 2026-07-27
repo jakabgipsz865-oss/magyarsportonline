@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { createDatabaseClient, type Database } from "./client";
-import { categories, entities, sources } from "./schema/index";
+import { categories, entities, llmUsage, sources, stories, storyReadModel } from "./schema/index";
 
 /**
  * Local-dev seed data (docs/architecture/08-roadmap.md Fázis 1, 20. lépés).
@@ -167,4 +167,35 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.error(error);
     process.exitCode = 1;
   });
+}
+
+/** Alap táblaszámlálók a távoli (HTTP-n keresztüli) deploy-ellenőrzéshez — a setup endpoint válasza. */
+export async function seedStatus(db: Database): Promise<{
+  sources: number;
+  categories: number;
+  entities: number;
+  stories: number;
+  storyReadModel: number;
+  llmUsageCalls: number;
+}> {
+  const countOf = async (
+    table:
+      | typeof sources
+      | typeof categories
+      | typeof entities
+      | typeof stories
+      | typeof storyReadModel
+      | typeof llmUsage,
+  ): Promise<number> => {
+    const [row] = await db.select({ value: count() }).from(table);
+    return row?.value ?? 0;
+  };
+  return {
+    sources: await countOf(sources),
+    categories: await countOf(categories),
+    entities: await countOf(entities),
+    stories: await countOf(stories),
+    storyReadModel: await countOf(storyReadModel),
+    llmUsageCalls: await countOf(llmUsage),
+  };
 }

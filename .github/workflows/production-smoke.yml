@@ -1,0 +1,87 @@
+# Production smoke test — a GitHub runnerről hívja végig a deployolt appot.
+#
+# Kézzel (workflow_dispatch) indítható. A publikus végpontokat secret nélkül
+# is ellenőrzi; a hitelesített lépések (seed setup, ingest indítás) csak a
+# CRON_SECRET repo-secret megléte esetén futnak, addig SKIPPED-ként
+# jelennek meg a kimenetben. A cél-URL a PRODUCTION_URL secretből jön, ennek
+# hiányában az alapértelmezett Vercel production URL.
+name: Production smoke test
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Run smoke checks
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -u
+          BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
+          echo "Target: $BASE"
+          FAILURES=0
+
+          check() { # name url expected_code
+            local name="$1" url="$2" expected="$3"
+            local code
+            code=$(curl -sS -o /tmp/last-body -w '%{http_code}' --max-time 60 "$url" || echo "000")
+            if [ "$code" = "$expected" ]; then
+              echo "PASS  $name ($code)"
+            else
+              echo "FAIL  $name (got $code, expected $expected)"
+              head -c 300 /tmp/last-body; echo
+              FAILURES=$((FAILURES+1))
+            fi
+          }
+
+          echo "== Publikus végpontok =="
+          check "home"        "$BASE/"            200
+          check "robots.txt"  "$BASE/robots.txt"  200
+          check "sitemap.xml" "$BASE/sitemap.xml" 200
+          check "rss.xml"     "$BASE/rss.xml"     200
+          check "api stories" "$BASE/api/v1/stories" 200
+
+          echo "== Auth-védelem =="
+          admin_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 60 "$BASE/admin/review" || echo "000")
+          case "$admin_code" in
+            401) echo "PASS  /admin/review auth aktív (401, ADMIN_SECRET beállítva)";;
+            503) echo "WARN  /admin/review letiltva (503) — ADMIN_SECRET nincs beállítva a Vercel env-ben";;
+            *)   echo "FAIL  /admin/review váratlan státusz: $admin_code"; FAILURES=$((FAILURES+1));;
+          esac
+          check "cron endpoint auth (no token)" "$BASE/api/internal/cron/dispatch-ingest" 401
+
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "SKIPPED  hitelesített lépések (seed setup, ingest) — CRON_SECRET repo-secret nincs beállítva"
+          else
+            echo "== Seed / setup =="
+            code=$(curl -sS -o /tmp/setup.json -w '%{http_code}' --max-time 120 \
+              -X POST "$BASE/api/internal/setup" -H "Authorization: Bearer $CRON_SECRET" || echo 000)
+            echo "setup: HTTP $code"; cat /tmp/setup.json; echo
+            [ "$code" = "200" ] || FAILURES=$((FAILURES+1))
+
+            echo "== Valódi BBC RSS ingest =="
+            code=$(curl -sS -o /tmp/ingest.json -w '%{http_code}' --max-time 300 \
+              -X POST "$BASE/api/internal/cron/dispatch-ingest" -H "Authorization: Bearer $CRON_SECRET" || echo 000)
+            echo "ingest: HTTP $code"; cat /tmp/ingest.json; echo
+            [ "$code" = "200" ] || FAILURES=$((FAILURES+1))
+
+            echo "== Story-állapot az ingest után =="
+            curl -sS --max-time 60 "$BASE/api/v1/stories?limit=5" | tee /tmp/stories.json; echo
+            slug=$(python3 -c "import json;d=json.load(open('/tmp/stories.json'));print(d['data'][0]['slug'] if d['data'] else '')" 2>/dev/null || echo "")
+            if [ -n "$slug" ]; then
+              check "story page /hir/$slug" "$BASE/hir/$slug" 200
+              python3 -c "import json; s=json.load(open('/tmp/stories.json'))['data'][0]; print('first story: slug=%s isAiGenerated=%s confidence=%s' % (s['slug'], s['isAiGenerated'], s['confidenceScore']))"
+            else
+              echo "INFO  nincs publikált Story a read modelben — vagy review queue-ban van (helyes Publish Gate viselkedés), vagy az ingest 0 új cikket talált"
+            fi
+          fi
+
+          echo "== Összegzés =="
+          echo "FAILURES=$FAILURES"
+          exit $([ "$FAILURES" -eq 0 ] && echo 0 || echo 1)
