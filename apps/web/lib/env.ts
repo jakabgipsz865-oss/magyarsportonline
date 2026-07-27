@@ -81,7 +81,11 @@ export const env = createEnv({
     SITE_URL: z.string().url().default("https://magyarsportonline-web.vercel.app"),
 
     // Wired: /api/internal/cron/dispatch-ingest — Vercel Cron "Authorization: Bearer $CRON_SECRET" konvenció (docs/architecture/04-api-spec.md §4.3, 06-deployment.md §6.5).
-    CRON_SECRET: z.string().min(1),
+    // .trim(): a Vercel/GitHub Actions secret-mezőkbe másoláskor könnyen
+    // bekerül egy záró newline (pl. .env fájlból vagy terminálból copy-paste
+    // esetén) — anélkül az ilyen, egyébként helyes érték is örökre 401-et
+    // adna a pontos string-egyezés miatt, secret-csere nélkül nem derülne ki.
+    CRON_SECRET: z.string().min(1).trim(),
 
     // Fázis 2+ (a jelenlegi in-process dispatcher helyett valódi Inngest-kötés, lásd docs/adr/0005-mvp-end-to-end-scope-cuts.md)
     INNGEST_EVENT_KEY: z.string().min(1).optional(),
