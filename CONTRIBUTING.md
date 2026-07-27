@@ -51,6 +51,7 @@ Mielőtt "kijavítanál" valamit, ami szokatlannak tűnik, nézd meg a `docs/adr
 - **[ADR 0002](docs/adr/0002-embedding-vector-dimensions.md)** — `raw_articles.embedding` 1536 dimenziós, felülvizsgálandó a Fázis 4 embedding-modell választásakor.
 - **[ADR 0003](docs/adr/0003-extensionless-relative-imports.md)** — a `packages/shared`, `packages/events`, `packages/db` csomagokban a relatív importok **kiterjesztés nélküliek** (`from "./enums"`, NEM `from "./enums.js"`), mert a `drizzle-kit generate` CJS-alapú betöltője nem tud `.js`-re végződő importot feloldani `.ts` fájlhoz. Ne írd vissza `.js`-re ezekben a csomagokban.
 - **[ADR 0004](docs/adr/0004-phase-0-env-vars-optional.md)** — a `apps/web/lib/env.ts`-ben egyik secret sincs kötelezővé téve Fázis 0-ban, mert még semmi nem használja őket; minden változó a saját roadmap-fázisában válik kötelezővé.
+- **[ADR 0005](docs/adr/0005-mvp-end-to-end-scope-cuts.md)** — az első end-to-end MVP hatókör-szűkítései (in-process event dispatcher Inngest helyett, fingerprint-only dedup, alias-lookup entitás-egyeztetés, slug-only SEO Agent) — mindegyik később, adapter-cserével bővíthető, nem újratervezés.
 
 Ha egy hasonlóan nem-nyilvánvaló, tervben nem rögzített döntést hozol, **írj hozzá egy új, sorszámozott ADR-t** a `docs/adr/` alá ugyanebben a formátumban (döntési helyzet / döntés / indoklás / következmény).
 
