@@ -89,13 +89,9 @@ jobs:
           BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
           echo "Target: $BASE"
 
-          echo "== CRON_SECRET (repo secret) — csak hossz + sha256-prefix, a tartalom soha =="
-          echo "  hossz: ${#CRON_SECRET} karakter"
-          echo "  sha256-prefix (első 12 hex): $(printf '%s' "$CRON_SECRET" | sha256sum | cut -c1-12)"
-
           if [ -n "${ADMIN_SECRET:-}" ]; then
-            echo "== CRON_SECRET (Vercel production) — ugyanez a diagnosztika, a /api/admin/debug-secret-check ideiglenes végponton keresztül =="
-            curl -sS -u "admin:$ADMIN_SECRET" --max-time 30 "$BASE/api/admin/debug-secret-check"; echo
+            echo "== Cloudflare Workers AI diagnosztika — miért esik vissza minden hívás No-LLM módra? =="
+            curl -sS -u "admin:$ADMIN_SECRET" --max-time 30 "$BASE/api/admin/debug-cloudflare-check"; echo
           fi
 
           if [ -z "${CRON_SECRET:-}" ]; then
