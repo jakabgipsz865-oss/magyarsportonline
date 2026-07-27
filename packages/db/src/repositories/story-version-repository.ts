@@ -25,6 +25,8 @@ export interface LatestVersionSummary {
   bodyHu: string;
   generatedByModel: string;
   isAiGenerated: boolean;
+  qualityIssues: unknown;
+  createdAt: Date;
 }
 
 /**
@@ -184,6 +186,8 @@ export class StoryVersionRepository {
         bodyHu: storyVersions.bodyHu,
         generatedByModel: storyVersions.generatedByModel,
         isAiGenerated: storyVersions.isAiGenerated,
+        qualityIssues: storyVersions.qualityIssues,
+        createdAt: storyVersions.createdAt,
       })
       .from(storyVersions)
       .innerJoin(
