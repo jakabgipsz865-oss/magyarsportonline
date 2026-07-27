@@ -26,3 +26,31 @@ export function estimateCostUsd(model: string, inputTokens: number, outputTokens
     (inputTokens * pricing.inputUsdPerMTok + outputTokens * pricing.outputUsdPerMTok) / 1_000_000
   );
 }
+
+/**
+ * Cloudflare Workers AI listaárak (a napi ingyenes Neuron-keret felett
+ * érvényesülnének — az alkalmazás sosem kapcsol be Cloudflare billinget,
+ * ez az érték kizárólag az `llm_usage` táblába kerülő becsült költséghez
+ * kell, hogy a tényleges fogyasztás nyomon követhető legyen a napi ingyenes
+ * keret közelségének megítéléséhez). Forrás: Cloudflare Workers AI árlista.
+ */
+export const CLOUDFLARE_MODEL_PRICING: Record<string, ModelPricing> = {
+  "@cf/qwen/qwen3-30b-a3b-fp8": { inputUsdPerMTok: 0.051, outputUsdPerMTok: 0.34 },
+};
+
+/** Konzervatív fallback ismeretlen Cloudflare modell-ID-re. */
+export const UNKNOWN_CLOUDFLARE_MODEL_PRICING: ModelPricing = {
+  inputUsdPerMTok: 1,
+  outputUsdPerMTok: 5,
+};
+
+export function estimateCloudflareCostUsd(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+): number {
+  const pricing = CLOUDFLARE_MODEL_PRICING[model] ?? UNKNOWN_CLOUDFLARE_MODEL_PRICING;
+  return (
+    (inputTokens * pricing.inputUsdPerMTok + outputTokens * pricing.outputUsdPerMTok) / 1_000_000
+  );
+}

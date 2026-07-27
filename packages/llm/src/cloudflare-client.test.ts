@@ -1,0 +1,176 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  CloudflareApiError,
+  CloudflareWorkersAiLlmClient,
+  DEFAULT_CLOUDFLARE_MODEL,
+  describeCloudflareError,
+} from "./cloudflare-client";
+
+function jsonResponse(body: unknown, init?: { status?: number }): Response {
+  return new Response(JSON.stringify(body), {
+    status: init?.status ?? 200,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+const textRequest = {
+  model: "claude-sonnet-5", // MODEL_TIERS-style logikai név — ezt a kliens nem használja fel közvetlenül
+  system: "system prompt",
+  messages: [{ role: "user" as const, content: "hello" }],
+  maxTokens: 100,
+};
+
+const JSON_SCHEMA = {
+  type: "object",
+  properties: { title_hu: { type: "string" }, lead_hu: { type: "string" } },
+  required: ["title_hu", "lead_hu"],
+  additionalProperties: false,
+} as const;
+
+describe("CloudflareWorkersAiLlmClient", () => {
+  it("uses the default model when none is configured", () => {
+    const client = new CloudflareWorkersAiLlmClient({ accountId: "acc", apiToken: "tok" });
+    expect(client.modelLabel).toBe(DEFAULT_CLOUDFLARE_MODEL);
+  });
+
+  it("calls the OpenAI-compatible endpoint with Bearer auth and the configured model", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe(
+        "https://api.cloudflare.com/client/v4/accounts/acc-123/ai/v1/chat/completions",
+      );
+      expect(init?.headers).toMatchObject({ authorization: "Bearer secret-token" });
+      const body = JSON.parse(String(init?.body)) as { model: string };
+      expect(body.model).toBe("@cf/qwen/custom-model");
+      return jsonResponse({
+        choices: [{ message: { content: "válasz" } }],
+        usage: { prompt_tokens: 10, completion_tokens: 5 },
+      });
+    });
+    const client = new CloudflareWorkersAiLlmClient({
+      accountId: "acc-123",
+      apiToken: "secret-token",
+      model: "@cf/qwen/custom-model",
+      fetchImpl,
+    });
+    const result = await client.completeText(textRequest);
+    expect(result).toEqual({ text: "válasz", inputTokens: 10, outputTokens: 5 });
+  });
+
+  it("parses JSON completions, including markdown-fenced output", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        choices: [{ message: { content: '```json\n{"title_hu": "Cím", "lead_hu": "Lead"}\n```' } }],
+        usage: { prompt_tokens: 3, completion_tokens: 2 },
+      }),
+    );
+    const client = new CloudflareWorkersAiLlmClient({
+      accountId: "acc",
+      apiToken: "tok",
+      fetchImpl,
+    });
+    const result = await client.completeJson({ ...textRequest, jsonSchema: JSON_SCHEMA });
+    expect(result.data).toEqual({ title_hu: "Cím", lead_hu: "Lead" });
+  });
+
+  it("throws a schema_error when a required field is missing from the response", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        choices: [{ message: { content: '{"title_hu": "Cím csak"}' } }],
+        usage: { prompt_tokens: 3, completion_tokens: 2 },
+      }),
+    );
+    const client = new CloudflareWorkersAiLlmClient({
+      accountId: "acc",
+      apiToken: "tok",
+      fetchImpl,
+    });
+    await expect(
+      client.completeJson({ ...textRequest, jsonSchema: JSON_SCHEMA }),
+    ).rejects.toMatchObject({ kind: "schema_error" });
+  });
+
+  it("throws a parse_error when the response is not valid JSON", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        choices: [{ message: { content: "nem JSON szöveg" } }],
+        usage: { prompt_tokens: 3, completion_tokens: 2 },
+      }),
+    );
+    const client = new CloudflareWorkersAiLlmClient({
+      accountId: "acc",
+      apiToken: "tok",
+      fetchImpl,
+    });
+    await expect(
+      client.completeJson({ ...textRequest, jsonSchema: JSON_SCHEMA }),
+    ).rejects.toMatchObject({ kind: "parse_error" });
+  });
+
+  it("throws an http error with status on a non-2xx response", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ errors: [{ code: 10000, message: "rate limited" }] }, { status: 429 }),
+    );
+    const client = new CloudflareWorkersAiLlmClient({
+      accountId: "acc",
+      apiToken: "tok",
+      fetchImpl,
+    });
+    await expect(client.completeText(textRequest)).rejects.toMatchObject({
+      kind: "http",
+      status: 429,
+    });
+  });
+
+  it("throws an error_envelope error when Cloudflare returns 2xx with an errors array", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ errors: [{ code: 5006, message: "model not found" }] }),
+    );
+    const client = new CloudflareWorkersAiLlmClient({
+      accountId: "acc",
+      apiToken: "tok",
+      fetchImpl,
+    });
+    await expect(client.completeText(textRequest)).rejects.toMatchObject({
+      kind: "error_envelope",
+    });
+  });
+
+  it("throws a network error on fetch failure", async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new Error("fetch failed");
+    });
+    const client = new CloudflareWorkersAiLlmClient({
+      accountId: "acc",
+      apiToken: "tok",
+      fetchImpl,
+    });
+    await expect(client.completeText(textRequest)).rejects.toMatchObject({ kind: "network" });
+  });
+});
+
+describe("describeCloudflareError", () => {
+  it("classifies every error kind and http status bucket", () => {
+    expect(describeCloudflareError(new CloudflareApiError("network", 0, "x"))).toBe(
+      "network_error",
+    );
+    expect(describeCloudflareError(new CloudflareApiError("parse_error", 0, "x"))).toBe(
+      "invalid_json_output",
+    );
+    expect(describeCloudflareError(new CloudflareApiError("schema_error", 0, "x"))).toBe(
+      "schema_mismatch",
+    );
+    expect(describeCloudflareError(new CloudflareApiError("error_envelope", 0, "x"))).toBe(
+      "api_error_envelope",
+    );
+    expect(describeCloudflareError(new CloudflareApiError("http", 429, "x"))).toBe(
+      "quota_exceeded",
+    );
+    expect(describeCloudflareError(new CloudflareApiError("http", 401, "x"))).toBe("forbidden");
+    expect(describeCloudflareError(new CloudflareApiError("http", 403, "x"))).toBe("forbidden");
+    expect(describeCloudflareError(new CloudflareApiError("http", 503, "x"))).toBe(
+      "service_unavailable",
+    );
+    expect(describeCloudflareError(new CloudflareApiError("http", 400, "x"))).toBe("http_400");
+    expect(describeCloudflareError(new Error("boom"))).toBe("unknown_error");
+  });
+});

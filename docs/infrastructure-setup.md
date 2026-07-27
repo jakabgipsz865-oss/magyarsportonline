@@ -27,7 +27,10 @@ cp apps/web/.env.example apps/web/.env.local
 | Változó            | Kötelező | Forrás                                                                             |
 | ------------------ | -------- | ----------------------------------------------------------------------------------- |
 | `DATABASE_URL`     | igen     | Neon konzol → Project → Connection Details ("Pooled connection" ajánlott)           |
-| `LLM_PROVIDER`     | nem (alapértelmezés: `none`) | `none`, `gemini` vagy `anthropic` — lásd lent                       |
+| `LLM_PROVIDER`     | nem (alapértelmezés: `none`) | `none`, `cloudflare`, `gemini` vagy `anthropic` — lásd lent         |
+| `CLOUDFLARE_ACCOUNT_ID` | csak ha `LLM_PROVIDER=cloudflare` | Cloudflare Dashboard → jobb felső sáv → Account ID       |
+| `CLOUDFLARE_API_TOKEN`  | csak ha `LLM_PROVIDER=cloudflare` | Cloudflare Dashboard → My Profile → API Tokens ("Workers AI" jogosultsággal) |
+| `CLOUDFLARE_AI_MODEL`   | nem (alapértelmezés: `@cf/qwen/qwen3-30b-a3b-fp8`) | csak `LLM_PROVIDER=cloudflare` esetén releváns |
 | `GEMINI_API_KEY`   | csak ha `LLM_PROVIDER=gemini` | Google AI Studio → aistudio.google.com/apikey (ingyenes tier)     |
 | `GEMINI_MODEL`     | nem (alapértelmezés: `gemini-2.0-flash-lite`) | csak `LLM_PROVIDER=gemini` esetén releváns          |
 | `ANTHROPIC_API_KEY` | csak ha `LLM_PROVIDER=anthropic` | Anthropic Console → API Keys                                |
@@ -47,47 +50,76 @@ Minden más — RSS ingest, deduplikáció, Story-létrehozás, Confidence Score
 Risk Classifier, Publish Gate, Timeline/verziókezelés — ettől függetlenül,
 teljes egészében működik, mert ezek eleve nem használnak LLM-et.
 
-#### `LLM_PROVIDER=gemini` — ingyenes tier teszthez (jelenlegi alapértelmezett teszt-üzemmód)
+#### `LLM_PROVIDER=cloudflare` — jelenlegi aktív provider (2026-07 döntés)
+
+```bash
+LLM_PROVIDER=cloudflare
+CLOUDFLARE_ACCOUNT_ID=<Cloudflare Dashboard jobb felső sáv>
+CLOUDFLARE_API_TOKEN=<"Workers AI" jogosultságú API-token>
+# CLOUDFLARE_AI_MODEL=@cf/qwen/qwen3-30b-a3b-fp8   # opcionális, ez az alapértelmezés
+```
+
+**Miért ez az aktív provider és nem Gemini/Anthropic:** a Google Gemini free
+tier használatához technikailag nem kell Google Cloud billing, de a
+mögöttes Cloud-projekt és a "billing hozzáadása a kvóta növeléséhez"
+felugró ablak korábban már okozott váratlan számlázási helyzetet — ezt a
+kockázatot tudatosan elkerüljük. A Cloudflare Workers AI ingyenes napi
+Neuron-kerete a Cloudflare Free plan része, **nem igényel hitelkártyát,
+Cloudflare Paid plant vagy bekapcsolt billinget** — a fiók regisztrációja
+és az API-token generálása önmagában nem hoz létre semmilyen fizetési
+kötelezettséget.
+
+**Token beszerzése:**
+1. Regisztrálj egy Cloudflare fiókot (dash.cloudflare.com) — hitelkártya
+   nem szükséges a Free planhoz.
+2. Dashboard → jobb felső sáv → másold ki az **Account ID**-t.
+3. Dashboard → My Profile → API Tokens → Create Token → válaszd a
+   **Workers AI** sablont (vagy egyedi tokent "Workers AI: Read/Edit"
+   jogosultsággal) → **ne kapcsolj hozzá billing-fiókot vagy Paid plant**.
+
+`packages/llm/src/cloudflare-client.ts` — raw HTTP-alapú kliens (nincs
+`@cloudflare/...` SDK-függőség), a Workers AI OpenAI-kompatibilis
+`/ai/v1/chat/completions` végpontját hívja **közvetlenül a Vercelről** —
+az alkalmazás NINCS Cloudflare Workers-re migrálva, ez csak egy plusz
+kimenő HTTP-hívás a meglévő Vercel serverless függvényből. A
+`ProviderFallbackLlmClient` (`packages/llm/src/provider-fallback-client.ts`)
+csomagolja be: **bármilyen hiba** — 4xx/5xx, kvótatúllépés/429,
+tiltás/401/403, szolgáltatáshiba/5xx, hálózati hiba, érvénytelen
+JSON-kimenet, vagy a kért séma hiányos mezői — esetén a rendszer
+automatikusan, hangosan naplózva átvált a determinisztikus No-LLM módra —
+a pipeline sosem áll le emiatt, és a Story ilyenkor helyesen
+`is_ai_generated: false`-ként, "nem AI-fordított" jelöléssel jön létre.
+Sikeres hívás esetén a token-felhasználás, a `provider: "cloudflare"` és a
+becsült USD-költség (Cloudflare listaár alapján, a tényleges napi ingyenes
+Neuron-fogyasztás nyomon követéséhez) az `llm_usage` táblába kerül.
+
+`CLOUDFLARE_API_TOKEN` kizárólag szerveroldalon (`apps/web/lib/llm.ts`,
+Next.js szerver-futtatókörnyezet) kerül felhasználásra — az
+`apps/web/lib/env.ts` Zod-sémájában a `server` blokkban van, sosem a
+`client`-ben, tehát a böngésző felé kiszolgált JS-bundle-ba nem kerülhet be.
+
+Ha Cloudflare időközben megváltoztatja a modellkínálatot vagy a napi
+ingyenes keretet, a `CLOUDFLARE_AI_MODEL` env-változó módosítása — kód
+nélkül, Vercel-en egyszerű redeploy-jal — elég az áttéréshez.
+
+#### `LLM_PROVIDER=gemini` / `LLM_PROVIDER=anthropic` — megtartott, jelenleg inaktív útvonalak
 
 ```bash
 LLM_PROVIDER=gemini
 GEMINI_API_KEY=<Google AI Studio-ban generált ingyenes kulcs>
-# GEMINI_MODEL=gemini-2.0-flash-lite   # opcionális, ez az alapértelmezés
 ```
-
-A kulcs a [Google AI Studio](https://aistudio.google.com/apikey) felületén
-generálható, **nem igényel fizetős Google Cloud billing-fiókot** — a
-`gemini-2.0-flash-lite` (és a legtöbb Flash/Flash-Lite modell) ingyenes
-tierben elérhető, napi/perces kvótával.
-
-`packages/llm/src/gemini-client.ts` — raw HTTP-alapú kliens (nincs
-`@google/...` SDK-függőség), amit a `ProviderFallbackLlmClient`
-(`packages/llm/src/provider-fallback-client.ts`) csomagol be: **bármilyen
-hiba** (kvótatúllépés/429, tiltás/403, szolgáltatáshiba/5xx, hálózati hiba,
-vagy akár egy elavult `GEMINI_MODEL` miatti 400) esetén a rendszer
-automatikusan, hangosan naplózva átvált a determinisztikus No-LLM módra —
-a pipeline sosem áll le emiatt, és a Story ilyenkor helyesen
-`is_ai_generated: false`-ként, "nem AI-fordított" jelöléssel jön létre.
-Sikeres hívás esetén a token-felhasználás és a `provider: "gemini"` az
-`llm_usage` táblába kerül, `cost_usd = 0` (ingyenes tier).
-
-Ha Google időközben megváltoztatja a free-tier modellkínálatot, a
-`GEMINI_MODEL` env-változó módosítása — kód nélkül, Vercel-en egyszerű
-redeploy-jal — elég az áttéréshez.
-
-#### `LLM_PROVIDER=anthropic` — fizetős, opcionális, jelenleg nem használt
 
 ```bash
 LLM_PROVIDER=anthropic
 ANTHROPIC_API_KEY=<valódi kulcs>
 ```
 
-(`apps/web/lib/llm.ts` ekkor a valódi `AnthropicLlmClient`-et adja vissza,
-`BudgetGuardedLlmClient`-be csomagolva — ha `LLM_PROVIDER=anthropic`, de
-`ANTHROPIC_API_KEY` hiányzik, az app egy egyértelmű hibával áll le
-boot-kor, nem csendes fallback-kel.) Ez az üzemmód later, csak amikor
-valós felhasználói forgalomhoz szükséges a jobb minőségű, fizetős modell —
-egyelőre a Gemini ingyenes tier a validált teszt-útvonal.
+Mindkét adapter (`packages/llm/src/gemini-client.ts`,
+`packages/llm/src/client.ts` `AnthropicLlmClient`) megmarad a kódbázisban,
+teljes teszt-lefedettséggel, de jelenleg egyik sincs Vercel-en bekapcsolva —
+az Anthropic ág emellett fizetős is, csak akkor érdemes rá váltani, ha
+valós felhasználói forgalomhoz jobb minőségű, fizetős modellre van
+szükség, és ezt tudatosan jóváhagyod.
 
 A `DATABASE_URL`-nek Neon esetén tartalmaznia kell az `sslmode=require`
 paramétert, pl. formátumban:

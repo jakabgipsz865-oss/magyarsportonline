@@ -1,10 +1,13 @@
 import {
   AnthropicLlmClient,
   BudgetGuardedLlmClient,
+  CloudflareWorkersAiLlmClient,
   GeminiLlmClient,
   NoLlmClient,
   ProviderFallbackLlmClient,
+  describeCloudflareError,
   describeGeminiError,
+  estimateCloudflareCostUsd,
   type LlmClient,
 } from "@magyarsportonline/llm";
 import { createRepositories } from "./db";
@@ -17,26 +20,51 @@ let cachedClient: LlmClient | undefined;
  * `LLM_PROVIDER=none` (default) returns the deterministic `NoLlmClient` —
  * no network call, no cost, no API key needed.
  *
+ * `LLM_PROVIDER=cloudflare` (jelenlegi aktív teszt-provider, 2026-07) a
+ * Cloudflare Workers AI ingyenes napi Neuron-kerettel elérhető API-ját
+ * hívja, wrapped in the (reactive) Provider Fallback: bármilyen hiba —
+ * 4xx/5xx, kvótatúllépés, hálózati hiba, érvénytelen JSON-kimenet, vagy a
+ * kért séma hiányos mezői — hangosan naplózva a NoLlmClient-re irányít, a
+ * pipeline emiatt sosem áll le (packages/llm/src/cloudflare-client.ts,
+ * provider-fallback-client.ts). Se Cloudflare Paid plan, se billing nincs
+ * bekapcsolva ehhez — a token kizárólag szerveroldalon kerül felhasználásra.
+ *
+ * `LLM_PROVIDER=gemini` switches to the free-tier Gemini API, ugyanezzel a
+ * Provider Fallback mintával. Jelenleg nincs aktívan használva, de az
+ * adapter megmarad opcionális útvonalként.
+ *
  * `LLM_PROVIDER=anthropic` switches to the real Anthropic API, wrapped in
  * the Budget Guard: every call is token/cost-metered into the `llm_usage`
  * table, and once the monthly spend reaches `LLM_MONTHLY_BUDGET_USD` the
  * guard transparently serves requests from the NoLlmClient instead of
- * failing or stopping (packages/llm/src/budget-guard.ts).
- *
- * `LLM_PROVIDER=gemini` switches to the free-tier Gemini API, wrapped in the
- * (reactive) Provider Fallback: any call failure — quota exhaustion (429),
- * forbidden (403), a service/network error, or anything else — is logged
- * and transparently served from the NoLlmClient instead, so the ingest
- * pipeline never stops on a free-tier quota hit
- * (packages/llm/src/provider-fallback-client.ts). Cost is always logged as
- * 0 USD (free tier, no billing).
+ * failing or stopping (packages/llm/src/budget-guard.ts). Fizetős, jelenleg
+ * nincs aktívan használva.
  */
 export function getLlmClient(): LlmClient {
   if (cachedClient) {
     return cachedClient;
   }
 
-  if (env.LLM_PROVIDER === "anthropic") {
+  if (env.LLM_PROVIDER === "cloudflare") {
+    if (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_API_TOKEN) {
+      throw new Error(
+        "LLM_PROVIDER=cloudflare requires CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN to be set (see docs/infrastructure-setup.md)",
+      );
+    }
+    cachedClient = new ProviderFallbackLlmClient({
+      inner: new CloudflareWorkersAiLlmClient({
+        accountId: env.CLOUDFLARE_ACCOUNT_ID,
+        apiToken: env.CLOUDFLARE_API_TOKEN,
+        model: env.CLOUDFLARE_AI_MODEL,
+      }),
+      fallback: new NoLlmClient(),
+      providerName: "cloudflare",
+      usageSink: createRepositories().llmUsageRepository,
+      estimateCostUsd: estimateCloudflareCostUsd,
+      describeError: describeCloudflareError,
+      logger: getLogger(),
+    });
+  } else if (env.LLM_PROVIDER === "anthropic") {
     if (!env.ANTHROPIC_API_KEY) {
       throw new Error(
         "LLM_PROVIDER=anthropic requires ANTHROPIC_API_KEY to be set (see docs/infrastructure-setup.md)",
