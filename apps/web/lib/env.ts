@@ -27,11 +27,31 @@ export const env = createEnv({
     // LLM_PROVIDER=none (alapértelmezés) esetén a pipeline a determinisztikus
     // NoLlmClient adaptert használja (packages/llm/src/no-llm-client.ts) —
     // nincs API-hívás, nincs költség, semmilyen API-kulcs nem szükséges.
+    // LLM_PROVIDER=cloudflare esetén CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN,
     // LLM_PROVIDER=anthropic esetén ANTHROPIC_API_KEY, LLM_PROVIDER=gemini
     // esetén GEMINI_API_KEY kötelező — ezt a feltételes kényszert lib/llm.ts
     // ellenőrzi (createEnv nem támogat egyszerűen mező-közti feltételes
-    // validációt).
-    LLM_PROVIDER: z.enum(["none", "anthropic", "gemini"]).default("none"),
+    // validációt). Jelenlegi (2026-07) döntés: Cloudflare Workers AI az
+    // aktív teszt-provider — a Gemini és Anthropic adapter megmarad, de
+    // egyik sincs bekapcsolva (lásd docs/infrastructure-setup.md).
+    LLM_PROVIDER: z.enum(["none", "anthropic", "gemini", "cloudflare"]).default("none"),
+
+    // Csak akkor kötelező ténylegesen, ha LLM_PROVIDER=cloudflare (lib/llm.ts).
+    // Cloudflare Dashboard → jobb felső saroktól jobbra → Account ID.
+    CLOUDFLARE_ACCOUNT_ID: z.string().min(1).optional(),
+
+    // Csak akkor kötelező ténylegesen, ha LLM_PROVIDER=cloudflare (lib/llm.ts).
+    // "Workers AI" jogosultságú API-token (Cloudflare Dashboard → My Profile
+    // → API Tokens) — kizárólag szerveroldalon (apps/web/lib/llm.ts) kerül
+    // felhasználásra, sosem jut a kliens-oldali bundle-be (lásd `client: {}`
+    // lent). Ingyenes napi Neuron-kerettel használható, nem igényel
+    // Cloudflare Paid plant vagy bekapcsolt billinget.
+    CLOUDFLARE_API_TOKEN: z.string().min(1).optional(),
+
+    // Ingyenes napi kerettel elérhető, a magyart hivatalosan is támogató
+    // Qwen3 MoE modell alapértelmezésben (packages/llm/src/cloudflare-client.ts)
+    // — kód nélkül felülírható, ha másik Workers AI modellt szeretnénk.
+    CLOUDFLARE_AI_MODEL: z.string().min(1).default("@cf/qwen/qwen3-30b-a3b-fp8"),
 
     // Csak akkor kötelező ténylegesen, ha LLM_PROVIDER=anthropic (lib/llm.ts).
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
