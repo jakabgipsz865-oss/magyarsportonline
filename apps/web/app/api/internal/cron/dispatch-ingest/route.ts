@@ -8,8 +8,11 @@ import { runIngestPipeline } from "../../../../../lib/pipeline";
  * docs/architecture/06-deployment.md §6.5: `/api/internal/cron/dispatch-ingest`).
  * Service-token auth via Vercel Cron's `Authorization: Bearer $CRON_SECRET`
  * convention — never session-based, never publicly callable.
+ *
+ * GET és POST ugyanazt csinálja: a Vercel Cron GET-tel hív, a kézi/CI
+ * indítás (GitHub Actions ütemezett workflow, curl) POST-tal.
  */
-export async function POST(request: NextRequest): Promise<NextResponse> {
+async function handleDispatch(request: NextRequest): Promise<NextResponse> {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -25,4 +28,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
     return NextResponse.json({ error: "ingest pipeline failed" }, { status: 500 });
   }
+}
+
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  return handleDispatch(request);
+}
+
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  return handleDispatch(request);
 }
