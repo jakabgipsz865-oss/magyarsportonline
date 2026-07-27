@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-typecheck-test-build:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      # A docs/architecture/06-deployment.md §6.4 egy további CI-lépést ír elő:
+      # "DB migráció dry-run Neon preview branch ellen". Ez Neon-projekt és
+      # valódi GitHub Secrets (pl. NEON_API_KEY) megléte nélkül nem
+      # megvalósítható — ezt a lépést a roadmap Fázis 1 4. lépése (Neon
+      # projekt létrehozása, docs/architecture/08-roadmap.md) után kell
+      # hozzáadni, amikor van tényleges Neon-projekt és hitelesítő adat.
+      # Szándékosan nem került be egy hamis/hibázó placeholder lépésként.
