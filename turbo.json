@@ -15,6 +15,14 @@
       "dependsOn": ["^build"],
       "passThroughEnv": ["DATABASE_URL", "TEST_DATABASE_URL", "ANTHROPIC_API_KEY", "LOG_LEVEL"]
     },
+    "@magyarsportonline/agents#test": {
+      "dependsOn": ["^build", "@magyarsportonline/db#test"],
+      "passThroughEnv": ["DATABASE_URL", "TEST_DATABASE_URL", "ANTHROPIC_API_KEY", "LOG_LEVEL"]
+    },
+    "@magyarsportonline/web#test": {
+      "dependsOn": ["^build", "@magyarsportonline/agents#test"],
+      "passThroughEnv": ["DATABASE_URL", "TEST_DATABASE_URL", "ANTHROPIC_API_KEY", "LOG_LEVEL"]
+    },
     "dev": {
       "cache": false,
       "persistent": true

@@ -32,16 +32,18 @@ Egyetlen csomagra szűkítve: `pnpm --filter @magyarsportonline/<csomagnév> <sc
 
 Lásd [`docs/architecture/05-repo-structure.md`](docs/architecture/05-repo-structure.md) a teljes tervezett struktúráért. Fázis 0 után létező csomagok:
 
-| Csomag                   | Felelősség                                                          |
-| ------------------------ | ------------------------------------------------------------------- |
-| `apps/web`               | Next.js frontend (publikus oldalak, admin UI, API route-ok)         |
-| `packages/config`        | megosztott ESLint/TypeScript/Prettier presetek                      |
-| `packages/shared`        | megosztott típusok, enumok                                          |
-| `packages/events`        | event-contract (Zod sémák)                                          |
-| `packages/db`            | Drizzle adatbázis-séma, kliens, fingerprint/locking segédfüggvények |
-| `packages/observability` | strukturált logolási határ                                          |
+| Csomag                   | Felelősség                                                                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`               | Next.js frontend (publikus oldalak, admin UI, API route-ok)                                                                           |
+| `packages/config`        | megosztott ESLint/TypeScript/Prettier presetek                                                                                        |
+| `packages/shared`        | megosztott típusok, enumok                                                                                                            |
+| `packages/events`        | event-contract (Zod sémák)                                                                                                            |
+| `packages/db`            | Drizzle adatbázis-séma, kliens, fingerprint/locking segédfüggvények                                                                   |
+| `packages/observability` | strukturált logolási határ                                                                                                            |
+| `packages/llm`           | Anthropic kliens, modellkonstansok, fallback-detektálás                                                                               |
+| `packages/agents`        | MVP agentek (Source Ingest, Deduplication, Story Merge, Fact Verification, Hungarian Writer, SEO, Publish Gate, Read Model Projector) |
 
-**`packages/agents` még nem létezik** — az agent-logika (Source Ingest, Deduplication, stb.) a roadmap Fázis 3+ része, lásd [`docs/architecture/08-roadmap.md`](docs/architecture/08-roadmap.md).
+Az end-to-end MVP-folyamat egyetlen paranccsal futtatható: `pnpm demo` (lásd `scripts/demo.ts`).
 
 ## Fontos kódstílus-döntések (ADR-ek)
 
@@ -49,8 +51,13 @@ Mielőtt "kijavítanál" valamit, ami szokatlannak tűnik, nézd meg a `docs/adr
 
 - **[ADR 0001](docs/adr/0001-dependency-version-pinning.md)** — a függőségek konkrét verzióra vannak rögzítve, nem `latest`-re; a frissítés tudatos, külön feladat.
 - **[ADR 0002](docs/adr/0002-embedding-vector-dimensions.md)** — `raw_articles.embedding` 1536 dimenziós, felülvizsgálandó a Fázis 4 embedding-modell választásakor.
-- **[ADR 0003](docs/adr/0003-extensionless-relative-imports.md)** — a `packages/shared`, `packages/events`, `packages/db` csomagokban a relatív importok **kiterjesztés nélküliek** (`from "./enums"`, NEM `from "./enums.js"`), mert a `drizzle-kit generate` CJS-alapú betöltője nem tud `.js`-re végződő importot feloldani `.ts` fájlhoz. Ne írd vissza `.js`-re ezekben a csomagokban.
+- **[ADR 0003](docs/adr/0003-extensionless-relative-imports.md)** — a monorepo egészében a relatív importok **kiterjesztés nélküliek** (`from "./enums"`, NEM `from "./enums.js"`), mert a `drizzle-kit generate` CJS-alapú betöltője és a Next.js webpack-bundlere sem tud `.js`-re végződő importot feloldani `.ts` fájlhoz. Ne írj vissza `.js`-re relatív importokat sehol.
 - **[ADR 0004](docs/adr/0004-phase-0-env-vars-optional.md)** — a `apps/web/lib/env.ts`-ben egyik secret sincs kötelezővé téve Fázis 0-ban, mert még semmi nem használja őket; minden változó a saját roadmap-fázisában válik kötelezővé.
+- **[ADR 0005](docs/adr/0005-mvp-direct-orchestration-no-queue.md)** — az MVP `pnpm demo` folyamata az agenteket közvetlen, szinkron függvényhívásokkal láncolja, nem üzenetsoron (Inngest/queue) keresztül; a queue-alapú orchestrálás bevezetése későbbi fázis.
+- **[ADR 0006](docs/adr/0006-mvp-fingerprint-only-dedup.md)** — az MVP deduplikációja kizárólag fingerprint-egyezésen (kategória + elsődleges entitás + dátum-bucket) alapul, embedding-alapú szemantikus keresés nélkül.
+- **[ADR 0007](docs/adr/0007-mvp-llm-fallback-mode.md)** — `ANTHROPIC_API_KEY` hiányában a Fact Verification és Hungarian Writer agentek szabály-, illetve sablon-alapú fallback-ra váltanak, ezt a kimenetben (`extractionMethod`/`generatedByModel`) mindig őszintén jelölve.
+- **[ADR 0008](docs/adr/0008-ci-postgres-service.md)** — a CI `pgvector/pgvector:pg16` service containert használ valódi Postgres ellen futó integrációs tesztekhez.
+- **[ADR 0009](docs/adr/0009-serialize-db-touching-test-tasks.md)** — `packages/db`, `packages/agents` és `apps/web` `test` taskja a `turbo.json`-ban explicit függőséggel szekvenciálisra van kötve (`db#test` → `agents#test` → `web#test`), mert mindhárom ugyanazt a megosztott Postgres-t használja integrációs tesztekhez, és a Turborepo alapból párhuzamosan futtatná őket.
 
 Ha egy hasonlóan nem-nyilvánvaló, tervben nem rögzített döntést hozol, **írj hozzá egy új, sorszámozott ADR-t** a `docs/adr/` alá ugyanebben a formátumban (döntési helyzet / döntés / indoklás / következmény).
 

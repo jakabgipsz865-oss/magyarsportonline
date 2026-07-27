@@ -14,6 +14,8 @@ A `packages/db` Drizzle-sémájának migráció-generálása (`drizzle-kit gener
 
 A `packages/shared`, `packages/events` és `packages/db` csomagokon belüli **összes relatív import/export kiterjesztés nélkülire** lett átírva (`from "./enums"`, nem `from "./enums.js"`).
 
+**2026-07-27, kiegészítés (MVP pipeline, `apps/web`):** ugyanez a korlát `apps/web`-ben is jelentkezett — a `lib/db.ts` egy `.js`-re végződő importja (`from "./env.js"`) `next build` alatt `Module not found`-dal elbukott, mert a Next.js webpack-alapú bundlere (a `tsc`-től eltérően) szintén nem oldja fel a `.js` → `.ts` TypeScript-specifikus leképezést relatív importoknál. A szabály tehát **kiterjesztve érvényes `apps/web`-re is**: minden relatív importot kiterjesztés nélkül kell írni az egész monorepóban, nem csak a három eredetileg érintett csomagban.
+
 ## Indoklás
 
 - A monorepo mindenütt `"moduleResolution": "Bundler"`-t használ (`packages/config/tsconfig/base.json`), ami **nem követeli meg** az explicit kiterjesztést relatív importoknál — a kiterjesztés-nélküli forma tehát nem regresszió `tsc`, Vitest vagy a Next.js build szempontjából (mindegyiket leteszteltük utána, lásd a Fázis 0 commit-történetet).
