@@ -165,7 +165,7 @@ export function buildDispatcher(repos: Repositories = createRepositories()): InP
  * ingest request bounded; anything left over is picked up by the next
  * scheduled run (URLs already ingested are never reprocessed either way).
  */
-const DEFAULT_MAX_NEW_ARTICLES_PER_RUN = 8;
+const DEFAULT_MAX_NEW_ARTICLES_PER_RUN = 2;
 
 export async function runIngestPipeline(): Promise<
   Awaited<ReturnType<typeof sourceIngest.runSourceIngest>>
