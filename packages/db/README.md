@@ -7,18 +7,19 @@ Az adatbázis-séma (Drizzle ORM, PostgreSQL) a teljes Story-alapú adatmodellhe
 
 Az `agent_runs` tábla **szándékosan vékony** (nem tartalmaz input/output snapshotot) — lásd a `agent-runs.ts` fájl kommentjét és `09-architecture-review.md` §6.
 
-## Mi VAN ebben a csomagban (Fázis 0 hatóköre)
+## Mi VAN ebben a csomagban
 
 - Teljes Drizzle séma (`src/schema/`)
 - Adatbázis-kliens factory (`src/client.ts`) — connection stringet paraméterként vár, nem olvas env-et közvetlenül
 - `computeFingerprint()` — tiszta, tesztelt hash-függvény a fingerprint-alapú lockoláshoz (`src/fingerprint.ts`)
 - `withFingerprintLock()` — `pg_advisory_xact_lock`-alapú helper (`src/locking.ts`), unit-tesztelve egy könnyű test double-lal
+- **Repository-réteg** (`src/repositories/`) — Fázis 1, 08-roadmap.md 19. lépés, review §4 szerint agentenként szűkített (`SourceRepository`, `RawArticleRepository`, `StoryRepository`, `StoryVersionRepository`, `FactRepository`, `StorySourceRepository`, `EntityRepository`, `CategoryRepository`, `ReviewQueueRepository`, `StoryReadModelRepository`, `AgentRunRepository`). A `StoryRepository.createOrMatchByFingerprint()` és a `StoryVersionRepository.createNextVersion()` implementálja ténylegesen a race-condition védelmet (advisory lock, ill. `SELECT ... FOR UPDATE`), nem csak a helper-t adja.
+- **Seed script** (`src/seed.ts`, `pnpm db:seed`) — Fázis 1, 08-roadmap.md 20. lépés: alap kategória/entitás-taxonómia + egy dev/demo RSS `Source` (BBC Sport Football) — az URL kizárólag seed-adatként létezik, nincs a Source Ingest Agent kódjába égetve (`docs/adr/0005-mvp-end-to-end-scope-cuts.md`).
 
 ## Mi NINCS ebben a csomagban (későbbi fázisok)
 
-- Repository-réteg (`StoryRepository`, stb.) — Fázis 1, 08-roadmap.md 19. lépés
-- Tényleges migráció futtatás éles/dev adatbázis ellen — ehhez `DATABASE_URL` és validált env-kezelés kell (Fázis 1+)
-- Agent-logika (dedup, story merge, stb.) — Fázis 3+
+- Tényleges migráció futtatás éles/dev adatbázis ellen — ehhez `DATABASE_URL` kell (a repository-réteg és a seed script már fel vannak készítve rá, csak élő kapcsolat hiányzik ebben a fejlesztői környezetben)
+- Agent-logika (dedup, story merge, stb.) — lásd `packages/agents`
 
 ## Migráció generálása
 
