@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { Database } from "../client";
 import { stories, storyVersions } from "../schema/index";
 
@@ -100,5 +100,38 @@ export class StoryVersionRepository {
       .from(storyVersions)
       .where(eq(storyVersions.storyId, storyId))
       .orderBy(asc(storyVersions.versionNumber));
+  }
+
+  /**
+   * Story ids whose *latest* version was produced by the given model label —
+   * used to find safe reprocessing candidates once a previously-failing LLM
+   * provider starts working again (e.g. `NO_LLM_MODEL_LABEL` after a
+   * misconfigured Cloudflare token gets fixed). Only the latest version
+   * counts: a Story already re-written by a real provider via corroboration
+   * must not be reprocessed again.
+   */
+  async listStoryIdsWithLatestModel(model: string): Promise<string[]> {
+    const latestPerStory = this.db
+      .select({
+        storyId: storyVersions.storyId,
+        maxVersion: sql<number>`max(${storyVersions.versionNumber})`.as("max_version"),
+      })
+      .from(storyVersions)
+      .groupBy(storyVersions.storyId)
+      .as("latest");
+
+    const rows = await this.db
+      .select({ storyId: storyVersions.storyId })
+      .from(storyVersions)
+      .innerJoin(
+        latestPerStory,
+        and(
+          eq(storyVersions.storyId, latestPerStory.storyId),
+          eq(storyVersions.versionNumber, latestPerStory.maxVersion),
+        ),
+      )
+      .where(eq(storyVersions.generatedByModel, model));
+
+    return rows.map((row) => row.storyId);
   }
 }
