@@ -59,7 +59,14 @@ export async function selfCheckContent(
         }),
       },
     ],
-    maxTokens: 1024,
+    // 2048 (raised from 1024 on 2026-07-28): a real 10-article A/B run
+    // proved every self-check fallback was "invalid_json_output" (Qwen3's
+    // hidden reasoning tokens exhausting max_tokens before any visible JSON
+    // came out), never a real inconsistency — 20% of calls were losing
+    // otherwise-good rewrites to this, not to an actual fact problem. See
+    // the same root cause already fixed for the editorial-rewrite call
+    // (rewrite.ts, 2048) and the A/B test's judge call.
+    maxTokens: 2048,
     jsonSchema: SELF_CHECK_JSON_SCHEMA,
   });
 

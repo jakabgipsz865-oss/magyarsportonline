@@ -15,13 +15,13 @@ const DIAGNOSTIC_REQUEST: JsonCompletionRequest = {
   system:
     'Válaszolj KIZÁRÓLAG ezzel a JSON-nal, más szöveg nélkül: {"consistent": true, "fact_consistency_score": 1, "issues": []}',
   messages: [{ role: "user", content: "diagnosztikai teszthívás" }],
-  // 1024, mert a valódi self-check hívás (hungarian-writer/self-check.ts)
-  // is ennyit használ — a Qwen3 egy reasoning modell, ami a rejtett
-  // gondolkodási tokenjeit is a max_tokens keretből fedezi, így egy
-  // túl szűk (pl. 64-es) keret üres `content`-et eredményezhet és
-  // JSON.parse hibát dob, ami a hitelesítéstől független, önmagában
+  // 2048, mert a valódi self-check hívás (hungarian-writer/self-check.ts)
+  // is ennyit használ (2026-07-28-tól, 1024-ről emelve) — a Qwen3 egy
+  // reasoning modell, ami a rejtett gondolkodási tokenjeit is a max_tokens
+  // keretből fedezi, így egy túl szűk keret üres `content`-et eredményezhet
+  // és JSON.parse hibát dob, ami a hitelesítéstől független, önmagában
   // okozott hamis negatív lenne ebben a diagnosztikában.
-  maxTokens: 1024,
+  maxTokens: 2048,
   jsonSchema: {
     type: "object",
     properties: {
