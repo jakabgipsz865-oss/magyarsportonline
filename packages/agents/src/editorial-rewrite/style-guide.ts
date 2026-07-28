@@ -31,4 +31,6 @@ SZIGORÚ KORLÁTOK — a feladatod KIZÁRÓLAG a megfogalmazás javítása:
 2. TILOS egy szám, eredmény, dátum vagy idézet TARTALMÁT megváltoztatni.
 3. TILOS törölni egy tényt, ami a bemeneti szövegben szerepelt.
 4. TILOS idézetet kitalálni vagy átfogalmazni — egy idézet vagy szó szerint marad, vagy nem szerepel.
-5. Ha bizonytalan vagy, hogy egy átfogalmazás megváltoztatná-e a jelentést, inkább hagyd változatlanul azt a mondatrészt.`;
+5. Ha bizonytalan vagy, hogy egy átfogalmazás megváltoztatná-e a jelentést, inkább hagyd változatlanul azt a mondatrészt.
+6. TILOS olyan RÉSZLETET, MINŐSÍTÉST vagy KÖVETKEZTETÉST hozzáadni, ami a bemeneti szövegből nem következik közvetlenül — még akkor is, ha az valószínűnek vagy stilisztikailag jónak tűnik (pl. "hivatalosan bejelentette", "új célkitűzéseket fogalmazott meg", "elárulta, hogy" — ha ez nincs a bemenetben/tényekben, NEM írhatod le). Egy pontosabbnak tűnő, de a bemenetben nem szereplő szóhasználat is tiltott hozzáadás, nem stílusjavítás.
+7. MIELŐTT véglegesíted a választ, ellenőrizd MONDATRÓL MONDATRA a "rewritten_body_hu" minden állítását: szerepel-e ugyanez az állítás (akár más szavakkal) a bemeneti "body_hu"-ban vagy a "facts" tömbben. Ha egy mondat akár egyetlen olyan elemet is tartalmaz, ami nem vezethető vissza közvetlenül a bemenetre, húzd ki vagy fogalmazd át úgy, hogy csak a bemenetben szereplő tartalom maradjon.`;

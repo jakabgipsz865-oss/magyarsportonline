@@ -1,5 +1,6 @@
 import { MODEL_TIERS, type LlmClient } from "@magyarsportonline/llm";
 import { z } from "zod";
+import { findRelevantLexiconEntries, formatLexiconBlock } from "../shared/football-lexicon";
 import type { WriterFact } from "./facts";
 import type { QualityIssue } from "./quality-gate";
 
@@ -51,6 +52,7 @@ Szabályok:
 - Természetes, élő, mai magyar sportújságírói stílust használj — ne fordíts szó szerint, ne másold be a "facts" szövegét változtatás nélkül; fogalmazz újra, kerüld az ismétlést és a gépies, monoton mondatszerkezetet.
 - Ügyelj a magyar nyelvtanra: helyes névelőhasználat (a/az), ékezetek, ragozás és mondatszerkezet.
 - Szó szerinti idézetet KIZÁRÓLAG akkor használj, ha egy tény "factType" mezője "quote", és akkor is csak a megadott "quoteOriginal"/"quoteSpeaker" alapján, forrás-hivatkozással.
+- Ha a rendszerüzenet végén egy "FUTBALLNYELVI SZÓTÁR" blokk szerepel, az a "quoteOriginal" mezőkben előforduló angol futballkifejezések/szleng/idióma természetes magyar megfelelőit adja meg — ezeket használd az idézet átültetésekor, NE a megadott tükörfordítást.
 - Ha a felhasználói üzenet "previousVersion" mezője nem null, a "change_summary_hu" mezőben egy rövid, magyar nyelvű összefoglalót adj arról, mi változott az előző verzióhoz képest. Ha "previousVersion" null (ez az első verzió), a "change_summary_hu" legyen null.`;
 
 const QUALITY_FIX_SYSTEM_PROMPT = `Magyar sportújságíró vagy. Az előző tervezeted NEM felelt meg a minőségi elvárásoknak — a felhasználói üzenet "previousAttempt" mezője mutatja a hibás tervezetet, "issues" mezője pedig a talált problémákat (pl. "title: looks_english" = a cím angolul maradt; "lead: empty" = a lead üres; "body: matches_source_verbatim" = a törzs szó szerint megegyezik egy ténnyel; "body: repeated_paragraph" = két bekezdés ugyanazt mondja el, csak átfogalmazva; "lead: duplicates_body" = a lead szó szerint megismétlődik egy bekezdésben).
@@ -63,14 +65,38 @@ const QUALITY_FIX_SYSTEM_PROMPT = `Magyar sportújságíró vagy. Az előző ter
 - ügyelj a helyes névelőkre, ékezetekre és mondatszerkezetre;
 - kizárólag a "facts" tömbben szereplő tényekre támaszkodj, ne találj ki semmit.`;
 
+/**
+ * A Hungarian Writer Agent sosem látja a nyers angol forráscikket (lásd a
+ * `generateStoryVersion` docstringjét) — a facts.detailHu mezőket a Fact
+ * Verification Agent már lefordítja. Az egyetlen valódi angol szöveg, ami
+ * idáig eljut, a szó szerint megőrzött idézetek (`quoteOriginal`) — ezekben
+ * fordulhat elő át nem ültetett futballszleng/idióma, amit a modellnek a
+ * body_hu megfogalmazásakor természetes magyarra kell váltania. Ezért a
+ * futballnyelvi lexikont (packages/agents/src/shared/football-lexicon.ts)
+ * kizárólag ezen idézetek ellen illesztjük, nem a már magyar detailHu ellen.
+ */
+function buildLexiconBlock(facts: WriterFact[]): string {
+  const englishQuotes = facts
+    .map((fact) => fact.quoteOriginal)
+    .filter((quote): quote is string => Boolean(quote))
+    .join("\n");
+  if (!englishQuotes) {
+    return "";
+  }
+  const entries = findRelevantLexiconEntries(englishQuotes);
+  const block = formatLexiconBlock(entries);
+  return block ? `\n\n${block}` : "";
+}
+
 async function runGenerationCall(
   llm: LlmClient,
   system: string,
   userContent: unknown,
+  facts: WriterFact[],
 ): Promise<GeneratedContent> {
   const result = await llm.completeJson({
     model: MODEL_TIERS.writing,
-    system,
+    system: system + buildLexiconBlock(facts),
     messages: [{ role: "user", content: JSON.stringify(userContent) }],
     maxTokens: 2048,
     jsonSchema: GENERATION_JSON_SCHEMA,
@@ -91,10 +117,15 @@ export async function generateStoryVersion(
   llm: LlmClient,
   input: GenerationInput,
 ): Promise<GeneratedContent> {
-  return runGenerationCall(llm, SYSTEM_PROMPT, {
-    facts: input.facts,
-    previousVersion: input.previousVersion,
-  });
+  return runGenerationCall(
+    llm,
+    SYSTEM_PROMPT,
+    {
+      facts: input.facts,
+      previousVersion: input.previousVersion,
+    },
+    input.facts,
+  );
 }
 
 export interface QualityFixInput extends GenerationInput {
@@ -112,10 +143,15 @@ export async function regenerateWithQualityFix(
   llm: LlmClient,
   input: QualityFixInput,
 ): Promise<GeneratedContent> {
-  return runGenerationCall(llm, QUALITY_FIX_SYSTEM_PROMPT, {
-    facts: input.facts,
-    previousVersion: input.previousVersion,
-    previousAttempt: input.previousAttempt,
-    issues: input.issues.map((issue) => `${issue.field}: ${issue.kind}`),
-  });
+  return runGenerationCall(
+    llm,
+    QUALITY_FIX_SYSTEM_PROMPT,
+    {
+      facts: input.facts,
+      previousVersion: input.previousVersion,
+      previousAttempt: input.previousAttempt,
+      issues: input.issues.map((issue) => `${issue.field}: ${issue.kind}`),
+    },
+    input.facts,
+  );
 }

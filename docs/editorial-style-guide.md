@@ -130,6 +130,12 @@ kettőspont vagy gondolatjel mögé rejtve a kifejtést.
    megfogalmazást finomíthatja).
 4. Nem találhat ki vagy fogalmazhat át idézetet — egy idézet vagy szó
    szerint marad, vagy nem szerepel a szövegben.
+5. Nem adhat hozzá olyan részletet, minősítést vagy következtetést, ami a
+   bemeneti szövegből nem következik közvetlenül — akkor sem, ha
+   valószínűnek vagy stilisztikailag jónak tűnik (2026-07-28: egy 25 cikkes
+   megerősítő teszt megmutatta, hogy ez volt a leggyakoribb módja, ahogyan a
+   modell — a korábbi 4 szabály betartása mellett is — ténybeli eltérést
+   vitt be, pl. be nem bizonyított részletek hozzátoldásával).
 
 Ezt a pipeline nem csak a promptra bízza: minden átírás után a Hungarian
 Writer Agent már meglévő tény-konzisztencia ellenőrzését (`selfCheckContent`)
