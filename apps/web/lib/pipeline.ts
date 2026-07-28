@@ -2,6 +2,7 @@ import {
   deduplication,
   editorialRewrite,
   factVerification,
+  footballLexicon,
   hungarianWriter,
   publishGate,
   readModelProjector,
@@ -426,4 +427,66 @@ export async function runEditorialAbTestBatch(options: { offset: number; limit: 
     options.offset + options.limit < candidates.length ? options.offset + options.limit : null;
 
   return { results, errors, totalCandidates: candidates.length, nextOffset };
+}
+
+/**
+ * `runEditorialAbTestBatch` plus persistence, for the human-reviewable
+ * `/internal/editorial-ab-review` admin page (2026-07-28 sprint — "ne
+ * tekintsd késznek a tesztet, amíg ezt az oldalt emberként át nem tudom
+ * nézni"). Writes ONLY to the dedicated `editorial_ab_snapshots` table (one
+ * row per Story, upserted) — never touches `story_versions` or anything the
+ * public site reads, so this cannot publish or alter a single word of the
+ * live site. `runEditorialAbTestBatch` itself stays pure/read-only, matching
+ * its own doc comment — this wrapper is the only thing that writes.
+ */
+export async function runEditorialAbReviewBatch(options: {
+  offset: number;
+  limit: number;
+}): Promise<{
+  results: Awaited<ReturnType<typeof editorialRewrite.runAbComparison>>[];
+  errors: Array<{ storyId: string; message: string }>;
+  totalCandidates: number;
+  nextOffset: number | null;
+}> {
+  const batch = await runEditorialAbTestBatch(options);
+  const repos = createRepositories();
+
+  for (const result of batch.results) {
+    const originalSources = await repos.storySourceRepository.originalContentByStoryId(
+      result.storyId,
+    );
+    const searchText = [
+      ...originalSources.map((source) => `${source.titleOriginal}\n${source.bodyOriginal}`),
+      result.pipelineA.titleHu,
+      result.pipelineA.leadHu,
+      result.pipelineA.bodyHu,
+      result.pipelineB.titleHu,
+      result.pipelineB.leadHu,
+      result.pipelineB.bodyHu,
+    ].join("\n");
+    const lexiconMatches = footballLexicon.findRelevantLexiconEntries(searchText, 30);
+
+    await repos.editorialAbSnapshotRepository.upsert({
+      storyId: result.storyId,
+      titleA: result.pipelineA.titleHu,
+      leadA: result.pipelineA.leadHu,
+      bodyA: result.pipelineA.bodyHu,
+      titleB: result.pipelineB.titleHu,
+      leadB: result.pipelineB.leadHu,
+      bodyB: result.pipelineB.bodyHu,
+      rewriteAccepted: result.pipelineB.rewriteAccepted,
+      rejectionKind: result.pipelineB.rejectionKind,
+      rejectionReason: result.pipelineB.rejectionReason,
+      qualityA: result.pipelineA.quality,
+      qualityB: result.pipelineB.quality,
+      judge: result.judge,
+      perCallUsage: result.perCallUsage,
+      totalUsage: result.totalUsage,
+      durationMs: result.durationMs,
+      lexiconMatches,
+      originalSources,
+    });
+  }
+
+  return batch;
 }

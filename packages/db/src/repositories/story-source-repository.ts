@@ -11,6 +11,13 @@ export interface StorySourceSummaryItem {
   firstSeenAt: string;
 }
 
+export interface OriginalSourceContent {
+  sourceName: string;
+  sourceUrl: string;
+  titleOriginal: string;
+  bodyOriginal: string;
+}
+
 /** Bounded-context repository for the Story Merge Agent (docs/architecture/02-agents.md §2.3). */
 export class StorySourceRepository {
   constructor(private readonly db: Database) {}
@@ -59,5 +66,27 @@ export class StorySourceRepository {
       url: row.url,
       firstSeenAt: row.firstSeenAt.toISOString(),
     }));
+  }
+
+  /**
+   * The original, untranslated English article(s) a Story was built from —
+   * for the `/internal/editorial-ab-review` admin page, so a human reviewer
+   * can compare the Hungarian Writer/Editorial Rewrite output against the
+   * actual source text. A merged Story can have more than one contributing
+   * raw article.
+   */
+  async originalContentByStoryId(storyId: string): Promise<OriginalSourceContent[]> {
+    const rows = await this.db
+      .select({
+        sourceName: sources.name,
+        sourceUrl: rawArticles.sourceUrl,
+        titleOriginal: rawArticles.titleOriginal,
+        bodyOriginal: rawArticles.bodyOriginal,
+      })
+      .from(storySources)
+      .innerJoin(rawArticles, eq(storySources.rawArticleId, rawArticles.id))
+      .innerJoin(sources, eq(rawArticles.sourceId, sources.id))
+      .where(eq(storySources.storyId, storyId));
+    return rows;
   }
 }

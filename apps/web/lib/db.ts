@@ -1,6 +1,7 @@
 import {
   AgentRunRepository,
   CategoryRepository,
+  EditorialAbSnapshotRepository,
   EntityRepository,
   FactRepository,
   LlmUsageRepository,
@@ -29,6 +30,7 @@ export function createRepositories(db: Database = getDb()) {
   return {
     agentRunRepository: new AgentRunRepository(db),
     categoryRepository: new CategoryRepository(db),
+    editorialAbSnapshotRepository: new EditorialAbSnapshotRepository(db),
     entityRepository: new EntityRepository(db),
     factRepository: new FactRepository(db),
     llmUsageRepository: new LlmUsageRepository(db),

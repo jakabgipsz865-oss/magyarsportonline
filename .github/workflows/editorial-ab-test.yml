@@ -4,10 +4,14 @@
 # cikkeken, olvashatósági metrikákkal, tartalom-minőségi heurisztikákkal és
 # egy vak LLM-judge összehasonlítással.
 #
-# Kizárólag olvasás — a `/api/internal/editorial-ab-test` végpont sosem ír az
-# adatbázisba. Kötegelve fut (alapértelmezés: 5 cikk/hívás), mert a Vercel
-# Hobby csomag 60 másodperces `maxDuration`-je nem bírná el 50 cikk összes
-# LLM-hívását egyetlen kérésben.
+# A `/api/internal/editorial-ab-review` végpontot hívja (2026-07-28-től) —
+# ugyanaz az összehasonlítás, mint a régi, kizárólag olvasó
+# `/api/internal/editorial-ab-test` végponté, de emellett minden cikk
+# eredményét elmenti az `editorial_ab_snapshots` táblába, hogy a
+# `/internal/editorial-ab-review` admin oldalon böngészőből, emberként is
+# átnézhető legyen — ne csak ennek a workflow-nak a logjában. Kötegelve fut
+# (alapértelmezés: 5 cikk/hívás), mert a Vercel Hobby csomag 60 másodperces
+# `maxDuration`-je nem bírná el 50 cikk összes LLM-hívását egyetlen kérésben.
 name: Editorial style A/B test
 
 on:
@@ -55,7 +59,7 @@ jobs:
 
             echo "== batch offset=$offset limit=$limit =="
             code=$(curl -sS -o batch.json -w '%{http_code}' --max-time 60 \
-              -X POST "$BASE/api/internal/editorial-ab-test?offset=$offset&limit=$limit" \
+              -X POST "$BASE/api/internal/editorial-ab-review?offset=$offset&limit=$limit" \
               -H "Authorization: Bearer $CRON_SECRET" || echo 000)
             echo "HTTP $code"
             if [ "$code" != "200" ]; then

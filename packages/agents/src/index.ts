@@ -7,3 +7,4 @@ export * as editorialRewrite from "./editorial-rewrite/index";
 export * as seo from "./seo/index";
 export * as publishGate from "./publish-gate/index";
 export * as readModelProjector from "./read-model-projector/index";
+export * as footballLexicon from "./shared/football-lexicon";
