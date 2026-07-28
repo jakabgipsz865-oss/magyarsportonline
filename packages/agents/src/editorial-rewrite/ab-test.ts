@@ -230,7 +230,14 @@ export async function runAbComparison(
           content: JSON.stringify({ verzio_1: fullText(first), verzio_2: fullText(second) }),
         },
       ],
-      maxTokens: 512,
+      // 2048, matching rewriteForStyle's budget: comparing two full articles
+      // is at least as reasoning-heavy as rewriting one, and Qwen3's hidden
+      // reasoning tokens are drawn from this same budget. 512 was measured
+      // (2026-07-28 A/B run) to fail with an empty/non-JSON response 100% of
+      // the time — see cloudflare-client.ts's "parse_error" kind — while the
+      // otherwise-identical self-check call (1024) and rewrite call (2048)
+      // fail far less often, proportionally to their own budgets.
+      maxTokens: 2048,
       jsonSchema: JUDGE_JSON_SCHEMA,
     });
     judgeCallUsage = judgeMeter.toCallUsage(model);
