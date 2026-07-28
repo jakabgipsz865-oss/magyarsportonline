@@ -1,0 +1,90 @@
+# Egyszeri, kézi rollout workflow a Content Quality & Reliability Hardening
+# sprint tartalom-ismétlési javításához (repeated_paragraph/duplicates_body
+# találatok a Content Quality Gate-ben): lefuttatja az isAiGenerated
+# backfill-t és a kiterjesztett reprocess-no-llm-et (ami a most szigorúbb
+# gate alapján újra átvizsgálja a meglévő valódi AI-tartalmakat is), kilistázza
+# a review queue-t, és — ha az `approve_item_ids` inputban ID-kat kapott —
+# jóváhagyja azokat a `/api/internal/review-queue/approve` végponton
+# keresztül. Csak akkor fut érdemben, ha a CRON_SECRET/ADMIN_SECRET
+# repo-secretek be vannak állítva.
+name: Content fix rollout (one-off)
+
+on:
+  push:
+    branches: [claude/magyarsportonline-v1-launch-j26j54]
+  workflow_dispatch:
+    inputs:
+      approve_item_ids:
+        description: "Comma-separated review-queue item IDs to approve+publish (leave empty to just list pending items)"
+        required: false
+        default: ""
+
+permissions: {}
+
+jobs:
+  rollout:
+    name: Backfill + reprocess + review-queue list/approve
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Run rollout
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APPROVE_ITEM_IDS: ${{ inputs.approve_item_ids }}
+        run: |
+          set -u
+          BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
+          echo "Target: $BASE"
+
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "SKIPPED - CRON_SECRET repo secret is not set."
+            exit 0
+          fi
+
+          echo "== Waiting for the merged deploy to go live (rss.xml, max ~6 min) =="
+          for i in $(seq 1 24); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$BASE/rss.xml" || echo 000)
+            if [ "$code" = "200" ]; then echo "deployed"; break; fi
+            echo "  waiting... ($code)"; sleep 15
+          done
+
+          echo "== isAiGenerated backfill (idempotent) =="
+          curl -sS -w '\nHTTP %{http_code}\n' --max-time 60 \
+            -X POST "$BASE/api/internal/backfill-ai-labels" -H "Authorization: Bearer $CRON_SECRET"
+
+          echo "== Reprocess backlog against the stricter Content Quality Gate, up to 15x (2 Story/call cap) =="
+          for i in $(seq 1 15); do
+            code=$(curl -sS -o /tmp/reprocess.json -w '%{http_code}' --max-time 90 \
+              -X POST "$BASE/api/internal/reprocess-no-llm" -H "Authorization: Bearer $CRON_SECRET" || echo 000)
+            body=$(cat /tmp/reprocess.json 2>/dev/null || echo "{}")
+            echo "  reprocess [$i] HTTP $code: $body"
+            if echo "$body" | grep -q '"reprocessedCount":0'; then
+              echo "  no more candidates, stopping reprocess loop early"
+              break
+            fi
+          done
+
+          echo "== Pending review queue (JSON) =="
+          curl -sS --max-time 30 "$BASE/api/internal/review-queue" -H "Authorization: Bearer $CRON_SECRET" | tee /tmp/review-queue.json
+          echo
+
+          if [ -n "${APPROVE_ITEM_IDS:-}" ]; then
+            echo "== Approving requested item IDs =="
+            IFS=',' read -ra IDS <<< "$APPROVE_ITEM_IDS"
+            for id in "${IDS[@]}"; do
+              trimmed=$(echo "$id" | xargs)
+              [ -z "$trimmed" ] && continue
+              echo "  approving $trimmed"
+              curl -sS -w '\n  HTTP %{http_code}\n' --max-time 30 \
+                -X POST "$BASE/api/internal/review-queue/approve" \
+                -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+                -d "{\"itemId\":\"$trimmed\"}"
+            done
+          else
+            echo "== No approve_item_ids given — listing only =="
+          fi
+
+          echo "== Story-állapot a művelet után =="
+          curl -sS --max-time 30 "$BASE/api/v1/stories?limit=5" | tee /tmp/stories.json
+          echo
