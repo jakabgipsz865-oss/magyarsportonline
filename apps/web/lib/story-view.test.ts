@@ -88,7 +88,7 @@ describe("toStoryDetailView", () => {
     expect(result.sources).toEqual([]);
   });
 
-  it("surfaces a well-formed credibility summary", () => {
+  it("surfaces a well-formed credibility summary, defaulting missing breakdown fields to empty arrays", () => {
     const result = toStoryDetailView(
       row({
         credibilitySummary: {
@@ -126,7 +126,70 @@ describe("toStoryDetailView", () => {
           recordedAt: "2026-07-28T09:00:00.000Z",
         },
       ],
+      sourceBreakdown: [],
+      contradictions: [],
+      scoreBreakdown: [],
     });
+  });
+
+  it("surfaces the full source breakdown and a contradiction detail when present", () => {
+    const result = toStoryDetailView(
+      row({
+        credibilitySummary: {
+          score: 86,
+          band: "strong_corroboration",
+          labelHu: "Több erős forrás megerősíti",
+          justificationHu: "2 független forrás egyezik meg legalább egy állításban.",
+          officialConfirmed: true,
+          corroboratingSourceCount: 2,
+          updatedAt: "2026-07-28T10:00:00.000Z",
+          history: [],
+          sourceBreakdown: [
+            {
+              sourceId: "bbc",
+              name: "BBC Sport",
+              category: "trusted_media",
+              badgeEmoji: "🟢",
+              reliabilityDisplayScore: 95,
+              factCount: 3,
+              factCountLabelHu: "3 állítás",
+            },
+            {
+              sourceId: "club",
+              name: "Liverpool FC",
+              category: "club",
+              badgeEmoji: "🟡",
+              reliabilityDisplayScore: 100,
+              factCount: 1,
+              factCountLabelHu: "1 hivatalos közlemény",
+            },
+          ],
+          contradictions: [
+            {
+              factType: "transfer_status",
+              factTypeLabelHu: "átigazolási részlet",
+              claims: [
+                { sourceName: "Sky Sports", detailHu: "35 millió euróért" },
+                { sourceName: "BBC Sport", detailHu: "40 millió euróért" },
+              ],
+              statusHu: "Nem megerősített átigazolási részlet",
+            },
+          ],
+          scoreBreakdown: [
+            { labelHu: "Hivatalos forrás megerősítette (Liverpool FC)", points: 25 },
+          ],
+        },
+      }),
+    );
+    expect(result.credibility?.sourceBreakdown).toHaveLength(2);
+    expect(result.credibility?.sourceBreakdown[1]).toMatchObject({
+      name: "Liverpool FC",
+      badgeEmoji: "🟡",
+      factCountLabelHu: "1 hivatalos közlemény",
+    });
+    expect(result.credibility?.contradictions).toHaveLength(1);
+    expect(result.credibility?.contradictions[0]?.claims).toHaveLength(2);
+    expect(result.credibility?.scoreBreakdown[0]?.points).toBe(25);
   });
 
   it("returns null credibility when the summary is null or malformed", () => {

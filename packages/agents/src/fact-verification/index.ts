@@ -50,7 +50,11 @@ export interface FactVerificationDeps {
   sourceRepository: Pick<SourceRepository, "getById">;
   factRepository: Pick<
     FactRepository,
-    "insertMany" | "markContradicted" | "bumpCorroboration" | "listByStoryId"
+    | "insertMany"
+    | "markContradicted"
+    | "bumpCorroboration"
+    | "listByStoryId"
+    | "listByStoryIdWithSourceName"
   >;
   storySourceRepository: Pick<StorySourceRepository, "sourcesWithMetaByStoryId">;
   storyCredibilityHistoryRepository: Pick<StoryCredibilityHistoryRepository, "insert">;

@@ -12,6 +12,15 @@ export interface ClaimMergeResult {
   corroboratingSourceCountByFactId: Map<string, number>;
   /** A legjobban megerősített állítás forrásszáma — a Hitelességi mutató "független megerősítések száma" bemenete. */
   maxCorroboratingSourceCount: number;
+  /**
+   * factId → csoportkulcs (`fact_type|normalizált szöveg`) — a megjelenítési
+   * réteg (credibility-explanation.ts hívói) ebből tudja megállapítani,
+   * mely tények tartoznak PONTOSAN ugyanahhoz az állításhoz, hogy a
+   * "legjobban megerősített állítás forrásai" ne keveredjen össze két
+   * KÜLÖNBÖZŐ, egymásnak ellentmondó, de véletlenül azonos (alacsony)
+   * forrásszámú állítással.
+   */
+  groupKeyByFactId: Map<string, string>;
 }
 
 /**
@@ -54,5 +63,5 @@ export function mergeClaims(facts: FactWithSource[]): ClaimMergeResult {
     maxCorroboratingSourceCount = Math.max(maxCorroboratingSourceCount, count);
   }
 
-  return { corroboratingSourceCountByFactId, maxCorroboratingSourceCount };
+  return { corroboratingSourceCountByFactId, maxCorroboratingSourceCount, groupKeyByFactId };
 }

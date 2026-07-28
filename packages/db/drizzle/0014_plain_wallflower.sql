@@ -1,0 +1,1 @@
+ALTER TABLE "story_credibility_history" ADD COLUMN "explanation" jsonb;

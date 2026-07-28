@@ -5,17 +5,42 @@ import type {
   StorySourceRepository,
 } from "@magyarsportonline/db";
 import { mergeClaims, type FactWithSource } from "./claim-merge";
+import {
+  buildContradictionDetails,
+  buildScoreBreakdown,
+  buildSourceBreakdown,
+  winningGroupSourceNames,
+  type ContradictionDetail,
+  type ScoreBreakdownEntry,
+  type SourceBreakdownItem,
+} from "./credibility-explanation";
 import { computeCredibilityScore } from "./credibility-score";
 import { sourceReliabilityScore } from "./confidence-score";
 
 export interface RecomputeCredibilityDeps {
-  factRepository: Pick<FactRepository, "listByStoryId" | "bumpCorroboration">;
+  factRepository: Pick<
+    FactRepository,
+    "listByStoryId" | "bumpCorroboration" | "listByStoryIdWithSourceName"
+  >;
   storySourceRepository: Pick<StorySourceRepository, "sourcesWithMetaByStoryId">;
   storyRepository: Pick<StoryRepository, "getById" | "updateCredibilityResult">;
   storyCredibilityHistoryRepository: Pick<StoryCredibilityHistoryRepository, "insert">;
 }
 
-function quoteOf(payload: unknown): string | null {
+export interface RecomputeCredibilityResult {
+  score: number;
+  band: string;
+  labelHu: string;
+  justificationHu: string;
+  officialConfirmed: boolean;
+  corroboratingSourceCount: number;
+  sourceBreakdown: SourceBreakdownItem[];
+  contradictions: ContradictionDetail[];
+  scoreBreakdown: ScoreBreakdownEntry[];
+}
+
+/** Van-e verbatim idézet a payloadban — a read-model-projector is ezt használja a hitelesség-magyarázat "közvetlen idézet" jelzőjéhez. */
+export function quoteOf(payload: unknown): string | null {
   if (
     typeof payload === "object" &&
     payload !== null &&
@@ -39,6 +64,11 @@ function quoteOf(payload: unknown): string | null {
  *      forrást vagy egy állítást — ilyenkor ez a függvény a MARADÉK,
  *      nem-kizárt adatokból számol újra.
  *
+ * A `sourceBreakdown`/`contradictions`/`scoreBreakdown` (2026-07-28-i
+ * "Hitelesség-magyarázat" bővítés) TISZTÁN megjelenítési célú kiegészítő
+ * adat — nem befolyásolja magát a pontszámítást, ami változatlanul az
+ * eredeti, absztrakt `computeCredibilityScore` bemenetekből történik.
+ *
  * Szándékos egyszerűsítés: a kizárt kontradikció-jelzéseket NEM vonja
  * vissza (a `facts.is_contradicted` "ragadós" — egyszer beállítva marad,
  * amíg egy ember explicit nem törli) — ezt lásd docs/open-decisions.md.
@@ -46,14 +76,7 @@ function quoteOf(payload: unknown): string | null {
 export async function recomputeCredibilityForStory(
   deps: RecomputeCredibilityDeps,
   storyId: string,
-): Promise<{
-  score: number;
-  band: string;
-  labelHu: string;
-  justificationHu: string;
-  officialConfirmed: boolean;
-  corroboratingSourceCount: number;
-}> {
+): Promise<RecomputeCredibilityResult> {
   const story = await deps.storyRepository.getById(storyId);
   if (!story) {
     throw new Error(`Story "${storyId}" not found`);
@@ -100,10 +123,11 @@ export async function recomputeCredibilityForStory(
   }
 
   const activeMetas = [...activeSourceMetaByRawArticleId.values()];
-  const officialSourcePresent = activeMetas.some(
+  const officialMetas = activeMetas.filter(
     (meta) =>
       meta.category === "official" || meta.category === "league" || meta.category === "club",
   );
+  const officialSourcePresent = officialMetas.length > 0;
   const reliabilityWeight = sourceReliabilityScore(activeMetas.map((meta) => meta.reliabilityTier));
   const hasContradiction = facts.some((fact) => fact.isContradicted);
   const hasDirectQuoteOrDocument = facts.some(
@@ -120,16 +144,53 @@ export async function recomputeCredibilityForStory(
     priorUpdateCount: story.versionCount,
   });
 
-  const result = {
+  // --- Hitelesség-magyarázat (tisztán megjelenítési célú, a fenti
+  // pontszámítást nem befolyásolja) ---
+  const factsWithSourceInfo = await deps.factRepository.listByStoryIdWithSourceName(storyId);
+  const sourceBreakdown = buildSourceBreakdown(factsWithSourceInfo);
+  const contradictions = buildContradictionDetails(factsWithSourceInfo);
+
+  const corroboratingSourceNames = winningGroupSourceNames(factsWithSourceInfo, claimMerge);
+  const reliabilitySummaryHu = activeMetas
+    .map((meta) => `${meta.sourceName}: ${meta.reliabilityTier}`)
+    .join(", ");
+  const contradictionSourceNames = [
+    ...new Set(contradictions.flatMap((detail) => detail.claims.map((claim) => claim.sourceName))),
+  ];
+
+  const scoreBreakdown = buildScoreBreakdown({
+    officialSourcePresent,
+    officialSourceNames: officialMetas.map((meta) => meta.sourceName),
+    corroboratingSourceNames,
+    reliabilitySummaryHu: reliabilitySummaryHu.length > 0 ? reliabilitySummaryHu : "nincs forrás",
+    reliabilityPoints: Math.round(reliabilityWeight * 20),
+    hasDirectQuoteOrDocument,
+    hasContradiction,
+    contradictionSourceNames,
+    isDeveloping: story.isDeveloping,
+    priorUpdateCount: story.versionCount,
+  });
+
+  const result: RecomputeCredibilityResult = {
     score: credibility.score,
     band: credibility.band.slug,
     labelHu: credibility.band.labelHu,
     justificationHu: credibility.justificationHu,
     officialConfirmed: officialSourcePresent,
     corroboratingSourceCount: claimMerge.maxCorroboratingSourceCount,
+    sourceBreakdown,
+    contradictions,
+    scoreBreakdown,
   };
 
-  await deps.storyRepository.updateCredibilityResult(storyId, result);
+  await deps.storyRepository.updateCredibilityResult(storyId, {
+    score: result.score,
+    band: result.band,
+    labelHu: result.labelHu,
+    justificationHu: result.justificationHu,
+    officialConfirmed: result.officialConfirmed,
+    corroboratingSourceCount: result.corroboratingSourceCount,
+  });
   await deps.storyCredibilityHistoryRepository.insert({
     storyId,
     score: result.score,
@@ -139,6 +200,10 @@ export async function recomputeCredibilityForStory(
     officialConfirmed: result.officialConfirmed,
     corroboratingSourceCount: result.corroboratingSourceCount,
     source: "auto",
+    // Pillanatkép — lásd a story-credibility-history.ts séma megjegyzését:
+    // a projektor ezt olvassa vissza változatlanul, sosem számolja újra
+    // publikáláskor (ami már más `versionCount`-ot látna).
+    explanation: { sourceBreakdown, contradictions, scoreBreakdown },
   });
 
   return result;

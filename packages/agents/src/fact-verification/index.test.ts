@@ -81,6 +81,31 @@ function source(overrides: Partial<Record<string, unknown>>) {
   };
 }
 
+const SOURCE_METAS = [
+  {
+    storyId: STORY.id,
+    rawArticleId: "raw-1",
+    sourceId: "source-1",
+    sourceName: "Source",
+    category: null,
+    reliabilityTier: "B" as const,
+    contributionType: "initial" as const,
+    excluded: false,
+    excludedReason: null,
+  },
+  {
+    storyId: STORY.id,
+    rawArticleId: "raw-2",
+    sourceId: "source-2",
+    sourceName: "Source",
+    category: null,
+    reliabilityTier: "A" as const,
+    contributionType: "new_info" as const,
+    excluded: false,
+    excludedReason: null,
+  },
+];
+
 function buildDeps(): FactVerificationDeps & {
   emitted: unknown[];
   updateCalls: unknown[];
@@ -149,32 +174,34 @@ function buildDeps(): FactVerificationDeps & {
       listByStoryId: vi.fn(async (storyId: string) =>
         factsStore.filter((fact) => fact.storyId === storyId),
       ),
+      listByStoryIdWithSourceName: vi.fn(async (storyId: string) => {
+        const metaByRawArticleId = new Map(
+          SOURCE_METAS.map((meta) => [meta.rawArticleId, meta] as const),
+        );
+        return factsStore
+          .filter((fact) => fact.storyId === storyId && !fact.excluded)
+          .flatMap((fact) => {
+            const meta = metaByRawArticleId.get(fact.rawArticleId);
+            if (!meta || meta.excluded) return [];
+            return [
+              {
+                id: fact.id,
+                factType: fact.factType,
+                payload: fact.payload,
+                isContradicted: fact.isContradicted,
+                corroborationCount: fact.corroborationCount,
+                sourceId: meta.sourceId,
+                sourceName: meta.sourceName,
+                category: meta.category,
+                reliabilityTier: meta.reliabilityTier,
+                trustBaseline: null,
+              },
+            ];
+          });
+      }),
     },
     storySourceRepository: {
-      sourcesWithMetaByStoryId: vi.fn(async () => [
-        {
-          storyId: STORY.id,
-          rawArticleId: "raw-1",
-          sourceId: "source-1",
-          sourceName: "Source",
-          category: null,
-          reliabilityTier: "B" as const,
-          contributionType: "initial" as const,
-          excluded: false,
-          excludedReason: null,
-        },
-        {
-          storyId: STORY.id,
-          rawArticleId: "raw-2",
-          sourceId: "source-2",
-          sourceName: "Source",
-          category: null,
-          reliabilityTier: "A" as const,
-          contributionType: "new_info" as const,
-          excluded: false,
-          excludedReason: null,
-        },
-      ]),
+      sourcesWithMetaByStoryId: vi.fn(async () => SOURCE_METAS),
     },
     storyCredibilityHistoryRepository: {
       insert: vi.fn(
@@ -187,10 +214,12 @@ function buildDeps(): FactVerificationDeps & {
           officialConfirmed: boolean;
           corroboratingSourceCount: number;
           source?: string;
+          explanation?: unknown;
         }) => ({
           id: "history-1",
           recordedAt: new Date(),
           source: "auto",
+          explanation: null,
           ...row,
         }),
       ),
