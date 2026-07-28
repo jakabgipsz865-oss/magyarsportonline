@@ -58,13 +58,34 @@ jobs:
             if [ "$remaining" -lt "$limit" ]; then limit=$remaining; fi
 
             echo "== batch offset=$offset limit=$limit =="
-            code=$(curl -sS -o batch.json -w '%{http_code}' --max-time 60 \
-              -X POST "$BASE/api/internal/editorial-ab-review?offset=$offset&limit=$limit" \
-              -H "Authorization: Bearer $CRON_SECRET" || echo 000)
-            echo "HTTP $code"
+            code="000"
+            attempt=1
+            while [ "$attempt" -le 2 ]; do
+              code=$(curl -sS -o batch.json -w '%{http_code}' --max-time 60 \
+                -X POST "$BASE/api/internal/editorial-ab-review?offset=$offset&limit=$limit" \
+                -H "Authorization: Bearer $CRON_SECRET" || echo 000)
+              echo "HTTP $code (attempt $attempt)"
+              if [ "$code" = "200" ]; then break; fi
+              attempt=$((attempt + 1))
+            done
+
+            # A nagyobb max_tokens keretek (2026-07-28, a rewrite/self-check/judge
+            # fallback-arány csökkentésére) egy-egy nehezebb cikknél a Vercel
+            # 60s maxDuration közelébe/fölé tolhatják a feldolgozási időt — ez
+            # curl kliens-oldali timeout-ként (HTTP 000) jelentkezik, nem a
+            # pipeline hibájaként. Egyetlen ilyen cikk miatt NE bukjon el az
+            # egész, akár több órás futás: két próbálkozás után kihagyjuk ezt
+            # az egy batch-et (hibaként rögzítve) és folytatjuk a többivel.
             if [ "$code" != "200" ]; then
-              cat batch.json
-              exit 1
+              echo "Batch offset=$offset kétszer is sikertelen (HTTP $code) — kihagyva, a futás folytatódik." >&2
+              cat batch.json 2>/dev/null || true
+              jq -n --arg offset "$offset" --arg code "$code" \
+                '[{"storyId": ("offset_" + $offset), "message": ("HTTP " + $code + " két próbálkozás után (timeout vagy átmeneti hiba)")}]' \
+                > skip-error.json
+              jq -s '.[0] + .[1]' all-errors.json skip-error.json > merged-errors.json && mv merged-errors.json all-errors.json
+              fetched=$((fetched + limit))
+              offset=$((offset + limit))
+              continue
             fi
 
             batch_count=$(jq '.results | length' batch.json)
