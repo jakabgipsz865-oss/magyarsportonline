@@ -2864,3 +2864,58 @@ export function formatLexiconBlock(entries: LexiconEntry[]): string {
   );
   return `FUTBALLNYELVI SZÓTÁR — a szövegben felismerhető angol futballkifejezések magyar megfelelői (ezt használd, ne tükörfordítást):\n${lines.join("\n")}`;
 }
+
+/**
+ * "Ugyanazon szleng automatikus felismerése" (2026-07-28-i "gyors tanítási
+ * munkafolyamat" sprint) — NEM AI-hívás, tiszta szöveg-egyezés: megkeresi,
+ * hogy egy már meglévő MAGYAR mondatban előfordul-e egy ismert
+ * kerülendő/tükörfordítás (`avoidLiteralHu`), akár a kézzel írt statikus
+ * lexikonból, akár korábbi szerkesztői javításokból (lásd
+ * editorial-corrections.ts `correctionsToLexiconEntries` — ugyanabba a
+ * `LexiconEntry` alakba konvertálja őket, ezért itt megkülönböztetés nélkül
+ * kereshetők). A leghosszabb egyező `avoidLiteralHu`-t adja vissza először
+ * (specifikusabb egyezés > általánosabb), hogy a javaslat a legpontosabb
+ * legyen.
+ */
+export function findLexiconMatchesInHungarianText(
+  text: string,
+  entries: LexiconEntry[] = FOOTBALL_LEXICON,
+): LexiconEntry[] {
+  const haystack = text.toLowerCase();
+  const matches = entries.filter((entry) => {
+    const needle = entry.avoidLiteralHu.trim().toLowerCase();
+    return needle.length > 0 && haystack.includes(needle);
+  });
+  return matches.sort((a, b) => b.avoidLiteralHu.length - a.avoidLiteralHu.length);
+}
+
+/** Magyar ékezetes betűkkel kiegészített "szóalkotó karakter" — a sima `\w` (ASCII-only) nem elég a toldalékos szóalakok felismeréséhez. */
+const HUNGARIAN_LETTER = /[a-zA-ZáéíóöőúüűÁÉÍÓÖŐÚÜŰ]/;
+
+/**
+ * Egy javaslat "egy kattintással" alkalmazása: a mondaton belül lecseréli a
+ * felismert kerülendő tükörfordítást a természetes magyar megfelelőre —
+ * ahelyett, hogy csak a puszta kifejezést adnánk vissza, egy teljes,
+ * mentésre kész javított mondatot ad.
+ *
+ * A magyar toldalékoló nyelv: egy egyezés után közvetlenül (szóköz nélkül)
+ * következő betű azt jelenti, hogy a talált szöveg valójában egy HOSSZABB,
+ * ragozott szóalak eleje (pl. "tiszta lap" a "tiszta lapOT"-ban) — ezt a
+ * konkrét előfordulást NEM cseréljük ki, mert a puszta szövegcsere
+ * értelmetlen, összefércelt szót eredményezne (pl. "...meccsetOT"). Csak a
+ * ténylegesen önálló (szóhatáron álló) előfordulásokat cseréli.
+ */
+export function applyLexiconSuggestion(text: string, entry: LexiconEntry): string {
+  const avoid = entry.avoidLiteralHu.trim();
+  if (avoid.length === 0) {
+    return text;
+  }
+  const escaped = avoid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.replace(new RegExp(escaped, "gi"), (match, offset: number) => {
+    const nextChar = text[offset + match.length];
+    if (nextChar && HUNGARIAN_LETTER.test(nextChar)) {
+      return match;
+    }
+    return entry.naturalHu;
+  });
+}
