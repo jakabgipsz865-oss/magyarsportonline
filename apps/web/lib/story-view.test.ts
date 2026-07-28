@@ -29,6 +29,7 @@ function row(overrides?: Partial<StoryReadModelRow>): StoryReadModelRow {
     versionHistorySummary: [
       { version_number: 1, created_at: "2026-07-27T20:55:00.000Z", change_summary: null },
     ],
+    credibilitySummary: null,
     ...overrides,
   };
 }
@@ -85,5 +86,53 @@ describe("toStoryDetailView", () => {
   it("drops malformed source entries instead of throwing", () => {
     const result = toStoryDetailView(row({ sourcesSummary: [{ missing: "fields" }] }));
     expect(result.sources).toEqual([]);
+  });
+
+  it("surfaces a well-formed credibility summary", () => {
+    const result = toStoryDetailView(
+      row({
+        credibilitySummary: {
+          score: 82,
+          band: "strong_corroboration",
+          labelHu: "Több erős forrás megerősíti",
+          justificationHu: "2 független forrás egyezik meg legalább egy állításban.",
+          officialConfirmed: false,
+          corroboratingSourceCount: 2,
+          updatedAt: "2026-07-28T10:00:00.000Z",
+          history: [
+            {
+              score: 60,
+              band: "likely",
+              labelHu: "Valószínű",
+              recordedAt: "2026-07-28T09:00:00.000Z",
+            },
+          ],
+        },
+      }),
+    );
+    expect(result.credibility).toEqual({
+      score: 82,
+      band: "strong_corroboration",
+      labelHu: "Több erős forrás megerősíti",
+      justificationHu: "2 független forrás egyezik meg legalább egy állításban.",
+      officialConfirmed: false,
+      corroboratingSourceCount: 2,
+      updatedAt: "2026-07-28T10:00:00.000Z",
+      history: [
+        {
+          score: 60,
+          band: "likely",
+          labelHu: "Valószínű",
+          recordedAt: "2026-07-28T09:00:00.000Z",
+        },
+      ],
+    });
+  });
+
+  it("returns null credibility when the summary is null or malformed", () => {
+    expect(toStoryDetailView(row({ credibilitySummary: null })).credibility).toBeNull();
+    expect(
+      toStoryDetailView(row({ credibilitySummary: { nonsense: true } })).credibility,
+    ).toBeNull();
   });
 });

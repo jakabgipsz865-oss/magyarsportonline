@@ -168,6 +168,32 @@ export async function seed(db: Database): Promise<void> {
     extractorName: "bbc-sport",
   });
 
+  // Sky Sports — a "Hitelességi mutató v1" sprint kivétele
+  // (docs/open-decisions.md), amit a felhasználó explicit engedélyezett:
+  // BBC + Sky Sports párost, hogy legyen valódi, két különböző
+  // hírportálról származó, ellenőrizhető két-forrásos Story a bizonyító
+  // riportban. Minden más médiaforrás egyelőre a lenti
+  // `documentedNotWiredSources`-ben marad.
+  await upsertSource(db, {
+    name: "Sky Sports - Football",
+    baseUrl: "https://www.skysports.com/football",
+    type: "rss",
+    language: "en",
+    licenseType: "public_rss",
+    reliabilityTier: "B",
+    fetchConfig: { url: "https://www.skysports.com/rss/12040" },
+    isActive: true,
+    country: "GB",
+    leagueTags: { leagues: ["premier-league"] },
+    category: "trusted_media",
+    contentMode: "full_text",
+    trustBaseline: 75,
+    robotsStatus: "robots.txt nem tiltja az RSS feedet vagy a cikkoldalakat crawler-számára",
+    termsStatus:
+      "Sky Sports Terms of Use: publikus RSS feed, személyes/nem-kereskedelmi felhasználásra szánt; a teljes cikk átvétele helyett önálló, saját szöveget írunk belőle (Hungarian Writer), forrásmegjelöléssel",
+    extractorName: "sky-sports",
+  });
+
   // Dokumentált, de MÉG NEM BEKÖTÖTT Source Registry sorok (docs/source-registry.md) —
   // a 2026-07-28-i többforrásos irány első forráscsomagja. Minden sor
   // `isActive: false` és `licenseType: "pending_review"`, amíg az élő
@@ -283,18 +309,7 @@ export async function seed(db: Database): Promise<void> {
       contentMode: "fact_only",
       trustBaseline: 90,
     },
-    // Média (a BBC Sporton kívül)
-    {
-      name: "Sky Sports",
-      baseUrl: "https://www.skysports.com",
-      type: "rss",
-      language: "en",
-      reliabilityTier: "B",
-      country: "GB",
-      category: "trusted_media",
-      contentMode: "full_text",
-      trustBaseline: 75,
-    },
+    // Média (a BBC Sporton és a Sky Sportson kívül — mindkettő fentebb, ténylegesen bekötve)
     {
       name: "The Guardian - Sport",
       baseUrl: "https://www.theguardian.com/sport",

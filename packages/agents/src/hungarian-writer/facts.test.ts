@@ -11,6 +11,8 @@ function fact(payload: unknown): Fact {
     payload,
     corroborationCount: 1,
     isContradicted: false,
+    excluded: false,
+    excludedReason: null,
     extractedAt: new Date(),
   };
 }

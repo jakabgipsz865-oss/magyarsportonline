@@ -83,7 +83,7 @@ Robots/ToS mindkettőnél: **ellenőrizendő élőben** — mindkét szervezet T
 | Forrás | Domain | Ország | Elérési mód | Tartalom-mód | Várható tier | Megjegyzés |
 |---|---|---|---|---|---|---|
 | BBC Sport | bbc.co.uk/bbc.com | GB | RSS + HTML (**bekötve**) | `full_text` | B / 75 | Az egyetlen ténylegesen bekötött forrás — lásd `bbcSportExtractor` |
-| Sky Sports | skysports.com | GB | RSS ismert (skysports.com/rss), HTML | `full_text` (extractor még nincs megírva) | B | Következő sprint jelöltje — a felhasználó eredeti "első körben BBC, Sky, Reuters, AP, ESPN" listájának 2. tagja |
+| Sky Sports | skysports.com | GB | RSS (`https://www.skysports.com/rss/12040`) + HTML (**bekötve**) | `full_text` | B / 75 | A "Hitelességi mutató v1" sprint kivétele (docs/open-decisions.md) — a felhasználó explicit engedélyezte, hogy legyen valódi BBC+Sky Sports két-forrásos Story a bizonyító riportban. `skySportsExtractor`, élő bizonyítás: `.github/workflows/sky-sports-extractor-diagnostic.yml` |
 | The Guardian | theguardian.com | GB | Hivatalos publikus RSS **és** dokumentált Open Platform API (content.guardianapis.com) | `full_text` | A (a Guardian Open Platform API kifejezetten újrafelhasználásra szánt, fejlesztői kulccsal) | A Guardian API a legkevésbé kockázatos "média" forrás jogi szempontból ebben a listában, mert kifejezetten szindikációra/API-használatra tervezték |
 | ESPN | espn.com | US | RSS (espn.com/espn/rss), HTML | `full_text` | B | Robots/ToS: ellenőrizendő; ESPN ToS jellemzően tiltja a kereskedelmi újraközlést engedély nélkül — snippet+attribution+önálló szöveg tervezhető |
 | Marca | marca.com | ES | RSS ismert, HTML | `full_text` | B (bulvár-közeli, de sportspecifikus trusted media) | Kategória: `trusted_media`, de a "Sport & Sztárok" rovatnál átfedhet a `tabloid` jelleggel egyes cikkeknél — cikkenkénti, nem forrás-szintű megkülönböztetés lehet indokolt (nyitott döntés) |
@@ -113,6 +113,7 @@ A felhasználó által kért 2. termékpillér (sportolók/edzők/klubok és csa
 | Forrás | Dokumentálva | `sources` sor létrehozva | RSS-ingestion bekötve | Full-article extractor |
 |---|---|---|---|---|
 | BBC Sport | ✅ | ✅ (`is_active=true`) | ✅ | ✅ `bbcSportExtractor` |
-| Minden más a fenti listából | ✅ (ebben a dokumentumban) | Következő lépés (lásd Task #23) | ❌ | ❌ |
+| Sky Sports | ✅ | ✅ (`is_active=true`) | ✅ | ✅ `skySportsExtractor` |
+| Minden más a fenti listából | ✅ (ebben a dokumentumban) | ✅ (`is_active=false`, `pending_review`) | ❌ | ❌ |
 
-Ez szándékos: a felhasználói utasítás sorrendje "dokumentálj, MIELŐTT bekötsz" — ez a dokumentum az a lépés. A tényleges bekötés (RSS-adapter + extractor minden egyes forráshoz) forrásonként külön, egyenkénti sprint, ahogy a BBC Sport is egy teljes, önálló sprint volt.
+Ez szándékos: a felhasználói utasítás sorrendje "dokumentálj, MIELŐTT bekötsz" — ez a dokumentum az a lépés. A Sky Sports az egyetlen, explicit felhasználói döntéssel engedélyezett kivétel (a Hitelességi mutató valódi, két-forrásos bizonyításához) — minden más forrás tényleges bekötése forrásonként külön, egyenkénti sprint, ahogy a BBC Sport is egy teljes, önálló sprint volt.

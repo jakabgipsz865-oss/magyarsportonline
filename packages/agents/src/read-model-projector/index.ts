@@ -1,4 +1,5 @@
 import type {
+  StoryCredibilityHistoryRepository,
   StoryReadModelRepository,
   StoryRepository,
   StorySourceRepository,
@@ -16,6 +17,7 @@ export interface ReadModelProjectorDeps {
   storyRepository: Pick<StoryRepository, "getById">;
   storyVersionRepository: Pick<StoryVersionRepository, "listByStoryId">;
   storySourceRepository: Pick<StorySourceRepository, "summaryByStoryId">;
+  storyCredibilityHistoryRepository: Pick<StoryCredibilityHistoryRepository, "listByStoryId">;
   storyReadModelRepository: Pick<StoryReadModelRepository, "upsert">;
   logger: Logger;
 }
@@ -62,6 +64,29 @@ export async function handleStoryPublished(
       change_summary: version.changeSummaryHu,
     }));
 
+  // Hitelességi mutató v1 (2026-07-28) — a `stories.credibility*` mezők a
+  // legutolsó számítást tükrözik, a `story_credibility_history` a teljes
+  // "hitelességi változások története" nézetet adja a publikus oldalnak.
+  const credibilityHistory = await deps.storyCredibilityHistoryRepository.listByStoryId(story.id);
+  const credibilitySummary =
+    story.credibilityScore === null
+      ? null
+      : {
+          score: story.credibilityScore,
+          band: story.credibilityBand,
+          labelHu: story.credibilityLabelHu,
+          justificationHu: story.credibilityJustificationHu,
+          officialConfirmed: story.credibilityOfficialConfirmed,
+          corroboratingSourceCount: story.credibilityCorroboratingCount,
+          updatedAt: story.credibilityUpdatedAt?.toISOString() ?? null,
+          history: credibilityHistory.map((entry) => ({
+            score: entry.score,
+            band: entry.band,
+            labelHu: entry.labelHu,
+            recordedAt: entry.recordedAt.toISOString(),
+          })),
+        };
+
   await deps.storyReadModelRepository.upsert({
     storyId: story.id,
     slug: story.slug,
@@ -80,6 +105,7 @@ export async function handleStoryPublished(
     publishedAt: story.publishedAt ?? new Date(),
     lastUpdatedAt: new Date(),
     versionHistorySummary,
+    credibilitySummary,
   });
 
   deps.logger.info(

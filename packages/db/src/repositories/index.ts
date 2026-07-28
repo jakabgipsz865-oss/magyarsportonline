@@ -10,6 +10,7 @@ export * from "./raw-article-repository";
 export * from "./review-queue-repository";
 export * from "./source-repository";
 export * from "./story-read-model-repository";
+export * from "./story-credibility-history-repository";
 export * from "./story-repository";
 export * from "./story-source-repository";
 export * from "./story-version-repository";

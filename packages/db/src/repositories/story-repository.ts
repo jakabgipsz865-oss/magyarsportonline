@@ -1,5 +1,5 @@
 import type { RiskLevel, StoryStatus } from "@magyarsportonline/shared";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import type { Database } from "../client";
 import { isUniqueViolation } from "../errors";
 import { withFingerprintLock } from "../locking";
@@ -31,6 +31,11 @@ export class StoryRepository {
   async getBySlug(slug: string): Promise<Story | null> {
     const [row] = await this.db.select().from(stories).where(eq(stories.slug, slug)).limit(1);
     return row ?? null;
+  }
+
+  /** Admin credibility-review felülethez (2026-07-28) — legutóbb frissített Story-k, publikálási státusztól függetlenül. */
+  async listRecent(limit: number): Promise<Story[]> {
+    return this.db.select().from(stories).orderBy(desc(stories.lastUpdatedAt)).limit(limit);
   }
 
   /**
@@ -100,6 +105,38 @@ export class StoryRepository {
         isDeveloping: result.isDeveloping,
         status: "fact_checked",
         lastUpdatedAt: new Date(),
+      })
+      .where(eq(stories.id, storyId));
+  }
+
+  /**
+   * Hitelességi mutató v1 (2026-07-28) — a Fact Verification Agent futása
+   * után, vagy admin "Újraszámolás"/"Felülbírálás" műveletkor hívva
+   * (packages/agents/src/fact-verification/recompute-credibility.ts). Csak
+   * a `credibility*` mezőket írja — nem érinti a régi `confidenceScore`-t,
+   * ami külön metrika marad.
+   */
+  async updateCredibilityResult(
+    storyId: string,
+    result: {
+      score: number;
+      band: string;
+      labelHu: string;
+      justificationHu: string;
+      officialConfirmed: boolean;
+      corroboratingSourceCount: number;
+    },
+  ): Promise<void> {
+    await this.db
+      .update(stories)
+      .set({
+        credibilityScore: result.score,
+        credibilityBand: result.band,
+        credibilityLabelHu: result.labelHu,
+        credibilityJustificationHu: result.justificationHu,
+        credibilityOfficialConfirmed: result.officialConfirmed,
+        credibilityCorroboratingCount: result.corroboratingSourceCount,
+        credibilityUpdatedAt: new Date(),
       })
       .where(eq(stories.id, storyId));
   }

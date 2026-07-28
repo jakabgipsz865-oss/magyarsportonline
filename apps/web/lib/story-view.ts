@@ -5,6 +5,10 @@ const sourceSummarySchema = z.object({
   name: z.string(),
   url: z.string(),
   firstSeenAt: z.string(),
+  // Optional (nem `sourceSummarySchema`-t mindenhol frissítő, régebbi
+  // read-model sorok is előfordulhatnak) — a publikus oldal "n/a"-ként
+  // kezeli, ha hiányzik.
+  reliabilityTier: z.enum(["A", "B", "C"]).optional(),
 });
 
 const versionHistoryEntrySchema = z.object({
@@ -12,6 +16,43 @@ const versionHistoryEntrySchema = z.object({
   created_at: z.string(),
   change_summary: z.string().nullable(),
 });
+
+const credibilityHistoryEntrySchema = z.object({
+  score: z.number(),
+  band: z.string(),
+  labelHu: z.string(),
+  recordedAt: z.string(),
+});
+
+const credibilitySummarySchema = z.object({
+  score: z.number(),
+  band: z.string().nullable(),
+  labelHu: z.string().nullable(),
+  justificationHu: z.string().nullable(),
+  officialConfirmed: z.boolean(),
+  corroboratingSourceCount: z.number().nullable(),
+  updatedAt: z.string().nullable(),
+  history: z.array(credibilityHistoryEntrySchema),
+});
+
+export interface CredibilityView {
+  score: number;
+  band: string | null;
+  labelHu: string | null;
+  justificationHu: string | null;
+  officialConfirmed: boolean;
+  corroboratingSourceCount: number | null;
+  updatedAt: string | null;
+  history: Array<{ score: number; band: string; labelHu: string; recordedAt: string }>;
+}
+
+function parseCredibility(value: unknown): CredibilityView | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const result = credibilitySummarySchema.safeParse(value);
+  return result.success ? result.data : null;
+}
 
 export interface StorySummaryView {
   id: string;
@@ -30,8 +71,9 @@ export interface StorySummaryView {
 export interface StoryDetailView extends StorySummaryView {
   bodyHtml: string;
   metaDescription: string | null;
-  sources: Array<{ name: string; url: string; firstSeenAt: string }>;
+  sources: Array<{ name: string; url: string; firstSeenAt: string; reliabilityTier?: string }>;
   versionHistory: Array<{ versionNumber: number; createdAt: string; changeSummary: string | null }>;
+  credibility: CredibilityView | null;
 }
 
 function parseSources(value: unknown): z.infer<typeof sourceSummarySchema>[] {
@@ -74,11 +116,13 @@ export function toStoryDetailView(row: StoryReadModelRow): StoryDetailView {
       name: source.name,
       url: source.url,
       firstSeenAt: source.firstSeenAt,
+      ...(source.reliabilityTier ? { reliabilityTier: source.reliabilityTier } : {}),
     })),
     versionHistory: versionHistory.map((entry) => ({
       versionNumber: entry.version_number,
       createdAt: entry.created_at,
       changeSummary: entry.change_summary,
     })),
+    credibility: parseCredibility(row.credibilitySummary),
   };
 }

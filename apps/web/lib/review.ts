@@ -36,6 +36,7 @@ export async function approveReviewItem(
       storyRepository: repos.storyRepository,
       storyVersionRepository: repos.storyVersionRepository,
       storySourceRepository: repos.storySourceRepository,
+      storyCredibilityHistoryRepository: repos.storyCredibilityHistoryRepository,
       storyReadModelRepository: repos.storyReadModelRepository,
       logger: getLogger(),
     },

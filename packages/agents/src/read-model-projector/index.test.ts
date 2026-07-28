@@ -18,6 +18,13 @@ const STORY = {
   publishedAt: new Date("2026-07-27T21:00:00.000Z"),
   isDeveloping: false,
   imageUrl: null,
+  credibilityScore: 72,
+  credibilityBand: "likely",
+  credibilityLabelHu: "Valószínű",
+  credibilityJustificationHu: "Egyetlen, még nem megerősített forrásból származó értesülés.",
+  credibilityOfficialConfirmed: false,
+  credibilityCorroboratingCount: 1,
+  credibilityUpdatedAt: new Date("2026-07-27T20:10:00.000Z"),
 };
 
 function version(overrides?: Partial<Record<string, unknown>>) {
@@ -59,6 +66,23 @@ function buildDeps(overrides?: {
           name: "BBC Sport - Football",
           url: "https://example.com/1",
           firstSeenAt: "2026-07-27T20:00:00.000Z",
+          reliabilityTier: "B" as const,
+        },
+      ]),
+    },
+    storyCredibilityHistoryRepository: {
+      listByStoryId: vi.fn(async () => [
+        {
+          id: "history-1",
+          storyId: STORY.id,
+          score: 72,
+          band: "likely",
+          labelHu: "Valószínű",
+          justificationHu: "Egyetlen, még nem megerősített forrásból származó értesülés.",
+          officialConfirmed: false,
+          corroboratingSourceCount: 1,
+          source: "auto",
+          recordedAt: new Date("2026-07-27T20:10:00.000Z"),
         },
       ]),
     },

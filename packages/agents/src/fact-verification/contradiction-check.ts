@@ -4,7 +4,8 @@ interface ScoreFactLike {
   payload: unknown;
 }
 
-function detailOf(payload: unknown): string | null {
+/** A `payload.detail_hu` normalizált (trim+lowercase) szövege, vagy `null` ha nincs ilyen mező — a claim-merge modul is ezt használja csoportosításhoz. */
+export function detailOf(payload: unknown): string | null {
   if (
     typeof payload === "object" &&
     payload !== null &&

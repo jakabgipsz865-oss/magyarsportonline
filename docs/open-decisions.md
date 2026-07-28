@@ -41,8 +41,8 @@ Formátum soronként: **Kérdés** → Jelenlegi válasz/döntés → Bizonyít�
 - **Jelenlegi döntés:** Ebben a sprintben **módszertan** készült (docs/source-registry.md 3. pont) 96 egyedi, élőben nem ellenőrzött állítás kitalálása helyett — mert a sandbox nem tudja ezt élőben megerősíteni, és a session "bizonyíts, ne feltételezz" elve tiltja a nem-ellenőrzött részletek tömeges kitalálását.
 - **Bizonyíték:** Lásd 1. tétel (sandbox-korlát); a klublista maga (csapatnevek) stabil, közismert tény, de az RSS/robots/ToS-részletek forrásonkénti ellenőrzést igényelnek.
 - **Nyitott kockázat:** A felhasználó explicit kérése ("dokumentáld forrásonként") technikailag nem 100%-ban teljesült a klubok szintjén — ez tudatosan vállalt, dokumentált hiány, nem elfeledett feladat.
-- **Következő teendő:** Egy generikus, minden klubdomain ellen futó audit-workflow megírása (RSS-autodiscovery + robots.txt-ellenőrzés élő internettel), majd a Registry tényleges feltöltése az audit eredményével.
-- **Felelős/státusz:** **NYITVA, a felhasználó döntésére vár** — javasolt kérdés: elfogadható-e ez a két lépéses (módszertan most, audit később) megközelítés, vagy a felhasználó inkább kézi, forrásonkénti kutatást vár el már ebben a sprintben?
+- **Következő teendő:** Egy generikus, minden klubdomain ellen futó audit-workflow megírása (RSS-autodiscovery + robots.txt-ellenőrzés élő internettel), majd a Registry tényleges feltöltése az audit eredményével. A felhasználó explicit kérése szerint ez a teljes 96-klubos audit **nem kezdődhet el**, amíg a többforrásos Story- és hitelességi motor élő adaton nincs bizonyítva.
+- **Felelős/státusz:** **LEZÁRVA** — a felhasználó jóváhagyta a kétlépéses megközelítést ("A 96 klub kétlépcsős auditja elfogadható: most módszertan, taxonómia és adapter-architektúra; később külön élő RSS/robots/terms audit."). A teljes audit ütemezése a hitelességi motor bizonyítása utánra várat.
 
 ## 5. Sport & Sztárok / sportbulvár konkrét forráslista
 
@@ -59,8 +59,8 @@ Formátum soronként: **Kérdés** → Jelenlegi válasz/döntés → Bizonyít�
 - **Jelenlegi döntés:** Az 5. (legutóbbi, "végleges induló termékirány") üzenetet tekintjük irányadónak, mint a korábbi, részleges specifikáció felülírását — ez összhangban van azzal, hogy az 5. üzenet explicit "végleges" jelzőt használ.
 - **Bizonyíték:** A két üzenet szó szerinti szövege (lásd session-history).
 - **Nyitott kockázat:** Ha a Reuters Sport / AP Sports kimaradása véletlen (nem szándékos) volt a felhasználó részéről, ez a döntés tévesen zárná ki ezt a két hírügynökséget, amelyek valószínűleg magas megbízhatóságú (`reliabilityTier=A`) forrás lennének.
-- **Következő teendő:** **Megkérdezni a felhasználót**, hogy a Reuters Sport / AP Sports szándékosan maradt-e ki, vagy kerüljön vissza a listába.
-- **Felelős/státusz:** **NYITVA, a felhasználó válaszára vár.**
+- **Következő teendő:** Nincs — lásd döntés.
+- **Felelős/státusz:** **LEZÁRVA** — a felhasználó megerősítette: "Reuters Sport és AP Sports egyelőre ne kerüljenek vissza az induló forráscsomagba. Később külön licenc/policy audit után térünk vissza rájuk." Mindkettő dokumentálva marad, mint jövőbeli jelölt, de nem kerül bekötésre ebben és a következő sprintben sem.
 
 ## 7. Képjogi és attribution adatmodell — csak oszlop, nincs szabálymotor
 
@@ -97,6 +97,15 @@ Formátum soronként: **Kérdés** → Jelenlegi válasz/döntés → Bizonyít�
 - **Nyitott kockázat:** Ha a jövőbeli Gazzetta/L'Équipe extractor véletlenül a paywall-oldal "előnézeti" HTML-jét (pl. az első bekezdést) próbálná teljes cikként kezelni, az félrevezető, hiányos tartalmat eredményezne — ez pontosan az a hiba, amit a Source Fetcher réteg orvosolni próbál az RSS-snippetnél.
 - **Következő teendő:** Amikor ezen forrás(ok) extractora megíródik, explicit paywall-jel-ellenőrzést kell beépíteni (pl. ismert paywall-CSS-osztály vagy "előfizetői tartalom" szöveg-minta), ami `null`-t ad vissza (biztonságos fallback), ha paywallt észlel.
 - **Felelős/státusz:** Nyitva, jövőbeli sprint feladata.
+
+## 11. Sky Sports bekötése kivételként — a többforrásos motor élő bizonyítása
+
+- **Kérdés:** A "többforrásos állítás-összevonás + hitelességi motor" sprint bizonyító bárja legalább 10 valós Storyt kér, ahol "legalább két forrás, amikor elérhető" látszik — de ebben a sprintben induláskor csak a BBC Sport volt bekötve, tehát valós adatban sosem lett volna két KÜLÖNBÖZŐ forrásból (outlet) származó Story, csak két cikk ugyanattól a BBC-től. Hogyan bizonyítsuk a többforrásos összevonást/ellentmondás-kezelést valós adaton, ha a felhasználó explicit tiltja új médiapartnerek hozzáadását, amíg a motor nincs bizonyítva?
+- **Jelenlegi döntés:** A felhasználó feloldotta ezt explicit kivétellel: "Válasszuk a Sky Sports bekötését kivételként... Ebben a sprintben engedélyezem a BBC + Sky Sports párost. Ne bővíts tovább új forrásokkal." A Sky Sports (már dokumentálva a forráscsomagban) kapott egy második, valódi `ArticleExtractor`-t (`sky-sports.ts`) és aktív `sources` sort — ez az EGYETLEN kivétel, minden más dokumentált-de-nem-bekötött forrás (Guardian, ESPN, Marca stb.) változatlanul `is_active=false` marad.
+- **Bizonyíték:** `packages/agents/src/source-ingest/article-fetcher/extractors/sky-sports.ts` + tesztek; `packages/db/src/seed.ts` Sky Sports `upsertSource` hívása `isActive: true`-val; `.github/workflows/sky-sports-extractor-diagnostic.yml` a BBC-mintát követi az élő bizonyításhoz.
+- **Nyitott kockázat:** A Sky Sports szelektorai (mint a BBC-é is) nem lettek élőben ellenőrizve a sandbox hálózati korlátja miatt — a diagnosztikai workflow futtatása még nem történt meg (GitHub Actions runneren kell kézzel elindítani).
+- **Következő teendő:** A `Sky Sports extractor diagnostic (one-off)` workflow lefuttatása a PR merge-je után egy valódi Sky Sports cikken.
+- **Felelős/státusz:** Lezárva (döntés), a diagnosztikai futtatás még nyitva.
 
 ---
 

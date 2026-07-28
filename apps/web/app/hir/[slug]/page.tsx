@@ -134,17 +134,65 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
       </article>
 
       <section className="story-section">
-        <h2>Források</h2>
+        <h2>Források ({story.sources.length})</h2>
         <ul className="story-sources">
           {story.sources.map((source) => (
             <li key={source.url}>
               <a href={source.url} target="_blank" rel="noreferrer">
                 {source.name}
               </a>
+              {source.reliabilityTier ? (
+                <span className="story-sources__tier">
+                  {" "}
+                  · {source.reliabilityTier} megbízhatóság
+                </span>
+              ) : null}
             </li>
           ))}
         </ul>
       </section>
+
+      {story.credibility && (
+        <section className="story-section story-credibility">
+          <h2>Hitelesség</h2>
+          <p className="story-credibility__band">
+            <strong>{story.credibility.labelHu ?? "Nincs értékelve"}</strong> (
+            {story.credibility.score}/100)
+          </p>
+          {story.credibility.justificationHu ? <p>{story.credibility.justificationHu}</p> : null}
+          <ul className="story-credibility__meta">
+            <li>
+              {story.credibility.corroboratingSourceCount ?? 0} megerősítő forrás a legjobban
+              alátámasztott állításra
+            </li>
+            <li>Hivatalos megerősítés: {story.credibility.officialConfirmed ? "igen" : "nem"}</li>
+            {story.credibility.updatedAt ? (
+              <li>
+                Utolsó frissítés:{" "}
+                <time dateTime={story.credibility.updatedAt}>
+                  {new Date(story.credibility.updatedAt).toLocaleString("hu-HU")}
+                </time>
+              </li>
+            ) : null}
+          </ul>
+          {story.credibility.history.length > 1 && (
+            <details className="story-credibility__history">
+              <summary>Hitelességi változások története</summary>
+              <ul>
+                {story.credibility.history.map((entry, index) => (
+                  <li key={`${entry.recordedAt}-${index}`}>
+                    <time dateTime={entry.recordedAt}>
+                      {new Date(entry.recordedAt).toLocaleString("hu-HU")}
+                    </time>
+                    {" — "}
+                    {entry.labelHu} ({entry.score}/100)
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </section>
+      )}
 
       {story.versionHistory.length > 1 && (
         <section className="story-section">

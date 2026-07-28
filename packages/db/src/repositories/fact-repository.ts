@@ -27,4 +27,28 @@ export class FactRepository {
   async bumpCorroboration(factId: string, corroborationCount: number): Promise<void> {
     await this.db.update(facts).set({ corroborationCount }).where(eq(facts.id, factId));
   }
+
+  /** Admin claim-szerkeszthetőség (2026-07-28) — egy állítás kizárása a hitelesség-számításból, indoklással. */
+  async setExcluded(factId: string, excluded: boolean, reason: string | null): Promise<void> {
+    await this.db
+      .update(facts)
+      .set({ excluded, excludedReason: excluded ? reason : null })
+      .where(eq(facts.id, factId));
+  }
+
+  /** Admin claim-szerkeszthetőség (2026-07-28) — egy állítás magyar szövegének (payload.detail_hu) javítása. */
+  async updateDetail(factId: string, detailHu: string): Promise<void> {
+    const [existing] = await this.db.select().from(facts).where(eq(facts.id, factId)).limit(1);
+    if (!existing) {
+      throw new Error(`Fact "${factId}" not found`);
+    }
+    const payload =
+      typeof existing.payload === "object" && existing.payload !== null
+        ? (existing.payload as Record<string, unknown>)
+        : {};
+    await this.db
+      .update(facts)
+      .set({ payload: { ...payload, detail_hu: detailHu } })
+      .where(eq(facts.id, factId));
+  }
 }
