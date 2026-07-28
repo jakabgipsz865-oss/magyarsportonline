@@ -1,4 +1,4 @@
-import { gte, sql } from "drizzle-orm";
+import { desc, gte, sql } from "drizzle-orm";
 import type { Database } from "../client";
 import { llmUsage } from "../schema/index";
 
@@ -45,5 +45,10 @@ export class LlmUsageRepository {
       .from(llmUsage)
       .where(gte(llmUsage.occurredAt, since));
     return row ? Number(row.total) : 0;
+  }
+
+  /** Legutóbbi N sikeres (nem-fallback) hívás naplója, legfrissebb elöl — diagnosztikai/audit célra (pl. "tényleg történt-e valódi Cloudflare-hívás mostanában"). */
+  async listRecent(limit: number): Promise<LlmUsageRow[]> {
+    return this.db.select().from(llmUsage).orderBy(desc(llmUsage.occurredAt)).limit(limit);
   }
 }
