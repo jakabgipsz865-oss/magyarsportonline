@@ -14,6 +14,8 @@ const REASON_LABELS_HU: Record<string, string> = {
   manual_flag: "kézi jelölés",
   single_source_sensitive_category: "egyforrásos érzékeny téma",
   prompt_injection_suspected: "prompt injection gyanú",
+  content_quality_failed: "minőségi ellenőrzés elbukott",
+  force_review_mode: "kézi review kikényszerítve",
 };
 
 async function approveAction(formData: FormData): Promise<void> {

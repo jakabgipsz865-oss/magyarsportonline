@@ -1,7 +1,12 @@
 import type { WriterFact } from "./facts";
 
 export type QualityIssueField = "title" | "lead" | "body";
-export type QualityIssueKind = "empty" | "looks_english" | "matches_source_verbatim";
+export type QualityIssueKind =
+  | "empty"
+  | "looks_english"
+  | "matches_source_verbatim"
+  | "repeated_paragraph"
+  | "duplicates_body";
 
 export interface QualityIssue {
   field: QualityIssueField;
@@ -75,6 +80,62 @@ function assessField(field: QualityIssueField, text: string, facts: WriterFact[]
   return issues;
 }
 
+const MIN_LENGTH_FOR_DUPLICATE_CHECK = 20;
+
+function normalizeForDuplicateCheck(text: string): string {
+  return text.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function splitParagraphs(text: string): string[] {
+  return text
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph.length > 0);
+}
+
+/**
+ * Catches both an exact repeat and the more common LLM failure mode of
+ * restating the same paragraph with a sentence added or dropped — a plain
+ * string-equality check would miss the latter, which is what the writer
+ * model (Qwen3) was observed to actually produce in production.
+ */
+function areNearDuplicates(a: string, b: string): boolean {
+  const normalizedA = normalizeForDuplicateCheck(a);
+  const normalizedB = normalizeForDuplicateCheck(b);
+  if (normalizedA.length < MIN_LENGTH_FOR_DUPLICATE_CHECK) return false;
+  if (normalizedB.length < MIN_LENGTH_FOR_DUPLICATE_CHECK) return false;
+  if (normalizedA === normalizedB) return true;
+
+  const shorter = normalizedA.length <= normalizedB.length ? normalizedA : normalizedB;
+  const longer = normalizedA.length <= normalizedB.length ? normalizedB : normalizedA;
+  if (longer.includes(shorter)) return true;
+
+  const tokensA = new Set(normalizedA.split(" ").filter((token) => token.length > 3));
+  const tokensB = new Set(normalizedB.split(" ").filter((token) => token.length > 3));
+  if (tokensA.size === 0 || tokensB.size === 0) return false;
+  let shared = 0;
+  for (const token of tokensA) {
+    if (tokensB.has(token)) shared += 1;
+  }
+  return shared / Math.min(tokensA.size, tokensB.size) >= 0.75;
+}
+
+/** Two paragraphs within the same body that are the model repeating itself, verbatim or near-verbatim. */
+function hasRepeatedParagraph(bodyHu: string): boolean {
+  const paragraphs = splitParagraphs(bodyHu);
+  for (let i = 0; i < paragraphs.length; i += 1) {
+    for (let j = i + 1; j < paragraphs.length; j += 1) {
+      if (areNearDuplicates(paragraphs[i]!, paragraphs[j]!)) return true;
+    }
+  }
+  return false;
+}
+
+/** The lead restated as its own body paragraph instead of the body elaborating on it — a distinct failure mode from a `matches_source_verbatim` Fact copy. */
+function leadDuplicatesBodyParagraph(leadHu: string, bodyHu: string): boolean {
+  return splitParagraphs(bodyHu).some((paragraph) => areNearDuplicates(leadHu, paragraph));
+}
+
 /**
  * Content Quality Gate (Content Quality & Reliability Hardening sprint):
  * catches the failure modes a schema-valid, non-fallback LLM response can
@@ -91,5 +152,11 @@ export function assessContentQuality(input: QualityAssessmentInput): QualityAsse
     ...assessField("lead", input.leadHu, input.facts),
     ...assessField("body", input.bodyHu, input.facts),
   ];
+  if (hasRepeatedParagraph(input.bodyHu)) {
+    issues.push({ field: "body", kind: "repeated_paragraph" });
+  }
+  if (leadDuplicatesBodyParagraph(input.leadHu, input.bodyHu)) {
+    issues.push({ field: "lead", kind: "duplicates_body" });
+  }
   return { passed: issues.length === 0, issues };
 }
