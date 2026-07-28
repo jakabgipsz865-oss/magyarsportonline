@@ -18,7 +18,7 @@ export interface Emitter {
 }
 
 export interface StoryMergeDeps {
-  storyRepository: Pick<StoryRepository, "createOrMatchByFingerprint">;
+  storyRepository: Pick<StoryRepository, "createOrMatchByFingerprint" | "setImageUrlIfMissing">;
   rawArticleRepository: Pick<RawArticleRepository, "getById" | "linkToStory">;
   storySourceRepository: Pick<StorySourceRepository, "link">;
   agentRunRepository: AgentRunRecorder;
@@ -73,10 +73,17 @@ export async function handleStoryCandidateIdentified(
           confidenceScore: INITIAL_CONFIDENCE_SCORE,
           riskLevel: null,
           isDeveloping: true,
+          imageUrl: rawArticle.imageUrl,
         },
       );
 
       await deps.rawArticleRepository.linkToStory(rawArticle.id, story.id);
+
+      if (!created && rawArticle.imageUrl) {
+        // A later corroborating source can still supply the Story's first
+        // image if the original source didn't have one.
+        await deps.storyRepository.setImageUrlIfMissing(story.id, rawArticle.imageUrl);
+      }
 
       if (created) {
         await deps.storySourceRepository.link(story.id, rawArticle.id, "initial");

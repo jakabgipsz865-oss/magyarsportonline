@@ -67,6 +67,7 @@ function buildDeps(overrides?: {
               titleOriginal: "Title",
               bodyOriginal: "Body",
               publishedAtSource: null,
+              imageUrl: null,
             },
           ],
         } satisfies SourceAdapter),

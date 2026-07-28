@@ -1,5 +1,5 @@
 import type { RiskLevel, StoryStatus } from "@magyarsportonline/shared";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "../client";
 import { isUniqueViolation } from "../errors";
 import { withFingerprintLock } from "../locking";
@@ -13,6 +13,7 @@ export interface StoryDraft {
   confidenceScore: number;
   riskLevel: RiskLevel | null;
   isDeveloping: boolean;
+  imageUrl: string | null;
 }
 
 /**
@@ -75,6 +76,7 @@ export class StoryRepository {
             confidenceScore: draft.confidenceScore.toFixed(3),
             riskLevel: draft.riskLevel,
             isDeveloping: draft.isDeveloping,
+            imageUrl: draft.imageUrl,
           })
           .returning();
         if (!story) {
@@ -107,6 +109,19 @@ export class StoryRepository {
       .update(stories)
       .set({ status, lastUpdatedAt: new Date() })
       .where(eq(stories.id, storyId));
+  }
+
+  /**
+   * Backfills `imageUrl` from a later corroborating source when the Story's
+   * initial source didn't have one — never overwrites an image already set
+   * (`and(..., isNull(stories.imageUrl))`), so this is safe to call on every
+   * corroboration regardless of whether the Story already has an image.
+   */
+  async setImageUrlIfMissing(storyId: string, imageUrl: string): Promise<void> {
+    await this.db
+      .update(stories)
+      .set({ imageUrl })
+      .where(and(eq(stories.id, storyId), isNull(stories.imageUrl)));
   }
 
   /** Best-effort slug assignment — relies on the `UNIQUE` constraint as the real guard against concurrent collisions; caller retries with a new candidate on `false`. */

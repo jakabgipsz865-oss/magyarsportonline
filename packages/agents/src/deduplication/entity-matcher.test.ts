@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchPrimaryEntity } from "./entity-matcher";
+import { entityMatchesText, matchPrimaryEntity } from "./entity-matcher";
 
 type TestEntity = Parameters<typeof matchPrimaryEntity>[1][number];
 
@@ -42,5 +42,22 @@ describe("matchPrimaryEntity", () => {
   it("returns null when nothing matches", () => {
     const entities = [entity({ id: "1", nameCanonical: "Liverpool FC" })];
     expect(matchPrimaryEntity("A story about tennis", entities)).toBeNull();
+  });
+});
+
+describe("entityMatchesText", () => {
+  it("matches on the canonical name, case-insensitively", () => {
+    const e = entity({ nameCanonical: "Liverpool FC" });
+    expect(entityMatchesText(e, "liverpool fc win again")).toBe(true);
+  });
+
+  it("matches on an alias", () => {
+    const e = entity({ nameCanonical: "Tottenham Hotspur FC", aliases: ["Tottenham", "Spurs"] });
+    expect(entityMatchesText(e, "Spurs sack their manager")).toBe(true);
+  });
+
+  it("returns false when neither the name nor an alias appears", () => {
+    const e = entity({ nameCanonical: "Arsenal FC", aliases: ["Arsenal"] });
+    expect(entityMatchesText(e, "Chelsea win the derby")).toBe(false);
   });
 });

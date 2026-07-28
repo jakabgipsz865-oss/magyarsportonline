@@ -11,4 +11,9 @@ export class CategoryRepository {
     const [row] = await this.db.select().from(categories).where(eq(categories.slug, slug)).limit(1);
     return row ?? null;
   }
+
+  /** Small, seeded taxonomy — used for the site-wide category navigation. */
+  async listAll(): Promise<Category[]> {
+    return this.db.select().from(categories);
+  }
 }

@@ -20,6 +20,10 @@ export const rawArticles = pgTable("raw_articles", {
   sourceUrl: text("source_url").notNull().unique(),
   titleOriginal: text("title_original").notNull(),
   bodyOriginal: text("body_original").notNull(),
+  // RSS media:thumbnail/enclosure image, if the source provided one — frontend
+  // hero/thumbnail display (Real Sports Portal UX sprint). Never re-hosted,
+  // just the source URL.
+  imageUrl: text("image_url"),
   language: text("language").notNull(),
   embedding: vector("embedding", {
     dimensions: RAW_ARTICLE_EMBEDDING_DIMENSIONS,

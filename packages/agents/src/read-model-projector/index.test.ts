@@ -17,6 +17,7 @@ const STORY = {
   lastUpdatedAt: new Date(),
   publishedAt: new Date("2026-07-27T21:00:00.000Z"),
   isDeveloping: false,
+  imageUrl: null,
 };
 
 function version(overrides?: Partial<Record<string, unknown>>) {

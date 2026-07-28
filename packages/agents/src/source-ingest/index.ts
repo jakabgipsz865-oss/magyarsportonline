@@ -119,6 +119,7 @@ async function ingestOneSource(
       bodyOriginal: article.bodyOriginal,
       language: source.language,
       publishedAtSource: article.publishedAtSource,
+      imageUrl: article.imageUrl,
     });
 
     const correlationId = crypto.randomUUID();

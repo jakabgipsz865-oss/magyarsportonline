@@ -68,6 +68,7 @@ export async function handleStoryPublished(
     titleHu: publishedVersion.titleHu,
     leadHu: publishedVersion.leadHu,
     bodyHtml: toBodyHtml(publishedVersion.bodyHu),
+    imageUrl: story.imageUrl,
     isAiGenerated: publishedVersion.isAiGenerated,
     metaDescription: publishedVersion.metaDescription,
     structuredData: publishedVersion.structuredData,

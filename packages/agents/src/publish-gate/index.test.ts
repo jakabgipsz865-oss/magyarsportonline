@@ -18,6 +18,7 @@ function story(overrides?: Partial<Record<string, unknown>>) {
     lastUpdatedAt: new Date(),
     publishedAt: null,
     isDeveloping: true,
+    imageUrl: null,
     ...overrides,
   };
 }

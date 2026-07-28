@@ -36,6 +36,13 @@
       "when": 1785189511809,
       "tag": "0004_high_human_robot",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785221298037,
+      "tag": "0005_mixed_christian_walker",
+      "breakpoints": true
     }
   ]
 }

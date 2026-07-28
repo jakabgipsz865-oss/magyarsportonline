@@ -23,6 +23,10 @@ export const stories = pgTable("stories", {
     scale: 3,
   }),
   categoryId: uuid("category_id").references(() => categories.id),
+  // First non-null RawArticle.imageUrl seen for this Story (Real Sports
+  // Portal UX sprint) — never overwritten once set, so a later source
+  // without an image can't blank out an earlier one.
+  imageUrl: text("image_url"),
   currentVersionId: uuid("current_version_id").references((): AnyPgColumn => storyVersions.id),
   versionCount: integer("version_count").notNull().default(0),
   firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),

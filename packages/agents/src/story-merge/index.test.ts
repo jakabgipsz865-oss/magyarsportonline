@@ -16,6 +16,7 @@ const RAW_ARTICLE = {
   storyId: null,
   publishedAtSource: null,
   ingestedAt: new Date(),
+  imageUrl: null,
 };
 
 const STORY = {
@@ -32,6 +33,7 @@ const STORY = {
   lastUpdatedAt: new Date(),
   publishedAt: null,
   isDeveloping: true,
+  imageUrl: null,
 };
 
 function buildDeps(created: boolean): StoryMergeDeps & { emitted: unknown[]; links: unknown[] } {
@@ -40,6 +42,7 @@ function buildDeps(created: boolean): StoryMergeDeps & { emitted: unknown[]; lin
   return {
     storyRepository: {
       createOrMatchByFingerprint: vi.fn(async () => ({ story: STORY, created })),
+      setImageUrlIfMissing: vi.fn(async () => undefined),
     },
     rawArticleRepository: {
       getById: vi.fn(async () => RAW_ARTICLE),
@@ -107,6 +110,33 @@ describe("handleStoryCandidateIdentified", () => {
         payload: { story_id: STORY.id, update_type: "new_info" },
       }),
     ]);
+  });
+
+  it("backfills the Story's imageUrl on a corroborating match when the raw article has one", async () => {
+    const deps = buildDeps(false);
+    deps.rawArticleRepository.getById = vi.fn(async () => ({
+      ...RAW_ARTICLE,
+      imageUrl: "https://example.com/photo.jpg",
+    }));
+
+    await handleStoryCandidateIdentified(deps, candidateEvent());
+
+    expect(deps.storyRepository.setImageUrlIfMissing).toHaveBeenCalledWith(
+      STORY.id,
+      "https://example.com/photo.jpg",
+    );
+  });
+
+  it("does not call setImageUrlIfMissing on initial creation (the insert already sets imageUrl)", async () => {
+    const deps = buildDeps(true);
+    deps.rawArticleRepository.getById = vi.fn(async () => ({
+      ...RAW_ARTICLE,
+      imageUrl: "https://example.com/photo.jpg",
+    }));
+
+    await handleStoryCandidateIdentified(deps, candidateEvent());
+
+    expect(deps.storyRepository.setImageUrlIfMissing).not.toHaveBeenCalled();
   });
 
   it("throws when the RawArticle cannot be found", async () => {

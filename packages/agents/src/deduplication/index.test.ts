@@ -16,6 +16,7 @@ const RAW_ARTICLE = {
   storyId: null,
   publishedAtSource: new Date("2026-07-27T20:00:00.000Z"),
   ingestedAt: new Date("2026-07-27T20:05:00.000Z"),
+  imageUrl: null,
 };
 
 const LIVERPOOL_ENTITY = {

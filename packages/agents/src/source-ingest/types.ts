@@ -3,6 +3,8 @@ export interface NormalizedArticle {
   titleOriginal: string;
   bodyOriginal: string;
   publishedAtSource: Date | null;
+  /** RSS media:thumbnail/enclosure image URL, if the feed item provided one. */
+  imageUrl: string | null;
 }
 
 /**
