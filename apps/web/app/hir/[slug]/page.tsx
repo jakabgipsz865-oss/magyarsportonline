@@ -88,29 +88,25 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: newsArticleJsonLd(story) }}
       />
-      <p>
-        <Link href="/">← Vissza a főoldalra</Link>
-      </p>
-      <article>
+      <Link href="/" className="back-link">
+        ← Vissza a főoldalra
+      </Link>
+      <article className="story-article">
         {!story.isAiGenerated && (
-          <p role="note">
-            <strong>
-              ⚠ Nem AI-fordított tartalom — az eredeti, angol nyelvű forrásszöveg jelenik meg
-              változatlanul.
-            </strong>
+          <p className="not-ai-notice" role="note">
+            ⚠ Nem AI-fordított tartalom — az eredeti, angol nyelvű forrásszöveg jelenik meg
+            változatlanul.
           </p>
         )}
         <h1>{story.title}</h1>
-        <p>
-          <strong>{story.lead}</strong>
-        </p>
+        <p className="story-article__lead">{story.lead}</p>
         {/* biztonságos: story.bodyHtml a projector (packages/agents/read-model-projector) HTML-escape-elt kimenete */}
-        <div dangerouslySetInnerHTML={{ __html: story.bodyHtml }} />
+        <div className="story-article__body" dangerouslySetInnerHTML={{ __html: story.bodyHtml }} />
       </article>
 
-      <section>
+      <section className="story-section">
         <h2>Források</h2>
-        <ul>
+        <ul className="story-sources">
           {story.sources.map((source) => (
             <li key={source.url}>
               <a href={source.url} target="_blank" rel="noreferrer">
@@ -122,9 +118,9 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
       </section>
 
       {story.versionHistory.length > 1 && (
-        <section>
+        <section className="story-section">
           <h2>Frissítések</h2>
-          <ul>
+          <ul className="version-history">
             {story.versionHistory.map((entry) => (
               <li key={entry.versionNumber}>
                 <time dateTime={entry.createdAt}>
@@ -138,7 +134,7 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
         </section>
       )}
 
-      <p>
+      <p className="story-footer-meta">
         Megbízhatósági pontszám:{" "}
         {story.confidenceScore !== null ? story.confidenceScore.toFixed(2) : "n/a"}
         {story.isDeveloping ? " · Ez a sztori még alakul." : null}

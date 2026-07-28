@@ -69,6 +69,46 @@ describe("assessContentQuality", () => {
     expect(result.issues).toContainEqual({ field: "lead", kind: "matches_source_verbatim" });
   });
 
+  it("flags a body that repeats the same paragraph twice with a trailing sentence dropped", () => {
+    const result = assessContentQuality({
+      titleHu: "Anglia nyerte a harmadik helyet a világbajnokságon",
+      leadHu:
+        "Az Anglia 6-4-es győzelmet aratott Franciaország ellen Bukayo Saka mesterhármasával.",
+      bodyHu:
+        "Bukayo Saka szintén mesterhármast szerzett, 6-4-es meccsen győzött az Anglia Franciaország ellen. Az angol szövetségi kapitány dicsérte játékosait a győzelem után.\n\nBukayo Saka szintén mesterhármast szerzett, 6-4-es meccsen győzött az Anglia Franciaország ellen.",
+      facts: FACTS,
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.issues).toContainEqual({ field: "body", kind: "repeated_paragraph" });
+  });
+
+  it("does not flag two distinct body paragraphs covering different facts", () => {
+    const result = assessContentQuality({
+      titleHu: "Anglia nyerte a harmadik helyet a világbajnokságon",
+      leadHu: "Az Anglia 6-4-re győzött Franciaország ellen egy izgalmas mérkőzésen.",
+      bodyHu:
+        "Az Anglia csapata megnyerte a harmadik helyért zajló mérkőzést Franciaország ellen.\n\nA szövetségi kapitány elmondta, hogy a csapat a jövő évi tornára készül a folytatásban.",
+      facts: FACTS,
+    });
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("flags a lead that is just restated verbatim as a body paragraph", () => {
+    const result = assessContentQuality({
+      titleHu: "Anglia nyerte a harmadik helyet a világbajnokságon",
+      leadHu:
+        "Az Anglia 6-4-es győzelmet aratott Franciaország ellen Bukayo Saka mesterhármasával.",
+      bodyHu:
+        "Az Anglia 6-4-es győzelmet aratott Franciaország ellen Bukayo Saka mesterhármasával.\n\nA szövetségi kapitány elmondta, hogy a csapat a jövő évi tornára készül.",
+      facts: FACTS,
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.issues).toContainEqual({ field: "lead", kind: "duplicates_body" });
+  });
+
   it("catches an English fact-extraction fallback passthrough copied into the body", () => {
     const englishPassthroughFacts = [
       {

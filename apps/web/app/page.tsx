@@ -18,26 +18,32 @@ export default async function HomePage(): Promise<ReactNode> {
 
   return (
     <main>
-      <h1>magyarsportonline.hu</h1>
-      <p>
-        AI-first, Story-alapú sporthír-platform — a repository <code>docs/architecture/</code>{" "}
-        könyvtárában található teljes architekturális terv szerint.
-      </p>
+      <h1 className="sr-only">Legfrissebb sporthírek</h1>
 
       {stories.length === 0 ? (
-        <p>Még nincs publikált hír.</p>
+        <p className="empty-state">Még nincs publikált hír.</p>
       ) : (
-        <ul>
+        <ul className="story-list">
           {stories.map((story) => (
-            <li key={story.id}>
-              <Link href={`/hir/${story.slug}`}>{story.title}</Link>
-              {story.isDeveloping ? " (élő, alakuló sztori)" : null}
-              {!story.isAiGenerated ? (
-                <>
-                  {" "}
-                  <strong>[nem AI-fordított]</strong>
-                </>
-              ) : null}
+            <li key={story.id} className="story-card">
+              <h2 className="story-card__title">
+                <Link href={`/hir/${story.slug}`}>{story.title}</Link>
+              </h2>
+              <p className="story-card__lead">{story.lead}</p>
+              <div className="story-card__meta">
+                <time dateTime={story.publishedAt}>
+                  {new Date(story.publishedAt).toLocaleString("hu-HU", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
+                </time>
+                {story.isDeveloping ? (
+                  <span className="badge badge--developing">Élő sztori</span>
+                ) : null}
+                {!story.isAiGenerated ? (
+                  <span className="badge badge--not-ai">Nem AI-fordított</span>
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>
