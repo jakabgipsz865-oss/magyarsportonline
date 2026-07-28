@@ -1,0 +1,42 @@
+# Egyszeri diagnosztikai futtatás: az éles /api/internal/llm-diagnostics
+# végpontot hívja meg (CRON_SECRET mögött), és a teljes JSON választ a job
+# summary-ba írja — nem ír adatbázisba (a végpont maga sem, csak a két
+# valódi LLM-hívása naplózódhat a szokásos módon sikeres válasz esetén).
+name: LLM diagnostics (one-off)
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call llm-diagnostics endpoint
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -u
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET repo secret hiányzik — nincs mit futtatni." >&2
+            exit 1
+          fi
+          BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
+          code=$(curl -sS -o response.json -w '%{http_code}' --max-time 60 \
+            -X POST "$BASE/api/internal/llm-diagnostics" \
+            -H "Authorization: Bearer $CRON_SECRET" || echo 000)
+          echo "HTTP $code"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          jq '.' response.json >> "$GITHUB_STEP_SUMMARY" || cat response.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat response.json
+          [ "$code" = "200" ]
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm-diagnostics-result
+          path: response.json
