@@ -60,9 +60,9 @@ export class ProviderFallbackLlmClient implements LlmClient {
       await this.recordUsage(result.inputTokens, result.outputTokens);
       return result;
     } catch (error) {
-      this.logFallback(error);
+      const reason = this.logFallback(error);
       const fallbackResult = await this.options.fallback.completeText(request);
-      return { ...fallbackResult, isFallback: true };
+      return { ...fallbackResult, isFallback: true, fallbackReason: reason };
     }
   }
 
@@ -72,13 +72,13 @@ export class ProviderFallbackLlmClient implements LlmClient {
       await this.recordUsage(result.inputTokens, result.outputTokens);
       return result;
     } catch (error) {
-      this.logFallback(error);
+      const reason = this.logFallback(error);
       const fallbackResult = await this.options.fallback.completeJson(request);
-      return { ...fallbackResult, isFallback: true };
+      return { ...fallbackResult, isFallback: true, fallbackReason: reason };
     }
   }
 
-  private logFallback(error: unknown): void {
+  private logFallback(error: unknown): string {
     const reason = this.options.describeError?.(error) ?? "unknown";
     this.options.logger.warn(
       {
@@ -88,6 +88,7 @@ export class ProviderFallbackLlmClient implements LlmClient {
       },
       `${this.options.providerName}: LLM call failed — falling back to No-LLM mode`,
     );
+    return reason;
   }
 
   private async recordUsage(inputTokens: number, outputTokens: number): Promise<void> {
