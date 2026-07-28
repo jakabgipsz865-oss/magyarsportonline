@@ -36,11 +36,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const { results, totalCandidates, nextOffset } = await runEditorialAbTestBatch({
+    const { results, errors, totalCandidates, nextOffset } = await runEditorialAbTestBatch({
       offset,
       limit,
     });
-    return NextResponse.json({ results, totalCandidates, nextOffset });
+    return NextResponse.json({ results, errors, totalCandidates, nextOffset });
   } catch (error) {
     getLogger().error(
       { error: error instanceof Error ? error.message : String(error) },

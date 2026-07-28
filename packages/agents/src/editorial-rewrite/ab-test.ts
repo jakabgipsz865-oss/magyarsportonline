@@ -1,7 +1,15 @@
-import { MODEL_TIERS, type LlmClient } from "@magyarsportonline/llm";
+import type {
+  JsonCompletionRequest,
+  JsonCompletionResult,
+  LlmClient,
+  TextCompletionRequest,
+  TextCompletionResult,
+} from "@magyarsportonline/llm";
+import { MODEL_TIERS } from "@magyarsportonline/llm";
 import { z } from "zod";
 import type { WriterFact } from "../hungarian-writer/facts";
 import { selfCheckContent } from "../hungarian-writer/self-check";
+import { assessContentQuality, type QualityAssessment } from "../hungarian-writer/quality-gate";
 import { computeReadability, type ReadabilityMetrics } from "./readability";
 import { rewriteForStyle } from "./rewrite";
 
@@ -26,6 +34,48 @@ const judgeResponseSchema = z.object({
 
 const JUDGE_SYSTEM_PROMPT = `Magyar sportújság szerkesztője vagy. Két, egymástól függetlenül megfogalmazott verziót kapsz UGYANARRÓL a hírről (azonos tények, más megfogalmazás: "verzió 1" és "verzió 2"). Kizárólag OLVASHATÓSÁG és MAGYAR SPORTÚJSÁGÍRÓI STÍLUS szempontjából értékeld őket, NE a tényeket — mindkettő ugyanazokra a tényekre épül. Adj 0-10 pontot mindkettőre, mondd meg melyik olvasmányosabb ("winner": "1", "2" vagy "tie", ha nincs érdemi különbség), és röviden indokold magyarul.`;
 
+/**
+ * Thin per-comparison usage meter: wraps the real `LlmClient` so
+ * `runAbComparison` can report real Cloudflare token consumption without
+ * touching `rewriteForStyle`/`selfCheckContent`'s return shapes (those are
+ * shared with the production Editorial Rewrite Agent — widening their
+ * result types purely to serve this diagnostic tool isn't worth the churn
+ * on already-tested, live code). NOT a Neuron counter: Cloudflare Workers
+ * AI's chat-completions response only ever includes `prompt_tokens`/
+ * `completion_tokens` (see packages/llm/src/cloudflare-client.ts) — Neuron
+ * usage is an account-level Cloudflare dashboard metric this app has no API
+ * call for, so it cannot be reported here.
+ */
+class UsageMeteringLlmClient implements LlmClient {
+  inputTokens = 0;
+  outputTokens = 0;
+  calls = 0;
+
+  constructor(private readonly inner: LlmClient) {}
+
+  get modelLabel(): string | undefined {
+    return this.inner.modelLabel;
+  }
+
+  async completeText(request: TextCompletionRequest): Promise<TextCompletionResult> {
+    const result = await this.inner.completeText(request);
+    this.record(result);
+    return result;
+  }
+
+  async completeJson(request: JsonCompletionRequest): Promise<JsonCompletionResult> {
+    const result = await this.inner.completeJson(request);
+    this.record(result);
+    return result;
+  }
+
+  private record(result: { inputTokens: number; outputTokens: number }): void {
+    this.inputTokens += result.inputTokens;
+    this.outputTokens += result.outputTokens;
+    this.calls += 1;
+  }
+}
+
 export interface AbTestArticleContent {
   titleHu: string;
   leadHu: string;
@@ -44,15 +94,23 @@ export interface JudgeVerdict {
   rationaleHu: string;
 }
 
+/** Why Pipeline B ended up identical to Pipeline A (no rewrite applied). */
+export type RejectionKind = "fact_check_failed" | "fallback" | null;
+
 export interface AbTestArticleResult {
   storyId: string;
-  pipelineA: AbTestArticleContent & { readability: ReadabilityMetrics };
+  pipelineA: AbTestArticleContent & { readability: ReadabilityMetrics; quality: QualityAssessment };
   pipelineB: AbTestArticleContent & {
     readability: ReadabilityMetrics;
+    quality: QualityAssessment;
     rewriteAccepted: boolean;
+    rejectionKind: RejectionKind;
     rejectionReason: string[] | null;
   };
   judge: JudgeVerdict | null;
+  /** Real Cloudflare token usage across every LLM call this comparison made (rewrite + self-check + judge, when run). Neuron consumption is NOT included — see UsageMeteringLlmClient's comment. */
+  llmUsage: { inputTokens: number; outputTokens: number; calls: number };
+  durationMs: number;
 }
 
 function fullText(content: AbTestArticleContent): string {
@@ -68,6 +126,13 @@ function fullText(content: AbTestArticleContent): string {
  * call to dampen position bias; this function un-shuffles it before
  * returning so callers always see stable "A"/"B" labels.
  *
+ * "Hallucination"/factual-deviation counting in this experiment is
+ * necessarily one-directional: Pipeline A is the already-published,
+ * ground-truth baseline (its own facts came from Fact Verification, not
+ * from this tool), so what's actually being measured is whether the
+ * *rewrite step itself* introduced a deviation from A's facts — that's
+ * exactly `rejectionKind === "fact_check_failed"`.
+ *
  * Read-only: never writes to the database. Callers decide what to do with
  * the result (the A/B test report, apps/web/app/api/internal/editorial-ab-test).
  */
@@ -75,20 +140,28 @@ export async function runAbComparison(
   llm: LlmClient,
   input: AbTestArticleInput,
 ): Promise<AbTestArticleResult> {
+  const startedAt = Date.now();
+  const metered = new UsageMeteringLlmClient(llm);
+
   const pipelineA: AbTestArticleContent = {
     titleHu: input.titleHu,
     leadHu: input.leadHu,
     bodyHu: input.bodyHu,
   };
 
-  const rewritten = await rewriteForStyle(llm, {
+  const rewritten = await rewriteForStyle(metered, {
     facts: input.facts,
     titleHu: input.titleHu,
     leadHu: input.leadHu,
     bodyHu: input.bodyHu,
   });
-  const check = await selfCheckContent(llm, { facts: input.facts, ...rewritten });
+  const check = await selfCheckContent(metered, { facts: input.facts, ...rewritten });
   const rewriteAccepted = check.consistent && !rewritten.isFallback;
+  const rejectionKind: RejectionKind = rewriteAccepted
+    ? null
+    : rewritten.isFallback
+      ? "fallback"
+      : "fact_check_failed";
 
   const pipelineB: AbTestArticleContent = rewriteAccepted
     ? { titleHu: rewritten.titleHu, leadHu: rewritten.leadHu, bodyHu: rewritten.bodyHu }
@@ -102,7 +175,7 @@ export async function runAbComparison(
     const first = aIsFirst ? pipelineA : pipelineB;
     const second = aIsFirst ? pipelineB : pipelineA;
 
-    const result = await llm.completeJson({
+    const result = await metered.completeJson({
       model: MODEL_TIERS.selfCheck,
       system: JUDGE_SYSTEM_PROMPT,
       messages: [
@@ -136,13 +209,25 @@ export async function runAbComparison(
 
   return {
     storyId: input.storyId,
-    pipelineA: { ...pipelineA, readability: computeReadability(fullText(pipelineA)) },
+    pipelineA: {
+      ...pipelineA,
+      readability: computeReadability(fullText(pipelineA)),
+      quality: assessContentQuality({ ...pipelineA, facts: input.facts }),
+    },
     pipelineB: {
       ...pipelineB,
       readability: computeReadability(fullText(pipelineB)),
+      quality: assessContentQuality({ ...pipelineB, facts: input.facts }),
       rewriteAccepted,
+      rejectionKind,
       rejectionReason: rewriteAccepted ? null : check.issues,
     },
     judge,
+    llmUsage: {
+      inputTokens: metered.inputTokens,
+      outputTokens: metered.outputTokens,
+      calls: metered.calls,
+    },
+    durationMs: Date.now() - startedAt,
   };
 }

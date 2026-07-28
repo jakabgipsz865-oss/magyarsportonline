@@ -1,7 +1,8 @@
 # Editorial style A/B test — a szerkesztőségi stílus sprint kért mérése:
 # lefuttatja a jelenlegi pipeline kimenetét (Pipeline A) és az Editorial
 # Rewrite Agent stilizált változatát (Pipeline B) ugyanazokon a már publikált
-# cikkeken, olvashatósági metrikákkal és egy vak LLM-judge összehasonlítással.
+# cikkeken, olvashatósági metrikákkal, tartalom-minőségi heurisztikákkal és
+# egy vak LLM-judge összehasonlítással.
 #
 # Kizárólag olvasás — a `/api/internal/editorial-ab-test` végpont sosem ír az
 # adatbázisba. Kötegelve fut (alapértelmezés: 5 cikk/hívás), mert a Vercel
@@ -43,6 +44,7 @@ jobs:
           BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
           echo "Target: $BASE"
           echo "[]" > all-results.json
+          echo "[]" > all-errors.json
 
           offset=0
           fetched=0
@@ -63,6 +65,7 @@ jobs:
 
             batch_count=$(jq '.results | length' batch.json)
             jq -s '.[0] + .[1].results' all-results.json batch.json > merged.json && mv merged.json all-results.json
+            jq -s '.[0] + .[1].errors' all-errors.json batch.json > merged-errors.json && mv merged-errors.json all-errors.json
             fetched=$((fetched + batch_count))
 
             next_offset=$(jq -r '.nextOffset' batch.json)
@@ -77,6 +80,7 @@ jobs:
           done
 
           echo "total collected: $(jq 'length' all-results.json)"
+          echo "total errors: $(jq 'length' all-errors.json)"
 
       - name: Summarize results
         run: |
@@ -85,18 +89,40 @@ jobs:
 
           with open("all-results.json") as f:
               results = json.load(f)
+          with open("all-errors.json") as f:
+              errors = json.load(f)
 
           n = len(results)
+          attempted = n + len(errors)
           accepted = [r for r in results if r["pipelineB"]["rewriteAccepted"]]
+          rejected_fact = [r for r in results if r["pipelineB"]["rejectionKind"] == "fact_check_failed"]
+          rejected_fallback = [r for r in results if r["pipelineB"]["rejectionKind"] == "fallback"]
           judged = [r for r in results if r["judge"] is not None]
 
           def avg(xs):
               return sum(xs) / len(xs) if xs else 0.0
 
+          def pct(part, whole):
+              return (100.0 * part / whole) if whole else 0.0
+
           a_sent = avg([r["pipelineA"]["readability"]["avgSentenceLengthWords"] for r in results])
           b_sent = avg([r["pipelineB"]["readability"]["avgSentenceLengthWords"] for r in results])
           a_word = avg([r["pipelineA"]["readability"]["avgWordLengthChars"] for r in results])
           b_word = avg([r["pipelineB"]["readability"]["avgWordLengthChars"] for r in results])
+
+          def count_issue_kind(rs, side, kind):
+              return sum(
+                  1 for r in rs for issue in r[side]["quality"]["issues"] if issue["kind"] == kind
+              )
+
+          a_unnatural = count_issue_kind(results, "pipelineA", "looks_english")
+          b_unnatural = count_issue_kind(results, "pipelineB", "looks_english")
+          a_repeat = count_issue_kind(results, "pipelineA", "repeated_paragraph") + count_issue_kind(
+              results, "pipelineA", "duplicates_body"
+          )
+          b_repeat = count_issue_kind(results, "pipelineB", "repeated_paragraph") + count_issue_kind(
+              results, "pipelineB", "duplicates_body"
+          )
 
           wins_a = sum(1 for r in judged if r["judge"]["winner"] == "A")
           wins_b = sum(1 for r in judged if r["judge"]["winner"] == "B")
@@ -104,33 +130,69 @@ jobs:
           score_a = avg([r["judge"]["scoreA"] for r in judged])
           score_b = avg([r["judge"]["scoreB"] for r in judged])
 
+          total_input_tokens = sum(r["llmUsage"]["inputTokens"] for r in results)
+          total_output_tokens = sum(r["llmUsage"]["outputTokens"] for r in results)
+          total_calls = sum(r["llmUsage"]["calls"] for r in results)
+          avg_duration_ms = avg([r["durationMs"] for r in results])
+
           lines = []
-          lines.append(f"# Editorial style A/B teszt — {n} cikk\n")
-          lines.append(f"- Rewrite elfogadva (tény-konzisztens): **{len(accepted)}/{n}**")
-          lines.append(f"- LLM-judge által megítélt cikkek: **{len(judged)}/{n}** (a nem-elfogadott rewrite-oknál nincs mit megítélni)\n")
-          lines.append("## Olvashatósági metrikák (átlag, kisebb = tömörebb/olvashatóbb mondat-/szóhossz)\n")
+          lines.append(f"# Editorial style A/B teszt — {n}/{attempted} cikk (kísérlet vs sikeresen feldolgozott)\n")
+
+          lines.append("## 1) Tényellenőrzési visszagörgetés (safety net) igazolása\n")
+          lines.append(f"- Rewrite elfogadva (tény-konzisztens és nem fallback): **{len(accepted)}/{n}** ({pct(len(accepted), n):.0f}%)")
+          lines.append(f"- Elutasítva tényellenőrzés miatt (hallucináció/eltérés gyanúja — eredeti szöveg maradt): **{len(rejected_fact)}/{n}**")
+          lines.append(f"- Elutasítva No-LLM/fallback miatt (nem volt mit átírni): **{len(rejected_fallback)}/{n}**")
+          lines.append(f"- Feldolgozási hiba (kihagyva, nem számít bele a fenti arányokba): **{len(errors)}/{attempted}**\n")
+
+          lines.append("## 2) Olvashatósági és ismétlődési mutatók (átlag)\n")
           lines.append("| Metrika | Pipeline A (jelenlegi) | Pipeline B (Editorial Rewrite) |")
           lines.append("|---|---|---|")
           lines.append(f"| Átlagos mondathossz (szó) | {a_sent:.1f} | {b_sent:.1f} |")
-          lines.append(f"| Átlagos szóhossz (karakter) | {a_word:.2f} | {b_word:.2f} |\n")
-          lines.append("## LLM-judge vak összehasonlítás (0-10 olvashatósági pont)\n")
+          lines.append(f"| Átlagos szóhossz (karakter) | {a_word:.2f} | {b_word:.2f} |")
+          lines.append(f"| Magyartalan (angolnak ható) mező-találat | {a_unnatural} | {b_unnatural} |")
+          lines.append(f"| Ismétlődő/duplikált bekezdés-találat | {a_repeat} | {b_repeat} |\n")
+          lines.append("_A „magyartalan” és „ismétlődés” számok a Hungarian Writer Agent már éles Content Quality Gate heurisztikájából jönnek (`assessContentQuality` — `looks_english`, `repeated_paragraph`, `duplicates_body`), ugyanazon a szövegen futtatva mindkét pipeline kimenetére._\n")
+
+          lines.append("## 3) LLM-judge vak összehasonlítás (0-10 olvashatósági pont)\n")
           lines.append(f"- A (jelenlegi) győzött: **{wins_a}**")
           lines.append(f"- B (Editorial Rewrite) győzött: **{wins_b}**")
           lines.append(f"- Döntetlen: **{ties}**")
-          lines.append(f"- Átlagpontszám A: **{score_a:.2f}** / B: **{score_b:.2f}**\n")
+          lines.append(f"- Átlagpontszám A: **{score_a:.2f}** / B: **{score_b:.2f}**")
+          lines.append("- FONTOS: ez önmagában NEM elégséges bizonyíték — lásd a mennyiségi metrikákat is fent és a cím/lead párokat lent.\n")
+
+          lines.append("## 4) Erőforrás-fogyasztás és megbízhatóság\n")
+          lines.append(f"- Összes Cloudflare token (input+output), a mintában: **{total_input_tokens + total_output_tokens}** ({total_input_tokens} input / {total_output_tokens} output), {total_calls} hívásból")
+          lines.append(f"- Átlagos token/cikk: **{(total_input_tokens + total_output_tokens) / n if n else 0:.0f}**")
+          lines.append("- Neuron-fogyasztás: **nem lekérdezhető innen** — a Cloudflare Workers AI chat-completions válasza csak `prompt_tokens`/`completion_tokens` mezőt ad vissza, Neuron-számot nem; ez kizárólag a Cloudflare dashboardon (Workers AI → Analytics) ellenőrizhető fiókszinten.")
+          lines.append(f"- Átlagos feldolgozási idő/cikk: **{avg_duration_ms:.0f} ms**")
+          lines.append(f"- Fallback arány (No-LLM/hiba miatt nem történt átírás): **{pct(len(rejected_fallback), n):.1f}%**")
+          lines.append(f"- Feldolgozási hiba arány (a kísérlet szintjén — nem a live pipeline-ban): **{pct(len(errors), attempted):.1f}%**")
+          lines.append("- Külön „timeout” arány: a jelenlegi LLM-kliens réteg (ProviderFallbackLlmClient/BudgetGuardedLlmClient) minden hibát — hálózati hibát, kvótát, timeoutot — ugyanabba a fallback-ágba terel, nincs elkülönített timeout-jelző; egy esetleges timeout emiatt vagy a fenti feldolgozási hiba arányban, vagy a fallback arányban jelenik meg, külön nem bontható.\n")
 
           verdict = "B (Editorial Rewrite) olvashatóbb" if wins_b > wins_a and score_b > score_a else (
               "A (jelenlegi) olvashatóbb" if wins_a > wins_b and score_a > score_b else "nincs egyértelmű különbség"
           )
-          lines.append(f"## Összegzés: **{verdict}**\n")
+          lines.append(f"## 5) Összegzés (csak ebből a futtatásból): **{verdict}**\n")
 
-          lines.append("<details><summary>Minta (első 3 cikk cím-összevetése)</summary>\n")
-          for r in results[:3]:
-              lines.append(f"- A: {r['pipelineA']['titleHu']}")
-              lines.append(f"  B: {r['pipelineB']['titleHu']}")
-              if r["judge"]:
-                  lines.append(f"  judge: {r['judge']['winner']} ({r['judge']['rationaleHu']})")
-          lines.append("\n</details>\n")
+          sample_count = min(15, n)
+          lines.append(f"## 6) Cím/lead párok — {sample_count} konkrét példa (előtte/utána)\n")
+          for i, r in enumerate(results[:sample_count], start=1):
+              lines.append(f"**{i}. story_id={r['storyId']}**")
+              lines.append(f"- A cím: {r['pipelineA']['titleHu']}")
+              lines.append(f"  A lead: {r['pipelineA']['leadHu']}")
+              lines.append(f"- B cím: {r['pipelineB']['titleHu']}")
+              lines.append(f"  B lead: {r['pipelineB']['leadHu']}")
+              if not r["pipelineB"]["rewriteAccepted"]:
+                  lines.append(f"  → B == A (elutasítva: {r['pipelineB']['rejectionKind']}, indok: {r['pipelineB']['rejectionReason']})")
+              elif r["judge"]:
+                  lines.append(f"  → judge: **{r['judge']['winner']}** jobb (A={r['judge']['scoreA']:.1f}, B={r['judge']['scoreB']:.1f}) — {r['judge']['rationaleHu']}")
+              lines.append("")
+
+          if errors:
+              lines.append("## 7) Feldolgozási hibák\n")
+              for e in errors[:10]:
+                  lines.append(f"- story_id={e['storyId']}: {e['message']}")
+              lines.append("")
 
           report = "\n".join(lines)
           print(report)
@@ -145,4 +207,5 @@ jobs:
           name: editorial-ab-test-results
           path: |
             all-results.json
+            all-errors.json
             report.md
