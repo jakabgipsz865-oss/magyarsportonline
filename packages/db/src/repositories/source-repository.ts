@@ -28,11 +28,13 @@ export class SourceRepository {
     sourceId: string,
     result: { status: "ok" | "error"; fetchedAt?: Date },
   ): Promise<void> {
+    const fetchedAt = result.fetchedAt ?? new Date();
     await this.db
       .update(sources)
       .set({
         lastFetchStatus: result.status,
-        lastFetchedAt: result.fetchedAt ?? new Date(),
+        lastFetchedAt: fetchedAt,
+        ...(result.status === "ok" ? { lastSuccessAt: fetchedAt } : { lastErrorAt: fetchedAt }),
       })
       .where(eq(sources.id, sourceId));
   }

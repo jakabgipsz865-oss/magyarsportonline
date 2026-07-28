@@ -25,6 +25,13 @@ const STORY = {
   publishedAt: null,
   isDeveloping: true,
   imageUrl: null,
+  credibilityScore: null,
+  credibilityBand: null,
+  credibilityLabelHu: null,
+  credibilityJustificationHu: null,
+  credibilityOfficialConfirmed: false,
+  credibilityCorroboratingCount: null,
+  credibilityUpdatedAt: null,
 };
 
 const FACT: Fact = {
@@ -35,6 +42,8 @@ const FACT: Fact = {
   payload: { detail_hu: "3-1", quote_original: null, quote_speaker: null },
   corroborationCount: 1,
   isContradicted: false,
+  excluded: false,
+  excludedReason: null,
   extractedAt: new Date(),
 };
 

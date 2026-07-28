@@ -1,0 +1,1 @@
+ALTER TYPE "public"."source_license_type" ADD VALUE 'pending_review';

@@ -19,7 +19,8 @@ function sourceCorroborationScore(sourceCount: number): number {
   return 0.3;
 }
 
-function sourceReliabilityScore(tiers: SourceReliabilityTier[]): number {
+/** 0-1 átlagos megbízhatósági súly — a credibility-score.ts is ezt használja "forrás megbízhatósági súlya" bemenetként. */
+export function sourceReliabilityScore(tiers: SourceReliabilityTier[]): number {
   if (tiers.length === 0) return 0.5;
   const sum = tiers.reduce((total, tier) => total + RELIABILITY_WEIGHT[tier], 0);
   return sum / tiers.length;

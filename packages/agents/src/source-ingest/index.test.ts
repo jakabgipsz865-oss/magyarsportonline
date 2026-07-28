@@ -16,6 +16,19 @@ const SOURCE = {
   onboardedAt: new Date(),
   lastFetchedAt: null,
   lastFetchStatus: null,
+  country: null,
+  leagueTags: null,
+  category: null,
+  contentMode: null,
+  trustBaseline: null,
+  robotsStatus: null,
+  termsStatus: null,
+  attributionRule: null,
+  imagePolicy: null,
+  pollingFrequencyMinutes: null,
+  extractorName: null,
+  lastSuccessAt: null,
+  lastErrorAt: null,
 };
 
 function buildDeps(overrides?: {

@@ -19,6 +19,13 @@ function story(overrides?: Partial<Record<string, unknown>>) {
     publishedAt: null,
     isDeveloping: true,
     imageUrl: null,
+    credibilityScore: null,
+    credibilityBand: null,
+    credibilityLabelHu: null,
+    credibilityJustificationHu: null,
+    credibilityOfficialConfirmed: false,
+    credibilityCorroboratingCount: null,
+    credibilityUpdatedAt: null,
     ...overrides,
   };
 }
@@ -32,6 +39,8 @@ function fact(isContradicted: boolean) {
     payload: {},
     corroborationCount: 1,
     isContradicted,
+    excluded: false,
+    excludedReason: null,
     extractedAt: new Date(),
   };
 }

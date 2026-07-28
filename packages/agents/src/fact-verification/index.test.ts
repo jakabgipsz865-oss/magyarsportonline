@@ -20,6 +20,13 @@ const STORY = {
   publishedAt: null,
   isDeveloping: true,
   imageUrl: null,
+  credibilityScore: null,
+  credibilityBand: null,
+  credibilityLabelHu: null,
+  credibilityJustificationHu: null,
+  credibilityOfficialConfirmed: false,
+  credibilityCorroboratingCount: null,
+  credibilityUpdatedAt: null,
 };
 
 function rawArticle(overrides: Partial<Record<string, unknown>>) {
@@ -57,6 +64,19 @@ function source(overrides: Partial<Record<string, unknown>>) {
     onboardedAt: new Date(),
     lastFetchedAt: null,
     lastFetchStatus: null,
+    country: null,
+    leagueTags: null,
+    category: null,
+    contentMode: null,
+    trustBaseline: null,
+    robotsStatus: null,
+    termsStatus: null,
+    attributionRule: null,
+    imagePolicy: null,
+    pollingFrequencyMinutes: null,
+    extractorName: null,
+    lastSuccessAt: null,
+    lastErrorAt: null,
     ...overrides,
   };
 }
@@ -70,6 +90,7 @@ function buildDeps(): FactVerificationDeps & {
   const updateCalls: unknown[] = [];
   const llm = new FakeLlmClient();
   let nextFactId = 1;
+  const factsStore: Fact[] = [];
 
   return {
     storyRepository: {
@@ -77,6 +98,7 @@ function buildDeps(): FactVerificationDeps & {
       updateFactVerificationResult: vi.fn(async (storyId: string, result: unknown) => {
         updateCalls.push({ storyId, ...(result as Record<string, unknown>) });
       }),
+      updateCredibilityResult: vi.fn(async () => undefined),
     },
     rawArticleRepository: {
       listByStoryId: vi.fn(async () => [
@@ -102,16 +124,76 @@ function buildDeps(): FactVerificationDeps & {
             factType: Fact["factType"];
             payload: unknown;
           }>,
-        ): Promise<Fact[]> =>
-          rows.map((row) => ({
+        ): Promise<Fact[]> => {
+          const inserted = rows.map((row) => ({
             id: `fact-${nextFactId++}`,
             corroborationCount: 1,
             isContradicted: false,
+            excluded: false,
+            excludedReason: null,
             extractedAt: new Date(),
             ...row,
-          })),
+          }));
+          factsStore.push(...inserted);
+          return inserted;
+        },
       ),
-      markContradicted: vi.fn(async () => undefined),
+      markContradicted: vi.fn(async (factId: string) => {
+        const fact = factsStore.find((f) => f.id === factId);
+        if (fact) fact.isContradicted = true;
+      }),
+      bumpCorroboration: vi.fn(async (factId: string, count: number) => {
+        const fact = factsStore.find((f) => f.id === factId);
+        if (fact) fact.corroborationCount = count;
+      }),
+      listByStoryId: vi.fn(async (storyId: string) =>
+        factsStore.filter((fact) => fact.storyId === storyId),
+      ),
+    },
+    storySourceRepository: {
+      sourcesWithMetaByStoryId: vi.fn(async () => [
+        {
+          storyId: STORY.id,
+          rawArticleId: "raw-1",
+          sourceId: "source-1",
+          sourceName: "Source",
+          category: null,
+          reliabilityTier: "B" as const,
+          contributionType: "initial" as const,
+          excluded: false,
+          excludedReason: null,
+        },
+        {
+          storyId: STORY.id,
+          rawArticleId: "raw-2",
+          sourceId: "source-2",
+          sourceName: "Source",
+          category: null,
+          reliabilityTier: "A" as const,
+          contributionType: "new_info" as const,
+          excluded: false,
+          excludedReason: null,
+        },
+      ]),
+    },
+    storyCredibilityHistoryRepository: {
+      insert: vi.fn(
+        async (row: {
+          storyId: string;
+          score: number;
+          band: string;
+          labelHu: string;
+          justificationHu: string;
+          officialConfirmed: boolean;
+          corroboratingSourceCount: number;
+          source?: string;
+        }) => ({
+          id: "history-1",
+          recordedAt: new Date(),
+          source: "auto",
+          ...row,
+        }),
+      ),
     },
     llm,
     agentRunRepository: { record: vi.fn(async () => undefined) },

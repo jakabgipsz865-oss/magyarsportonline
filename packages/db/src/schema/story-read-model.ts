@@ -40,4 +40,9 @@ export const storyReadModel = pgTable("story_read_model", {
   publishedAt: timestamp("published_at", { withTimezone: true }).notNull(),
   lastUpdatedAt: timestamp("last_updated_at", { withTimezone: true }).notNull().defaultNow(),
   versionHistorySummary: jsonb("version_history_summary").notNull().default([]),
+  // Hitelességi mutató v1 (additív, 2026-07-28) — a projector tölti fel a
+  // `stories.credibility*` mezőkből és a `story_credibility_history`
+  // táblából: { score, band, labelHu, justificationHu, officialConfirmed,
+  // corroboratingSourceCount, updatedAt, history: [...] }.
+  credibilitySummary: jsonb("credibility_summary"),
 });

@@ -14,6 +14,7 @@ export * from "./review-queue-items";
 export * from "./social-posts";
 export * from "./agent-runs";
 export * from "./story-fingerprints";
+export * from "./story-credibility-history";
 export * from "./story-read-model";
 export * from "./llm-usage";
 export * from "./editorial-ab-snapshots";

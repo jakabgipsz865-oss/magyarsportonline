@@ -33,4 +33,18 @@ export const stories = pgTable("stories", {
   lastUpdatedAt: timestamp("last_updated_at", { withTimezone: true }).notNull().defaultNow(),
   publishedAt: timestamp("published_at", { withTimezone: true }),
   isDeveloping: boolean("is_developing").notNull().default(false),
+  // --- Hitelességi mutató v1 (additív, 2026-07-28) ---
+  // Mindig a legutolsó számítást tükrözik — a teljes történetet a
+  // `story_credibility_history` tábla őrzi (packages/db/src/schema/
+  // story-credibility-history.ts). `credibilityBand` a
+  // `@magyarsportonline/shared` CREDIBILITY_BANDS slugja, a régi
+  // `confidenceScore` (0-1 float) mellett, azt NEM helyettesíti — az a Fact
+  // Verification Agent régi, forrásszám-alapú metrikája marad.
+  credibilityScore: integer("credibility_score"),
+  credibilityBand: text("credibility_band"),
+  credibilityLabelHu: text("credibility_label_hu"),
+  credibilityJustificationHu: text("credibility_justification_hu"),
+  credibilityOfficialConfirmed: boolean("credibility_official_confirmed").notNull().default(false),
+  credibilityCorroboratingCount: integer("credibility_corroborating_count"),
+  credibilityUpdatedAt: timestamp("credibility_updated_at", { withTimezone: true }),
 });

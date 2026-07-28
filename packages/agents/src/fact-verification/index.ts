@@ -2,7 +2,9 @@ import type {
   FactRepository,
   RawArticleRepository,
   SourceRepository,
+  StoryCredibilityHistoryRepository,
   StoryRepository,
+  StorySourceRepository,
 } from "@magyarsportonline/db";
 import { createEventEnvelope, type SportsNewsEvent } from "@magyarsportonline/events";
 import type { LlmClient } from "@magyarsportonline/llm";
@@ -13,11 +15,15 @@ import { withAgentRun } from "../shared/with-agent-run";
 import { computeConfidenceScore } from "./confidence-score";
 import { findContradictedFactIds } from "./contradiction-check";
 import { extractFacts } from "./extraction";
+import { recomputeCredibilityForStory } from "./recompute-credibility";
 import { classifyRisk } from "./risk-classifier";
 
+export * from "./claim-merge";
 export * from "./confidence-score";
 export * from "./contradiction-check";
+export * from "./credibility-score";
 export * from "./extraction";
+export * from "./recompute-credibility";
 export * from "./risk-classifier";
 
 export const AGENT_VERSION = "fact-verification@0.1.0";
@@ -36,10 +42,18 @@ export interface Emitter {
 }
 
 export interface FactVerificationDeps {
-  storyRepository: Pick<StoryRepository, "getById" | "updateFactVerificationResult">;
+  storyRepository: Pick<
+    StoryRepository,
+    "getById" | "updateFactVerificationResult" | "updateCredibilityResult"
+  >;
   rawArticleRepository: Pick<RawArticleRepository, "listByStoryId">;
   sourceRepository: Pick<SourceRepository, "getById">;
-  factRepository: Pick<FactRepository, "insertMany" | "markContradicted">;
+  factRepository: Pick<
+    FactRepository,
+    "insertMany" | "markContradicted" | "bumpCorroboration" | "listByStoryId"
+  >;
+  storySourceRepository: Pick<StorySourceRepository, "sourcesWithMetaByStoryId">;
+  storyCredibilityHistoryRepository: Pick<StoryCredibilityHistoryRepository, "insert">;
   llm: LlmClient;
   agentRunRepository: AgentRunRecorder;
   dispatcher: Emitter;
@@ -133,6 +147,20 @@ export async function handleFactVerificationTrigger(
         isDeveloping: story.isDeveloping,
       });
 
+      // Hitelességi mutató v1 (2026-07-28) — a story_sources linkeket a
+      // Story Merge Agent már létrehozta ezt megelőzően a pipeline-ban, így
+      // a most beszúrt Fact-ok forrás-eredete már megtalálható. Ugyanezt a
+      // függvényt hívja az admin "Újraszámolás" is (recompute-credibility.ts).
+      const credibilityResult = await recomputeCredibilityForStory(
+        {
+          factRepository: deps.factRepository,
+          storySourceRepository: deps.storySourceRepository,
+          storyRepository: deps.storyRepository,
+          storyCredibilityHistoryRepository: deps.storyCredibilityHistoryRepository,
+        },
+        story.id,
+      );
+
       await deps.dispatcher.emit({
         ...createEventEnvelope({ correlationId: event.correlation_id }),
         type: "story/facts.verified",
@@ -151,6 +179,8 @@ export async function handleFactVerificationTrigger(
           storyId: story.id,
           confidenceScore,
           riskLevel: risk.riskLevel,
+          credibilityScore: credibilityResult.score,
+          credibilityBand: credibilityResult.band,
         },
         "fact verification completed",
       );

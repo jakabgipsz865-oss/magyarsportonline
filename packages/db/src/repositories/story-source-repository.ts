@@ -1,5 +1,9 @@
-import type { StorySourceContributionType } from "@magyarsportonline/shared";
-import { eq } from "drizzle-orm";
+import type {
+  SourceCategory,
+  SourceReliabilityTier,
+  StorySourceContributionType,
+} from "@magyarsportonline/shared";
+import { and, eq } from "drizzle-orm";
 import type { Database } from "../client";
 import { rawArticles, sources, storySources } from "../schema/index";
 
@@ -9,6 +13,7 @@ export interface StorySourceSummaryItem {
   name: string;
   url: string;
   firstSeenAt: string;
+  reliabilityTier: SourceReliabilityTier;
 }
 
 export interface OriginalSourceContent {
@@ -16,6 +21,25 @@ export interface OriginalSourceContent {
   sourceUrl: string;
   titleOriginal: string;
   bodyOriginal: string;
+}
+
+/**
+ * Egy Story hitelesség-újraszámolásához szükséges, forrásonkénti metaadat
+ * (2026-07-28-i "Hitelességi mutató v1" sprint,
+ * packages/agents/src/fact-verification/recompute-credibility.ts). Az
+ * `excluded` sorok IS szerepelnek a listában (az admin felületnek látnia
+ * kell őket a vissza-bekapcsoláshoz) — a hívó felel a szűrésért.
+ */
+export interface StorySourceWithMeta {
+  storyId: string;
+  rawArticleId: string;
+  sourceId: string;
+  sourceName: string;
+  category: SourceCategory | null;
+  reliabilityTier: SourceReliabilityTier;
+  contributionType: StorySourceContributionType;
+  excluded: boolean;
+  excludedReason: string | null;
 }
 
 /** Bounded-context repository for the Story Merge Agent (docs/architecture/02-agents.md §2.3). */
@@ -49,23 +73,66 @@ export class StorySourceRepository {
     return rows.length;
   }
 
-  /** Pre-joined source list for the `story_read_model.sources_summary` projection. */
+  /**
+   * Pre-joined source list for the `story_read_model.sources_summary`
+   * projection — admin-excluded sources (2026-07-28) are left out, since
+   * this feeds the PUBLIC page.
+   */
   async summaryByStoryId(storyId: string): Promise<StorySourceSummaryItem[]> {
     const rows = await this.db
       .select({
         name: sources.name,
         url: rawArticles.sourceUrl,
         firstSeenAt: storySources.linkedAt,
+        reliabilityTier: sources.reliabilityTier,
+      })
+      .from(storySources)
+      .innerJoin(rawArticles, eq(storySources.rawArticleId, rawArticles.id))
+      .innerJoin(sources, eq(rawArticles.sourceId, sources.id))
+      .where(and(eq(storySources.storyId, storyId), eq(storySources.excluded, false)));
+    return rows.map((row) => ({
+      name: row.name,
+      url: row.url,
+      firstSeenAt: row.firstSeenAt.toISOString(),
+      reliabilityTier: row.reliabilityTier,
+    }));
+  }
+
+  /**
+   * Minden forrás-kapcsolat metaadata a hitelesség-újraszámoláshoz és az
+   * admin szerkesztőfelülethez (2026-07-28) — a kizártakat IS visszaadja.
+   */
+  async sourcesWithMetaByStoryId(storyId: string): Promise<StorySourceWithMeta[]> {
+    const rows = await this.db
+      .select({
+        storyId: storySources.storyId,
+        rawArticleId: storySources.rawArticleId,
+        sourceId: rawArticles.sourceId,
+        sourceName: sources.name,
+        category: sources.category,
+        reliabilityTier: sources.reliabilityTier,
+        contributionType: storySources.contributionType,
+        excluded: storySources.excluded,
+        excludedReason: storySources.excludedReason,
       })
       .from(storySources)
       .innerJoin(rawArticles, eq(storySources.rawArticleId, rawArticles.id))
       .innerJoin(sources, eq(rawArticles.sourceId, sources.id))
       .where(eq(storySources.storyId, storyId));
-    return rows.map((row) => ({
-      name: row.name,
-      url: row.url,
-      firstSeenAt: row.firstSeenAt.toISOString(),
-    }));
+    return rows;
+  }
+
+  /** Admin forrás-szerkeszthetőség (2026-07-28) — egy forrás kizárása a Story hitelesség-számításából, indoklással. */
+  async setExcluded(
+    storyId: string,
+    rawArticleId: string,
+    excluded: boolean,
+    reason: string | null,
+  ): Promise<void> {
+    await this.db
+      .update(storySources)
+      .set({ excluded, excludedReason: excluded ? reason : null })
+      .where(and(eq(storySources.storyId, storyId), eq(storySources.rawArticleId, rawArticleId)));
   }
 
   /**

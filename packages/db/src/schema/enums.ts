@@ -2,6 +2,8 @@ import {
   REVIEW_QUEUE_REASONS,
   REVIEW_QUEUE_STATUSES,
   RISK_LEVELS,
+  SOURCE_CATEGORIES,
+  SOURCE_CONTENT_MODES,
   SOURCE_RELIABILITY_TIERS,
   STORY_SOURCE_CONTRIBUTION_TYPES,
   STORY_STATUSES,
@@ -27,11 +29,35 @@ export const sourceReliabilityTierEnum = pgEnum(
 export const reviewQueueReasonEnum = pgEnum("review_queue_reason", REVIEW_QUEUE_REASONS);
 export const reviewQueueStatusEnum = pgEnum("review_queue_status", REVIEW_QUEUE_STATUSES);
 
-export const sourceTypeEnum = pgEnum("source_type", ["rss", "api", "scraper"]);
+export const sourceCategoryEnum = pgEnum("source_category", SOURCE_CATEGORIES);
+export const sourceContentModeEnum = pgEnum("source_content_mode", SOURCE_CONTENT_MODES);
+
+/**
+ * "scraper" a korábbi, egyetlen-forrásos MVP maradványa — egyetlen seed sor
+ * sem használja (ellenőrizve), de a Postgres enum-értékek biztonságos
+ * eltávolítása táblaátírást igényelne, ezért csak deprecate-eljük, nem
+ * töröljük. A 2026-07-28-i többforrásos irány "elérési mód" taxonómiája
+ * (api/rss/html/social-embed) mostantól "html"-t és "social_embed"-et használ
+ * "scraper" helyett.
+ */
+export const sourceTypeEnum = pgEnum("source_type", [
+  "rss",
+  "api",
+  "scraper",
+  "html",
+  "social_embed",
+]);
+/**
+ * "pending_review" a 2026-07-28-i többforrásos irány által hozzáadott új
+ * érték — olyan forrásokhoz kell, amiket dokumentáltunk (docs/source-registry.md),
+ * de robots.txt/ToS élő ellenőrzése még nem történt meg, ezért `is_active`
+ * még `false` marad, amíg a jogi/technikai audit le nem zajlik.
+ */
 export const sourceLicenseTypeEnum = pgEnum("source_license_type", [
   "public_rss",
   "licensed_api",
   "scrape_allowed",
+  "pending_review",
 ]);
 export const ingestStatusEnum = pgEnum("ingest_status", ["ingested", "deduped", "merged", "error"]);
 export const entityTypeEnum = pgEnum("entity_type", [

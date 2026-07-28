@@ -1,0 +1,37 @@
+# Egyszeri diagnosztikai futtatás (2026-07-28-i "Hitelességi mutató" sprint,
+# a bbc-extractor-diagnostic.yml mintájára): valódi, aktuális Sky Sports
+# cikken bizonyítja, hogy a skySportsExtractor ténylegesen működik. A
+# fejlesztői sandbox nem ér el kifelé élő internetet, ezért ez a bizonyíték
+# csak itt, egy valódi hálózati hozzáféréssel rendelkező GitHub Actions
+# runneren szerezhető be. Nem ír adatbázisba.
+name: Sky Sports extractor diagnostic (one-off)
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Sky Sports extractor against a live article
+        run: pnpm --filter @magyarsportonline/agents diagnose:sky-sports | tee "$GITHUB_STEP_SUMMARY"

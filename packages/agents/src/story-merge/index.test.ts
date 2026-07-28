@@ -36,6 +36,13 @@ const STORY = {
   publishedAt: null,
   isDeveloping: true,
   imageUrl: null,
+  credibilityScore: null,
+  credibilityBand: null,
+  credibilityLabelHu: null,
+  credibilityJustificationHu: null,
+  credibilityOfficialConfirmed: false,
+  credibilityCorroboratingCount: null,
+  credibilityUpdatedAt: null,
 };
 
 function buildDeps(created: boolean): StoryMergeDeps & { emitted: unknown[]; links: unknown[] } {

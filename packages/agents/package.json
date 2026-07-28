@@ -14,7 +14,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "diagnose:bbc": "tsx src/source-ingest/article-fetcher/bbc-diagnostic.ts"
+    "diagnose:bbc": "tsx src/source-ingest/article-fetcher/bbc-diagnostic.ts",
+    "diagnose:sky-sports": "tsx src/source-ingest/article-fetcher/sky-sports-diagnostic.ts"
   },
   "dependencies": {
     "@magyarsportonline/db": "workspace:*",
