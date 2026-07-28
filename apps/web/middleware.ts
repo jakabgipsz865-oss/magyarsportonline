@@ -2,11 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 
 /**
  * HTTP Basic auth az admin/review felülethez (docs/architecture/04-api-spec.md
- * §4.2 admin API). Edge middleware — szándékosan NEM importálja a lib/env.ts
- * Zod-validált env-et: az edge bundle-nek csak az ADMIN_SECRET-re van
- * szüksége, és egy másik (itt nem használt) env-változó hibája nem döntheti
- * el az összes admin request sorsát. Ha ADMIN_SECRET nincs beállítva, az
- * admin felület 503-mal le van tiltva — nincs "nyitva felejtett" állapot.
+ * §4.2 admin API), és ugyanezzel a védelemmel a `/internal/editorial-ab-review`
+ * belső A/B review oldalhoz (2026-07-28 sprint) — ugyanaz az ADMIN_SECRET,
+ * mert mindkettő egyetlen emberi adminnak szóló, sosem publikus felület.
+ * Edge middleware — szándékosan NEM importálja a lib/env.ts Zod-validált
+ * env-et: az edge bundle-nek csak az ADMIN_SECRET-re van szüksége, és egy
+ * másik (itt nem használt) env-változó hibája nem döntheti el az összes
+ * admin request sorsát. Ha ADMIN_SECRET nincs beállítva, az admin felület
+ * 503-mal le van tiltva — nincs "nyitva felejtett" állapot.
  */
 export function middleware(request: NextRequest): NextResponse {
   const adminSecret = process.env["ADMIN_SECRET"];
@@ -51,5 +54,5 @@ function timingSafeEqualString(a: string, b: string): boolean {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*"],
+  matcher: ["/admin/:path*", "/api/admin/:path*", "/internal/:path*"],
 };
