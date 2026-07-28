@@ -28,8 +28,56 @@ describe("RssSourceAdapter", () => {
         titleOriginal: "Team A wins",
         bodyOriginal: "Great match & result.",
         publishedAtSource: new Date("2026-07-27T10:00:00.000Z"),
+        imageUrl: null,
       },
     ]);
+  });
+
+  it("prefers a native enclosure image over media:thumbnail", async () => {
+    const fakeParser: RssParserLike = {
+      parseURL: async () => ({
+        items: [
+          {
+            link: "https://example.com/a",
+            title: "A",
+            enclosure: { url: "https://example.com/enclosure.jpg" },
+            mediaThumbnail: { $: { url: "https://example.com/thumb.jpg" } },
+          },
+        ],
+      }),
+    };
+    const adapter = new RssSourceAdapter(fakeParser);
+    const [article] = await adapter.fetch({ url: "https://feeds.example.com/football.xml" });
+    expect(article?.imageUrl).toBe("https://example.com/enclosure.jpg");
+  });
+
+  it("falls back to the first media:thumbnail when there is no enclosure, including array form", async () => {
+    const fakeParser: RssParserLike = {
+      parseURL: async () => ({
+        items: [
+          {
+            link: "https://example.com/a",
+            title: "A",
+            mediaThumbnail: [
+              { $: { url: "https://example.com/thumb-1.jpg" } },
+              { $: { url: "https://example.com/thumb-2.jpg" } },
+            ],
+          },
+        ],
+      }),
+    };
+    const adapter = new RssSourceAdapter(fakeParser);
+    const [article] = await adapter.fetch({ url: "https://feeds.example.com/football.xml" });
+    expect(article?.imageUrl).toBe("https://example.com/thumb-1.jpg");
+  });
+
+  it("sets imageUrl to null when neither enclosure nor media:thumbnail is present", async () => {
+    const fakeParser: RssParserLike = {
+      parseURL: async () => ({ items: [{ link: "https://example.com/a", title: "A" }] }),
+    };
+    const adapter = new RssSourceAdapter(fakeParser);
+    const [article] = await adapter.fetch({ url: "https://feeds.example.com/football.xml" });
+    expect(article?.imageUrl).toBeNull();
   });
 
   it("drops items missing a link or a title", async () => {

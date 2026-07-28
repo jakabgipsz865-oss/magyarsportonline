@@ -21,6 +21,7 @@ export interface StorySummaryView {
   confidenceScore: number | null;
   isDeveloping: boolean;
   isAiGenerated: boolean;
+  imageUrl: string | null;
   publishedAt: string;
   lastUpdatedAt: string;
   versionCount: number;
@@ -54,6 +55,7 @@ export function toStorySummaryView(row: StoryReadModelRow): StorySummaryView {
     confidenceScore: row.confidenceScore === null ? null : Number(row.confidenceScore),
     isDeveloping: row.isDeveloping,
     isAiGenerated: row.isAiGenerated,
+    imageUrl: row.imageUrl,
     publishedAt: row.publishedAt.toISOString(),
     lastUpdatedAt: row.lastUpdatedAt.toISOString(),
     versionCount: versionHistory.length,

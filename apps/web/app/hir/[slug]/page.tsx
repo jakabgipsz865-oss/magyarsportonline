@@ -2,12 +2,21 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import { deduplication } from "@magyarsportonline/agents";
+import { MediaThumb } from "../../../components/media-thumb";
+import { StoryRiver } from "../../../components/story-river";
 import { createRepositories } from "../../../lib/db";
 import { env } from "../../../lib/env";
-import { toStoryDetailView } from "../../../lib/story-view";
+import { entitySlug } from "../../../lib/entity-slug";
+import { pickRelatedStories } from "../../../lib/related-stories";
+import { toStoryDetailView, toStorySummaryView } from "../../../lib/story-view";
+
+const { matchPrimaryEntity } = deduplication;
 
 // DB-driven, always-fresh — never statically prerendered at build time.
 export const dynamic = "force-dynamic";
+
+const RELATED_CANDIDATES_LIMIT = 20;
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -37,6 +46,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       publishedTime: story.publishedAt,
       modifiedTime: story.lastUpdatedAt,
       locale: "hu_HU",
+      ...(story.imageUrl ? { images: [{ url: story.imageUrl }] } : {}),
     },
   };
 }
@@ -57,9 +67,10 @@ function newsArticleJsonLd(story: NonNullable<Awaited<ReturnType<typeof loadStor
     inLanguage: "hu",
     isAccessibleForFree: true,
     mainEntityOfPage: `${env.SITE_URL}/hir/${story.slug}`,
+    ...(story.imageUrl ? { image: story.imageUrl } : {}),
     publisher: {
       "@type": "Organization",
-      name: "magyarsportonline.hu",
+      name: "MagyarSportOnline",
       url: env.SITE_URL,
     },
   });
@@ -81,6 +92,18 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
     notFound();
   }
 
+  const { storyReadModelRepository, entityRepository } = createRepositories();
+  const [candidateRows, entities] = await Promise.all([
+    storyReadModelRepository.listPublished({ limit: RELATED_CANDIDATES_LIMIT, offset: 0 }),
+    entityRepository.listAll(),
+  ]);
+  const candidates = candidateRows.map(toStorySummaryView);
+  const related = pickRelatedStories(story, candidates, entities);
+  const primaryEntityMatch = matchPrimaryEntity(`${story.title} ${story.lead}`, entities);
+  const primaryEntity = primaryEntityMatch
+    ? (entities.find((entity) => entity.id === primaryEntityMatch.entityId) ?? null)
+    : null;
+
   return (
     <main>
       {/* biztonságos: newsArticleJsonLd kimenete JSON.stringify-jal épül, nem nyers string-összefűzéssel */}
@@ -92,6 +115,9 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
         ← Vissza a főoldalra
       </Link>
       <article className="story-article">
+        <span className="kicker">
+          Labdarúgás{primaryEntity ? ` · ${primaryEntity.nameHu}` : ""}
+        </span>
         {!story.isAiGenerated && (
           <p className="not-ai-notice" role="note">
             ⚠ Nem AI-fordított tartalom — az eredeti, angol nyelvű forrásszöveg jelenik meg
@@ -100,6 +126,9 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
         )}
         <h1>{story.title}</h1>
         <p className="story-article__lead">{story.lead}</p>
+        <div className="story-article__hero">
+          <MediaThumb imageUrl={story.imageUrl} title={story.title} seed={story.id} />
+        </div>
         {/* biztonságos: story.bodyHtml a projector (packages/agents/read-model-projector) HTML-escape-elt kimenete */}
         <div className="story-article__body" dangerouslySetInnerHTML={{ __html: story.bodyHtml }} />
       </article>
@@ -134,11 +163,26 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
         </section>
       )}
 
+      {related.length > 0 ? (
+        <section className="story-section">
+          <h2>Kapcsolódó hírek</h2>
+          <StoryRiver stories={related} />
+        </section>
+      ) : null}
+
       <p className="story-footer-meta">
         Megbízhatósági pontszám:{" "}
         {story.confidenceScore !== null ? story.confidenceScore.toFixed(2) : "n/a"}
         {story.isDeveloping ? " · Ez a sztori még alakul." : null}
       </p>
+
+      {primaryEntity ? (
+        <p className="story-footer-meta">
+          <Link href={`/csapat/${entitySlug(primaryEntity)}`}>
+            Több hír: {primaryEntity.nameHu}
+          </Link>
+        </p>
+      ) : null}
     </main>
   );
 }

@@ -23,6 +23,18 @@ function aliasesOf(entity: Entity): string[] {
 }
 
 /**
+ * Whether an Entity's canonical name or any alias appears (case-insensitively)
+ * in the given text — the read-side counterpart to `matchPrimaryEntity`,
+ * used by the web app to find which published Stories mention a given
+ * team/competition without needing a populated `story_entities` table (which
+ * no agent currently writes to).
+ */
+export function entityMatchesText(entity: Entity, text: string): boolean {
+  const normalizedText = text.toLowerCase();
+  return aliasesOf(entity).some((alias) => normalizedText.includes(alias.toLowerCase()));
+}
+
+/**
  * Deterministic alias-lookup entity matcher — the MVP substitute for a real
  * NER model (docs/adr/0005-mvp-end-to-end-scope-cuts.md decision 3). Picks
  * the single "primary" entity a coarse fingerprint can key off of: the

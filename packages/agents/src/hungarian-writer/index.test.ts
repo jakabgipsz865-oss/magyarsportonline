@@ -24,6 +24,7 @@ const STORY = {
   lastUpdatedAt: new Date(),
   publishedAt: null,
   isDeveloping: true,
+  imageUrl: null,
 };
 
 const FACT: Fact = {

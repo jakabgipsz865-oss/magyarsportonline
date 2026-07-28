@@ -6,6 +6,11 @@ import type { NormalizedArticle, SourceAdapter } from "./types";
 
 const rssFetchConfigSchema = z.object({ url: z.string().url() });
 
+/** A single `<media:thumbnail url="..." .../>` tag as parsed by rss-parser's customFields (xml2js attribute convention: `$`). */
+interface MediaThumbnail {
+  $?: { url?: string };
+}
+
 interface RssFeedItem {
   link?: string;
   title?: string;
@@ -13,11 +18,29 @@ interface RssFeedItem {
   content?: string;
   isoDate?: string;
   pubDate?: string;
+  /** Native rss-parser support, no customFields needed. */
+  enclosure?: { url?: string };
+  /** BBC-style `<media:thumbnail>` — only present when the parser is configured with the matching customField (see `createDefaultParser` below). Feeds with multiple sizes give an array; a single tag gives one object. */
+  mediaThumbnail?: MediaThumbnail | MediaThumbnail[];
 }
 
 /** The subset of `rss-parser`'s `Parser` this adapter needs — narrow so tests can inject a fake instead of hitting the network. */
 export interface RssParserLike {
   parseURL(url: string): Promise<{ items: RssFeedItem[] }>;
+}
+
+function createDefaultParser(): RssParserLike {
+  return new Parser({ customFields: { item: [["media:thumbnail", "mediaThumbnail"]] } });
+}
+
+function extractImageUrl(item: RssFeedItem): string | null {
+  if (item.enclosure?.url) {
+    return item.enclosure.url;
+  }
+  const thumbnail = Array.isArray(item.mediaThumbnail)
+    ? item.mediaThumbnail[0]
+    : item.mediaThumbnail;
+  return thumbnail?.$?.url ?? null;
 }
 
 /**
@@ -28,7 +51,7 @@ export interface RssParserLike {
  * (docs/adr/0005-mvp-end-to-end-scope-cuts.md), not in this file.
  */
 export class RssSourceAdapter implements SourceAdapter {
-  constructor(private readonly parser: RssParserLike = new Parser()) {}
+  constructor(private readonly parser: RssParserLike = createDefaultParser()) {}
 
   async fetch(fetchConfig: unknown): Promise<NormalizedArticle[]> {
     const config = rssFetchConfigSchema.parse(fetchConfig);
@@ -56,6 +79,7 @@ export class RssSourceAdapter implements SourceAdapter {
             publishedAtSource && !Number.isNaN(publishedAtSource.getTime())
               ? publishedAtSource
               : null,
+          imageUrl: extractImageUrl(item),
         };
       })
       .filter((article): article is NormalizedArticle => article !== null);

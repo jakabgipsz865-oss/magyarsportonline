@@ -23,6 +23,7 @@ function row(overrides?: Partial<StoryReadModelRow>): StoryReadModelRow {
     confidenceScore: "0.700",
     isDeveloping: false,
     isAiGenerated: true,
+    imageUrl: null,
     publishedAt: new Date("2026-07-27T21:00:00.000Z"),
     lastUpdatedAt: new Date("2026-07-27T21:05:00.000Z"),
     versionHistorySummary: [
@@ -42,6 +43,7 @@ describe("toStorySummaryView", () => {
       confidenceScore: 0.7,
       isDeveloping: false,
       isAiGenerated: true,
+      imageUrl: null,
       publishedAt: "2026-07-27T21:00:00.000Z",
       lastUpdatedAt: "2026-07-27T21:05:00.000Z",
       versionCount: 1,

@@ -19,6 +19,7 @@ const STORY = {
   lastUpdatedAt: new Date(),
   publishedAt: null,
   isDeveloping: true,
+  imageUrl: null,
 };
 
 function rawArticle(overrides: Partial<Record<string, unknown>>) {
@@ -35,6 +36,7 @@ function rawArticle(overrides: Partial<Record<string, unknown>>) {
     storyId: STORY.id,
     publishedAtSource: null,
     ingestedAt: new Date("2026-07-27T20:00:00.000Z"),
+    imageUrl: null,
     ...overrides,
   };
 }

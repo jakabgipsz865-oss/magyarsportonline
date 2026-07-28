@@ -1,39 +1,33 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import type { ReactNode } from "react";
+import { SiteHeader } from "../components/site-header";
+import { bodyFont, displayFont, monoFont } from "../lib/fonts";
 import { env } from "../lib/env";
 import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(env.SITE_URL),
   title: {
-    default: "magyarsportonline.hu — AI-alapú sporthírek",
-    template: "%s — magyarsportonline.hu",
+    default: "MagyarSportOnline — Sporthírek",
+    template: "%s — MagyarSportOnline",
   },
   description:
-    "Story-alapú, AI-támogatott sporthírek: több forrásból összevetett, folyamatosan frissülő hírek verziótörténettel és forrásmegjelöléssel.",
+    "A legfrissebb labdarúgó-hírek magyarul: átigazolások, mérkőzés-eredmények és klubhírek, több forrásból összevetve.",
   alternates: {
-    types: { "application/rss+xml": [{ url: "/rss.xml", title: "magyarsportonline.hu RSS" }] },
+    types: { "application/rss+xml": [{ url: "/rss.xml", title: "MagyarSportOnline RSS" }] },
   },
   openGraph: {
     type: "website",
-    siteName: "magyarsportonline.hu",
+    siteName: "MagyarSportOnline",
     locale: "hu_HU",
   },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }): ReactNode {
   return (
-    <html lang="hu">
+    <html lang="hu" className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable}`}>
       <body>
-        <header className="site-header">
-          <div className="site-header__inner">
-            <Link href="/" className="site-header__brand">
-              magyarsportonline.hu
-            </Link>
-            <span className="site-header__tagline">Sporthírek, frissítve</span>
-          </div>
-        </header>
+        <SiteHeader />
         {children}
       </body>
     </html>
