@@ -117,6 +117,9 @@ export class NoLlmClient implements LlmClient {
     if (hasSchemaProperty(request.jsonSchema, "rewritten_title_hu")) {
       return this.editorialRewriteFallback(userContent);
     }
+    if (hasSchemaProperty(request.jsonSchema, "winner")) {
+      return this.judgeFallback();
+    }
     throw new Error(
       "NoLlmClient: unrecognized JSON schema shape — no deterministic fallback defined for this call site",
     );
@@ -182,6 +185,29 @@ export class NoLlmClient implements LlmClient {
     const { titleHu, leadHu, bodyHu } = parseEditorialRewritePayload(userContent);
     return {
       data: { rewritten_title_hu: titleHu, rewritten_lead_hu: leadHu, rewritten_body_hu: bodyHu },
+      inputTokens: 0,
+      outputTokens: 0,
+    };
+  }
+
+  /**
+   * The editorial A/B test tool's blind judge call (packages/agents/src/
+   * editorial-rewrite/ab-test.ts) has no production call site — it only
+   * ever runs through this same production `llm` client during the
+   * experiment. Without this branch, a judge call that itself falls back
+   * (a single transient Cloudflare hiccup, independent of the rewrite call
+   * succeeding) crashed the whole per-article comparison instead of
+   * degrading gracefully like the other four call sites. A neutral "tie"
+   * is the only honest answer with no real model behind it.
+   */
+  private judgeFallback(): JsonCompletionResult {
+    return {
+      data: {
+        winner: "tie",
+        score_1: 5,
+        score_2: 5,
+        rationale_hu: "Nincs valódi LLM-válasz (fallback) — olvashatóság nem értékelhető.",
+      },
       inputTokens: 0,
       outputTokens: 0,
     };

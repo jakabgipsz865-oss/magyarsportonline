@@ -202,6 +202,34 @@ describe("NoLlmClient", () => {
     });
   });
 
+  it("returns a neutral tie verdict for the A/B test's judge call site", async () => {
+    const client = new NoLlmClient();
+    const result = await client.completeJson({
+      model: "m",
+      system: "s",
+      maxTokens: 10,
+      jsonSchema: {
+        type: "object",
+        properties: {
+          winner: { type: "string", enum: ["1", "2", "tie"] },
+          score_1: { type: "number" },
+          score_2: { type: "number" },
+          rationale_hu: { type: "string" },
+        },
+        required: ["winner", "score_1", "score_2", "rationale_hu"],
+        additionalProperties: false,
+      },
+      messages: [{ role: "user", content: "{}" }],
+    });
+
+    expect(result.data).toEqual({
+      winner: "tie",
+      score_1: 5,
+      score_2: 5,
+      rationale_hu: "Nincs valódi LLM-válasz (fallback) — olvashatóság nem értékelhető.",
+    });
+  });
+
   it("throws on an unrecognized JSON schema shape", async () => {
     const client = new NoLlmClient();
     await expect(
