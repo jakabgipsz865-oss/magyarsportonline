@@ -230,6 +230,12 @@ jobs:
           PYEOF
           cat report.md >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Dump raw results to job log
+        run: |
+          echo "===RAW_ALL_RESULTS_JSON_START==="
+          jq -c '.' all-results.json
+          echo "===RAW_ALL_RESULTS_JSON_END==="
+
       - name: Upload full results
         uses: actions/upload-artifact@v4
         with:
