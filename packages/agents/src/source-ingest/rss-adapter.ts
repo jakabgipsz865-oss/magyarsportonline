@@ -74,7 +74,13 @@ export class RssSourceAdapter implements SourceAdapter {
         return {
           sourceUrl,
           titleOriginal,
+          // Az RSS-feed sosem ad alcímet/szerzőt — ezeket (és a rövid
+          // `contentSnippet` helyett a teljes törzset) a Source Fetcher réteg
+          // tölti ki, ha talál a forráshoz regisztrált extractort (lásd
+          // article-enriching-adapter.ts).
+          subtitleOriginal: null,
           bodyOriginal,
+          authorOriginal: null,
           publishedAtSource:
             publishedAtSource && !Number.isNaN(publishedAtSource.getTime())
               ? publishedAtSource

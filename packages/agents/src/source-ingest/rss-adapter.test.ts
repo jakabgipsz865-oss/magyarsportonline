@@ -26,7 +26,9 @@ describe("RssSourceAdapter", () => {
       {
         sourceUrl: "https://example.com/article-1",
         titleOriginal: "Team A wins",
+        subtitleOriginal: null,
         bodyOriginal: "Great match & result.",
+        authorOriginal: null,
         publishedAtSource: new Date("2026-07-27T10:00:00.000Z"),
         imageUrl: null,
       },
