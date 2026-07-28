@@ -127,6 +127,7 @@ describe("generateStoryVersion", () => {
       previousVersion: null,
       learnedCorrections: [
         {
+          id: "correction-1",
           category: "terminology",
           termEn: "super-sub",
           originalSentenceEn: "He is a real super-sub for this team.",
@@ -155,6 +156,7 @@ describe("generateStoryVersion", () => {
       previousVersion: null,
       learnedCorrections: [
         {
+          id: "correction-2",
           category: "style",
           termEn: null,
           originalSentenceEn: "The manager praised the team's effort.",

@@ -18,3 +18,4 @@ export * from "./story-read-model";
 export * from "./llm-usage";
 export * from "./editorial-ab-snapshots";
 export * from "./editorial-corrections";
+export * from "./editorial-correction-applications";

@@ -1,4 +1,5 @@
 import type {
+  EditorialCorrectionApplicationRepository,
   EditorialCorrectionRepository,
   FactRepository,
   StoryRepository,
@@ -20,6 +21,7 @@ import {
 } from "./generation";
 import { assessContentQuality } from "./quality-gate";
 import { selfCheckContent } from "./self-check";
+import { evaluateCorrectionApplication } from "../shared/correction-effectiveness";
 import type { EditorialCorrection } from "../shared/editorial-corrections";
 import type { AgentRunRecorder } from "../shared/with-agent-run";
 import { withAgentRun } from "../shared/with-agent-run";
@@ -48,6 +50,10 @@ export interface HungarianWriterDeps {
   storyVersionRepository: Pick<StoryVersionRepository, "getLatest" | "createNextVersion">;
   factRepository: Pick<FactRepository, "listByStoryId">;
   editorialCorrectionRepository: Pick<EditorialCorrectionRepository, "listRecent">;
+  editorialCorrectionApplicationRepository: Pick<
+    EditorialCorrectionApplicationRepository,
+    "create"
+  >;
   llm: LlmClient;
   agentRunRepository: AgentRunRecorder;
   dispatcher: Emitter;
@@ -96,6 +102,7 @@ export async function handleStoryFactsVerified(
         .listRecent(LEARNED_CORRECTIONS_LIMIT)
         .then((rows) =>
           rows.map((row) => ({
+            id: row.id,
             category: row.category,
             termEn: row.termEn,
             originalSentenceEn: row.originalSentenceEn,
@@ -182,6 +189,29 @@ export async function handleStoryFactsVerified(
       // produce it, so its fallback status must never flip real AI content
       // to "not AI-generated".
       const isAiGenerated = !(deps.llm instanceof NoLlmClient) && !generated.isFallback;
+
+      // "Mérhető szerkesztői memória" (2026-07-28 sprint): csak valódi AI
+      // generálás után mérünk — egy No-LLM/fallback passthrough nem tükrözi
+      // a modell tanulását, mérése csak zajt vinne a naplóba.
+      if (isAiGenerated && learnedCorrections.length > 0) {
+        const generatedText = `${generated.titleHu}\n${generated.leadHu}\n${generated.bodyHu}`;
+        const sourceText = facts
+          .map((fact) => fact.quoteOriginal)
+          .filter((quote): quote is string => Boolean(quote))
+          .join("\n");
+        for (const correction of learnedCorrections) {
+          const result = evaluateCorrectionApplication(correction, generatedText, sourceText);
+          if (result) {
+            await deps.editorialCorrectionApplicationRepository.create({
+              correctionId: correction.id,
+              storyId: story.id,
+              stage: "hungarian_writer",
+              verdict: result.verdict,
+              evidence: result.evidence,
+            });
+          }
+        }
+      }
 
       // `deps.llm.modelLabel` — ha a kliens (pl. GeminiLlmClient) a
       // ténylegesen hívott modellt jelzi, azt használjuk a DB-rekordban;

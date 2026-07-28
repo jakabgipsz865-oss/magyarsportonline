@@ -143,6 +143,7 @@ describe("rewriteForStyle", () => {
       bodyHu: "A csapat gólos drámában nyert.",
       learnedCorrections: [
         {
+          id: "correction-1",
           category: "literal_translation",
           termEn: null,
           originalSentenceEn: "The team won in a five-goal thriller.",
@@ -180,6 +181,7 @@ describe("rewriteForStyle", () => {
       bodyHu: "B",
       learnedCorrections: [
         {
+          id: "correction-2",
           category: "terminology",
           termEn: "super-sub",
           originalSentenceEn: "He is a real super-sub for this team.",
@@ -211,6 +213,7 @@ describe("rewriteForStyle", () => {
       bodyHu: "B",
       learnedCorrections: [
         {
+          id: "correction-3",
           category: "style",
           termEn: null,
           originalSentenceEn: "The manager praised the team's effort.",

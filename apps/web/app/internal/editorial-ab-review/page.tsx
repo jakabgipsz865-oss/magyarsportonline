@@ -1,6 +1,14 @@
 import type { Metadata } from "next";
-import type { EditorialCorrectionRow, OriginalSourceContent } from "@magyarsportonline/db";
-import { editorialCorrections, type footballLexicon } from "@magyarsportonline/agents";
+import type {
+  CorrectionApplicationVerdict,
+  EditorialCorrectionRow,
+  OriginalSourceContent,
+} from "@magyarsportonline/db";
+import {
+  correctionEffectiveness,
+  editorialCorrections,
+  type footballLexicon,
+} from "@magyarsportonline/agents";
 import { revalidatePath } from "next/cache";
 import type { ReactNode } from "react";
 import { createRepositories } from "../../../lib/db";
@@ -13,6 +21,21 @@ const CORRECTION_CATEGORY_LABELS_HU = editorialCorrections.CORRECTION_CATEGORY_L
 const EDITORIAL_CORRECTION_CATEGORIES = Object.keys(
   CORRECTION_CATEGORY_LABELS_HU,
 ) as editorialCorrections.CorrectionCategory[];
+
+const VERDICT_BADGE: Record<
+  CorrectionApplicationVerdict,
+  { icon: string; label: string; bg: string; color: string }
+> = {
+  applied: { icon: "✔", label: "Alkalmazva", bg: "#e6f4ea", color: "#1e7e34" },
+  partial: { icon: "⚠", label: "Részben alkalmazva", bg: "#fff8e1", color: "#a15c00" },
+  not_applied: { icon: "✖", label: "Nem alkalmazta", bg: "#fdecea", color: "#b3261e" },
+};
+
+const TREND_LABELS_HU: Record<NonNullable<correctionEffectiveness.ApplicationTrend>, string> = {
+  improved: "javult ↑",
+  worsened: "romlott ↓",
+  unchanged: "változatlan",
+};
 
 // Sosem indexelhető — belső, ADMIN_SECRET-tel védett review felület
 // (docs/editorial-style-guide.md, 2026-07-28 sprint). Lásd még
@@ -290,7 +313,47 @@ function TeachableSentence({
   );
 }
 
-function CorrectionHistory({ corrections }: { corrections: EditorialCorrectionRow[] }): ReactNode {
+/**
+ * Egyetlen javítás összesített "tanult-e" jelzése (2026-07-28-i "mérhető
+ * szerkesztői memória" sprint) — a legutóbbi mérési esemény adja a fő
+ * ikont (✔/⚠/✖), mellette a teljes eseménysor bontása és a trend
+ * (javult/romlott az előző méréshez képest), lásd
+ * packages/agents/src/shared/correction-effectiveness.ts.
+ */
+function VerdictBadge({
+  summary,
+}: {
+  summary: correctionEffectiveness.CorrectionApplicationSummary;
+}): ReactNode {
+  if (summary.totalCount === 0) {
+    return <span style={chipStyle("#eee", "#777")}>– még nincs mérési adat</span>;
+  }
+  const meta = summary.latestVerdict ? VERDICT_BADGE[summary.latestVerdict] : null;
+  return (
+    <>
+      {meta && (
+        <span style={chipStyle(meta.bg, meta.color)}>
+          {meta.icon} {meta.label}
+        </span>
+      )}
+      <span style={{ fontSize: "0.75em", color: "#999" }}>
+        ({summary.totalCount} mérésből: ✔{summary.appliedCount} ⚠{summary.partialCount} ✖
+        {summary.notAppliedCount}
+        {summary.trend ? ` · ${TREND_LABELS_HU[summary.trend]}` : ""})
+      </span>
+    </>
+  );
+}
+
+function CorrectionHistory({
+  corrections,
+  applicationsByCorrectionId,
+  sequenceByCorrectionId,
+}: {
+  corrections: EditorialCorrectionRow[];
+  applicationsByCorrectionId: Map<string, correctionEffectiveness.CorrectionApplicationEvent[]>;
+  sequenceByCorrectionId: Map<string, number>;
+}): ReactNode {
   if (corrections.length === 0) {
     return null;
   }
@@ -300,15 +363,26 @@ function CorrectionHistory({ corrections }: { corrections: EditorialCorrectionRo
         Eddig elfogadott javítások ehhez a cikkhez ({corrections.length})
       </summary>
       <ul style={{ fontSize: "0.82em", margin: "6px 0" }}>
-        {corrections.map((correction) => (
-          <li key={correction.id} style={{ marginBottom: 4 }}>
-            <span style={{ color: "#999" }}>
-              [{CORRECTION_CATEGORY_LABELS_HU[correction.category]}]
-            </span>{" "}
-            &quot;{correction.currentSentenceHu}&quot; → &quot;{correction.correctedSentenceHu}
-            &quot;
-          </li>
-        ))}
+        {corrections.map((correction) => {
+          const summary = correctionEffectiveness.summarizeCorrectionApplications(
+            applicationsByCorrectionId.get(correction.id) ?? [],
+          );
+          return (
+            <li key={correction.id} style={{ marginBottom: 8 }}>
+              <code style={{ color: "#999" }}>
+                #{sequenceByCorrectionId.get(correction.id) ?? "?"}
+              </code>{" "}
+              <span style={{ color: "#999" }}>
+                [{CORRECTION_CATEGORY_LABELS_HU[correction.category]}]
+              </span>{" "}
+              &quot;{correction.currentSentenceHu}&quot; → &quot;{correction.correctedSentenceHu}
+              &quot;
+              <div style={{ marginTop: 3 }}>
+                <VerdictBadge summary={summary} />
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </details>
   );
@@ -325,17 +399,46 @@ const STATUS_LABELS: Record<string, { label: string; bg: string; color: string }
 };
 
 export default async function EditorialAbReviewPage(): Promise<ReactNode> {
-  const { editorialAbSnapshotRepository, editorialCorrectionRepository } = createRepositories();
+  const {
+    editorialAbSnapshotRepository,
+    editorialCorrectionRepository,
+    editorialCorrectionApplicationRepository,
+  } = createRepositories();
   const [rows, allCorrections] = await Promise.all([
     editorialAbSnapshotRepository.listAll(),
     editorialCorrectionRepository.listAll(),
   ]);
+  const allApplications = await editorialCorrectionApplicationRepository.listByCorrectionIds(
+    allCorrections.map((correction) => correction.id),
+  );
+
   const correctionsByStoryId = new Map<string, EditorialCorrectionRow[]>();
   for (const correction of allCorrections) {
     const existing = correctionsByStoryId.get(correction.storyId) ?? [];
     existing.push(correction);
     correctionsByStoryId.set(correction.storyId, existing);
   }
+
+  const applicationsByCorrectionId = new Map<
+    string,
+    correctionEffectiveness.CorrectionApplicationEvent[]
+  >();
+  for (const application of allApplications) {
+    const existing = applicationsByCorrectionId.get(application.correctionId) ?? [];
+    existing.push({ verdict: application.verdict, detectedAt: application.detectedAt });
+    applicationsByCorrectionId.set(application.correctionId, existing);
+  }
+
+  // Sorszám (#1, #2, ...) a legelső elfogadott javítástól kezdve — csak
+  // megjelenítési célra, hogy a szerkesztő egyszerűen hivatkozhasson egy
+  // adott javításra ("a 14-es javítás").
+  const sequenceByCorrectionId = new Map<string, number>();
+  const correctionsOldestFirst = [...allCorrections].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+  );
+  correctionsOldestFirst.forEach((correction, index) => {
+    sequenceByCorrectionId.set(correction.id, index + 1);
+  });
 
   return (
     <main
@@ -467,7 +570,11 @@ export default async function EditorialAbReviewPage(): Promise<ReactNode> {
               </div>
             </div>
 
-            <CorrectionHistory corrections={correctionsByStoryId.get(row.storyId) ?? []} />
+            <CorrectionHistory
+              corrections={correctionsByStoryId.get(row.storyId) ?? []}
+              applicationsByCorrectionId={applicationsByCorrectionId}
+              sequenceByCorrectionId={sequenceByCorrectionId}
+            />
 
             {rejectionReason && rejectionReason.length > 0 && (
               <div style={{ marginTop: 10, background: "#fdecea", borderRadius: 6, padding: 10 }}>

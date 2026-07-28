@@ -12,6 +12,7 @@ import {
 
 function correction(overrides: Partial<EditorialCorrection> = {}): EditorialCorrection {
   return {
+    id: "correction-1",
     category: "terminology",
     termEn: "super-sub",
     originalSentenceEn: "He is a real super-sub for this team.",

@@ -1,4 +1,5 @@
 import type {
+  EditorialCorrectionApplicationRepository,
   EditorialCorrectionRepository,
   FactRepository,
   StoryRepository,
@@ -9,6 +10,7 @@ import { NoLlmClient, type LlmClient } from "@magyarsportonline/llm";
 import type { Logger } from "@magyarsportonline/observability";
 import { toWriterFact } from "../hungarian-writer/facts";
 import { selfCheckContent } from "../hungarian-writer/self-check";
+import { evaluateCorrectionApplication } from "../shared/correction-effectiveness";
 import type { EditorialCorrection } from "../shared/editorial-corrections";
 import type { AgentRunRecorder } from "../shared/with-agent-run";
 import { withAgentRun } from "../shared/with-agent-run";
@@ -33,6 +35,10 @@ export interface EditorialRewriteDeps {
   storyVersionRepository: Pick<StoryVersionRepository, "getById" | "updateDraftContent">;
   factRepository: Pick<FactRepository, "listByStoryId">;
   editorialCorrectionRepository: Pick<EditorialCorrectionRepository, "listRecent">;
+  editorialCorrectionApplicationRepository: Pick<
+    EditorialCorrectionApplicationRepository,
+    "create"
+  >;
   llm: LlmClient;
   agentRunRepository: AgentRunRecorder;
   dispatcher: Emitter;
@@ -98,6 +104,7 @@ export async function handleStoryContentDrafted(
           .listRecent(LEARNED_CORRECTIONS_LIMIT)
           .then((rows) =>
             rows.map((row) => ({
+              id: row.id,
               category: row.category,
               termEn: row.termEn,
               originalSentenceEn: row.originalSentenceEn,
@@ -134,6 +141,29 @@ export async function handleStoryContentDrafted(
                 { correlationId: event.correlation_id, storyId: story.id, versionId: version.id },
                 "editorial rewrite: version was published before the rewrite could be saved, discarding it",
               );
+            } else if (learnedCorrections.length > 0) {
+              // "Mérhető szerkesztői memória" (2026-07-28 sprint): csak akkor
+              // mérünk, ha az átírás ténylegesen megtörtént és el is mentődött
+              // — egy elutasított vagy fallback-átírás nem tükrözi a modell
+              // tanulását.
+              const generatedText = `${rewritten.titleHu}\n${rewritten.leadHu}\n${rewritten.bodyHu}`;
+              const englishQuotes = facts
+                .map((fact) => fact.quoteOriginal)
+                .filter((quote): quote is string => Boolean(quote))
+                .join("\n");
+              const sourceText = `${englishQuotes}\n${version.titleHu}\n${version.leadHu}\n${version.bodyHu}`;
+              for (const correction of learnedCorrections) {
+                const result = evaluateCorrectionApplication(correction, generatedText, sourceText);
+                if (result) {
+                  await deps.editorialCorrectionApplicationRepository.create({
+                    correctionId: correction.id,
+                    storyId: story.id,
+                    stage: "editorial_rewrite",
+                    verdict: result.verdict,
+                    evidence: result.evidence,
+                  });
+                }
+              }
             }
           } else {
             deps.logger.warn(
