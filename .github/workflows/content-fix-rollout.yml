@@ -18,6 +18,14 @@ on:
         description: "Comma-separated review-queue item IDs to approve+publish (leave empty to just list pending items)"
         required: false
         default: ""
+      target_story_id:
+        description: "A specific Story ID to force-reprocess via /api/internal/reprocess-story (bypasses the general candidate scan)"
+        required: false
+        default: ""
+      verify_slug:
+        description: "A Story slug to fetch and print (both JSON and HTML) after the run, for visual/content verification"
+        required: false
+        default: ""
 
 permissions: {}
 
@@ -32,6 +40,8 @@ jobs:
           PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           APPROVE_ITEM_IDS: ${{ inputs.approve_item_ids }}
+          TARGET_STORY_ID: ${{ inputs.target_story_id }}
+          VERIFY_SLUG: ${{ inputs.verify_slug }}
         run: |
           set -u
           BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
@@ -52,6 +62,14 @@ jobs:
           echo "== isAiGenerated backfill (idempotent) =="
           curl -sS -w '\nHTTP %{http_code}\n' --max-time 60 \
             -X POST "$BASE/api/internal/backfill-ai-labels" -H "Authorization: Bearer $CRON_SECRET"
+
+          if [ -n "${TARGET_STORY_ID:-}" ]; then
+            echo "== Force-reprocessing target_story_id=$TARGET_STORY_ID =="
+            curl -sS -w '\nHTTP %{http_code}\n' --max-time 60 \
+              -X POST "$BASE/api/internal/reprocess-story" \
+              -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
+              -d "{\"storyId\":\"$TARGET_STORY_ID\"}"
+          fi
 
           echo "== Reprocess backlog against the stricter Content Quality Gate, up to 15x (2 Story/call cap) =="
           for i in $(seq 1 15); do
@@ -87,4 +105,17 @@ jobs:
 
           echo "== Story-állapot a művelet után =="
           curl -sS --max-time 30 "$BASE/api/v1/stories?limit=5" | tee /tmp/stories.json
+          echo
+
+          if [ -n "${VERIFY_SLUG:-}" ]; then
+            echo "== Verification: /api/v1/stories/$VERIFY_SLUG (JSON) =="
+            curl -sS --max-time 30 "$BASE/api/v1/stories/$VERIFY_SLUG"
+            echo
+            echo "== Verification: /hir/$VERIFY_SLUG (raw HTML) =="
+            curl -sS --max-time 30 "$BASE/hir/$VERIFY_SLUG"
+            echo
+          fi
+
+          echo "== Verification: homepage raw HTML =="
+          curl -sS --max-time 30 "$BASE/"
           echo

@@ -243,42 +243,66 @@ export async function reprocessNoLlmStories(): Promise<{ reprocessedStoryIds: st
   }
 
   for (const storyId of storyIds) {
-    const story = await repos.storyRepository.getById(storyId);
-    if (!story || story.riskLevel === null) {
-      // Shouldn't happen post-Fact-Verification — skip defensively rather than crash the whole batch.
-      logger.warn(
-        { storyId },
-        "reprocess-no-llm: story missing or never risk-classified, skipping",
-      );
-      continue;
-    }
-
-    const facts = await repos.factRepository.listByStoryId(storyId);
-    const hasContradiction = facts.some((fact) => fact.isContradicted);
-    const correlationId = crypto.randomUUID();
-
-    // dispatcher.emit (not a direct handler call) so the same registered
-    // wiring as a normal ingest run carries this through
-    // hungarian-writer → seo → publish-gate → (if auto-published) the
-    // read-model projector.
-    await dispatcher.emit({
-      ...createEventEnvelope({ correlationId }),
-      type: "story/facts.verified",
-      payload: {
-        story_id: storyId,
-        confidence_score: Number(story.confidenceScore),
-        risk_level: story.riskLevel,
-        // Not persisted on Story and not read by any current handler
-        // (hungarian-writer/seo/publish-gate all key off risk_level, not
-        // this flag) — false is safe here; we're re-writing from the
-        // already-verified Fact set, not re-scanning raw text.
-        prompt_injection_suspected: false,
-        has_contradiction: hasContradiction,
-      },
-    });
+    await emitFactsVerifiedForStory(repos, dispatcher, logger, storyId);
   }
 
   return { reprocessedStoryIds: storyIds };
+}
+
+async function emitFactsVerifiedForStory(
+  repos: Repositories,
+  dispatcher: ReturnType<typeof buildDispatcher>,
+  logger: ReturnType<typeof getLogger>,
+  storyId: string,
+): Promise<boolean> {
+  const story = await repos.storyRepository.getById(storyId);
+  if (!story || story.riskLevel === null) {
+    // Shouldn't happen post-Fact-Verification — skip defensively rather than crash the whole batch.
+    logger.warn({ storyId }, "reprocess: story missing or never risk-classified, skipping");
+    return false;
+  }
+
+  const facts = await repos.factRepository.listByStoryId(storyId);
+  const hasContradiction = facts.some((fact) => fact.isContradicted);
+  const correlationId = crypto.randomUUID();
+
+  // dispatcher.emit (not a direct handler call) so the same registered
+  // wiring as a normal ingest run carries this through
+  // hungarian-writer → seo → publish-gate → (if auto-published) the
+  // read-model projector.
+  await dispatcher.emit({
+    ...createEventEnvelope({ correlationId }),
+    type: "story/facts.verified",
+    payload: {
+      story_id: storyId,
+      confidence_score: Number(story.confidenceScore),
+      risk_level: story.riskLevel,
+      // Not persisted on Story and not read by any current handler
+      // (hungarian-writer/seo/publish-gate all key off risk_level, not
+      // this flag) — false is safe here; we're re-writing from the
+      // already-verified Fact set, not re-scanning raw text.
+      prompt_injection_suspected: false,
+      has_contradiction: hasContradiction,
+    },
+  });
+  return true;
+}
+
+/**
+ * Entry point for `/api/internal/reprocess-story`: unconditionally re-runs
+ * Hungarian Writer → SEO → Publish Gate for exactly one, caller-specified
+ * Story — for the case where a specific Story is already known to be broken
+ * (e.g. reported by a user) but wasn't reached by `reprocessNoLlmStories`'s
+ * candidate scan within its per-call batch cap. Skips the "is this a
+ * candidate" check entirely since the caller already knows it needs
+ * rewriting.
+ */
+export async function reprocessStoryById(storyId: string): Promise<{ reprocessed: boolean }> {
+  const repos = createRepositories();
+  const dispatcher = buildDispatcher(repos);
+  const logger = getLogger();
+  const reprocessed = await emitFactsVerifiedForStory(repos, dispatcher, logger, storyId);
+  return { reprocessed };
 }
 
 /**
