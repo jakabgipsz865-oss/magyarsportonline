@@ -106,6 +106,7 @@ function buildDeps(overrides?: {
       ),
     },
     factRepository: { listByStoryId: vi.fn(async () => [FACT]) },
+    editorialCorrectionRepository: { listRecent: vi.fn(async () => []) },
     llm,
     agentRunRepository: { record: vi.fn(async () => undefined) },
     dispatcher: {

@@ -1,6 +1,17 @@
 import { MODEL_TIERS, type LlmClient } from "@magyarsportonline/llm";
 import { z } from "zod";
-import { findRelevantLexiconEntries, formatLexiconBlock } from "../shared/football-lexicon";
+import {
+  correctionsToLexiconEntries,
+  correctionsToRecommendedPhrasings,
+  formatPromptExamplesBlock,
+  formatRecommendedPhrasingsBlock,
+  type EditorialCorrection,
+} from "../shared/editorial-corrections";
+import {
+  FOOTBALL_LEXICON,
+  findRelevantLexiconEntries,
+  formatLexiconBlock,
+} from "../shared/football-lexicon";
 import type { WriterFact } from "./facts";
 import type { QualityIssue } from "./quality-gate";
 
@@ -32,6 +43,8 @@ export interface PreviousVersionContent {
 export interface GenerationInput {
   facts: WriterFact[];
   previousVersion: PreviousVersionContent | null;
+  /** Szerkesztő által elfogadott, korábbi javítások (legfrissebb elöl) — lásd editorial-corrections.ts. Alapértelmezés: üres lista, ha a hívó nem ad meg semmit. */
+  learnedCorrections?: EditorialCorrection[];
 }
 
 export interface GeneratedContent {
@@ -53,6 +66,7 @@ Szabályok:
 - Ügyelj a magyar nyelvtanra: helyes névelőhasználat (a/az), ékezetek, ragozás és mondatszerkezet.
 - Szó szerinti idézetet KIZÁRÓLAG akkor használj, ha egy tény "factType" mezője "quote", és akkor is csak a megadott "quoteOriginal"/"quoteSpeaker" alapján, forrás-hivatkozással.
 - Ha a rendszerüzenet végén egy "FUTBALLNYELVI SZÓTÁR" blokk szerepel, az a "quoteOriginal" mezőkben előforduló angol futballkifejezések/szleng/idióma természetes magyar megfelelőit adja meg — ezeket használd az idézet átültetésekor, NE a megadott tükörfordítást.
+- Ha a rendszerüzenet végén "AJÁNLOTT MAGYAR SPORTÚJSÁGÍRÓI MEGFOGALMAZÁSOK" vagy "PROMPT PÉLDATÁR" blokk szerepel, azok korábbi, emberi szerkesztő által ténylegesen elfogadott javítások — kövesd a mintájukat, ezek nálad megbízhatóbb forrásból származnak, mint egy általános stílusszabály.
 - Ha a felhasználói üzenet "previousVersion" mezője nem null, a "change_summary_hu" mezőben egy rövid, magyar nyelvű összefoglalót adj arról, mi változott az előző verzióhoz képest. Ha "previousVersion" null (ez az első verzió), a "change_summary_hu" legyen null.`;
 
 const QUALITY_FIX_SYSTEM_PROMPT = `Magyar sportújságíró vagy. Az előző tervezeted NEM felelt meg a minőségi elvárásoknak — a felhasználói üzenet "previousAttempt" mezője mutatja a hibás tervezetet, "issues" mezője pedig a talált problémákat (pl. "title: looks_english" = a cím angolul maradt; "lead: empty" = a lead üres; "body: matches_source_verbatim" = a törzs szó szerint megegyezik egy ténnyel; "body: repeated_paragraph" = két bekezdés ugyanazt mondja el, csak átfogalmazva; "lead: duplicates_body" = a lead szó szerint megismétlődik egy bekezdésben).
@@ -75,7 +89,7 @@ const QUALITY_FIX_SYSTEM_PROMPT = `Magyar sportújságíró vagy. Az előző ter
  * futballnyelvi lexikont (packages/agents/src/shared/football-lexicon.ts)
  * kizárólag ezen idézetek ellen illesztjük, nem a már magyar detailHu ellen.
  */
-function buildLexiconBlock(facts: WriterFact[]): string {
+function buildLexiconBlock(facts: WriterFact[], learnedCorrections: EditorialCorrection[]): string {
   const englishQuotes = facts
     .map((fact) => fact.quoteOriginal)
     .filter((quote): quote is string => Boolean(quote))
@@ -83,9 +97,20 @@ function buildLexiconBlock(facts: WriterFact[]): string {
   if (!englishQuotes) {
     return "";
   }
-  const entries = findRelevantLexiconEntries(englishQuotes);
+  const combinedLexicon = [...FOOTBALL_LEXICON, ...correctionsToLexiconEntries(learnedCorrections)];
+  const entries = findRelevantLexiconEntries(englishQuotes, 20, combinedLexicon);
   const block = formatLexiconBlock(entries);
   return block ? `\n\n${block}` : "";
+}
+
+/** A statikus lexikonon túl a szerkesztő eddig elfogadott javításaiból is épít egy blokkot — lásd editorial-corrections.ts. */
+function buildLearnedGuidanceBlock(learnedCorrections: EditorialCorrection[]): string {
+  const phrasingsBlock = formatRecommendedPhrasingsBlock(
+    correctionsToRecommendedPhrasings(learnedCorrections),
+  );
+  const examplesBlock = formatPromptExamplesBlock(learnedCorrections);
+  const blocks = [phrasingsBlock, examplesBlock].filter(Boolean);
+  return blocks.length > 0 ? `\n\n${blocks.join("\n\n")}` : "";
 }
 
 async function runGenerationCall(
@@ -93,10 +118,14 @@ async function runGenerationCall(
   system: string,
   userContent: unknown,
   facts: WriterFact[],
+  learnedCorrections: EditorialCorrection[],
 ): Promise<GeneratedContent> {
   const result = await llm.completeJson({
     model: MODEL_TIERS.writing,
-    system: system + buildLexiconBlock(facts),
+    system:
+      system +
+      buildLexiconBlock(facts, learnedCorrections) +
+      buildLearnedGuidanceBlock(learnedCorrections),
     messages: [{ role: "user", content: JSON.stringify(userContent) }],
     maxTokens: 2048,
     jsonSchema: GENERATION_JSON_SCHEMA,
@@ -125,6 +154,7 @@ export async function generateStoryVersion(
       previousVersion: input.previousVersion,
     },
     input.facts,
+    input.learnedCorrections ?? [],
   );
 }
 
@@ -153,5 +183,6 @@ export async function regenerateWithQualityFix(
       issues: input.issues.map((issue) => `${issue.field}: ${issue.kind}`),
     },
     input.facts,
+    input.learnedCorrections ?? [],
   );
 }

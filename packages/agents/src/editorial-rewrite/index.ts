@@ -1,4 +1,5 @@
 import type {
+  EditorialCorrectionRepository,
   FactRepository,
   StoryRepository,
   StoryVersionRepository,
@@ -8,9 +9,13 @@ import { NoLlmClient, type LlmClient } from "@magyarsportonline/llm";
 import type { Logger } from "@magyarsportonline/observability";
 import { toWriterFact } from "../hungarian-writer/facts";
 import { selfCheckContent } from "../hungarian-writer/self-check";
+import type { EditorialCorrection } from "../shared/editorial-corrections";
 import type { AgentRunRecorder } from "../shared/with-agent-run";
 import { withAgentRun } from "../shared/with-agent-run";
 import { rewriteForStyle } from "./rewrite";
+
+/** A modell hány legfrissebb szerkesztői javítást lásson híváskánt — lásd editorial-corrections.ts blokk-limitjeit (10), ennél bőven adunk neki keresési alapanyagot. */
+const LEARNED_CORRECTIONS_LIMIT = 50;
 
 export * from "./ab-test";
 export * from "./readability";
@@ -27,6 +32,7 @@ export interface EditorialRewriteDeps {
   storyRepository: Pick<StoryRepository, "getById">;
   storyVersionRepository: Pick<StoryVersionRepository, "getById" | "updateDraftContent">;
   factRepository: Pick<FactRepository, "listByStoryId">;
+  editorialCorrectionRepository: Pick<EditorialCorrectionRepository, "listRecent">;
   llm: LlmClient;
   agentRunRepository: AgentRunRecorder;
   dispatcher: Emitter;
@@ -88,11 +94,24 @@ export async function handleStoryContentDrafted(
         );
       } else {
         const facts = (await deps.factRepository.listByStoryId(story.id)).map(toWriterFact);
+        const learnedCorrections: EditorialCorrection[] = await deps.editorialCorrectionRepository
+          .listRecent(LEARNED_CORRECTIONS_LIMIT)
+          .then((rows) =>
+            rows.map((row) => ({
+              category: row.category,
+              termEn: row.termEn,
+              originalSentenceEn: row.originalSentenceEn,
+              currentSentenceHu: row.currentSentenceHu,
+              correctedSentenceHu: row.correctedSentenceHu,
+              note: row.note,
+            })),
+          );
         const rewritten = await rewriteForStyle(deps.llm, {
           facts,
           titleHu: version.titleHu,
           leadHu: version.leadHu,
           bodyHu: version.bodyHu,
+          learnedCorrections,
         });
 
         if (rewritten.isFallback || deps.llm instanceof NoLlmClient) {

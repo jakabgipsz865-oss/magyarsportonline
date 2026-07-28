@@ -19,7 +19,9 @@ export type LexiconCategory =
   | "tactics"
   | "injury_squad"
   | "quotes"
-  | "slang_idiom";
+  | "slang_idiom"
+  /** Szerkesztői visszajelzésből (nem kézzel írt) tétel — lásd editorial-corrections.ts. */
+  | "learned";
 
 export interface LexiconEntry {
   category: LexiconCategory;
@@ -2838,9 +2840,13 @@ export const FOOTBALL_LEXICON: LexiconEntry[] = RAW.map(
  * méretét/költségét, miközben a legtöbb tétel az adott cikkhez nem
  * kapcsolódna.
  */
-export function findRelevantLexiconEntries(text: string, limit = 20): LexiconEntry[] {
+export function findRelevantLexiconEntries(
+  text: string,
+  limit = 20,
+  entries: LexiconEntry[] = FOOTBALL_LEXICON,
+): LexiconEntry[] {
   const haystack = text.toLowerCase();
-  const matches = FOOTBALL_LEXICON.filter((entry) => {
+  const matches = entries.filter((entry) => {
     const needle = entry.en.toLowerCase();
     const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     return new RegExp(`\\b${escaped}\\b`, "i").test(haystack) || haystack.includes(needle);

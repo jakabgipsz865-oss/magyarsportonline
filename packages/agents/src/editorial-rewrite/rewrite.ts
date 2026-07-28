@@ -1,7 +1,21 @@
 import { MODEL_TIERS, type LlmClient } from "@magyarsportonline/llm";
 import { z } from "zod";
 import type { WriterFact } from "../hungarian-writer/facts";
-import { findRelevantLexiconEntries, formatLexiconBlock } from "../shared/football-lexicon";
+import {
+  correctionsToForbiddenLiteralTranslations,
+  correctionsToLexiconEntries,
+  correctionsToRecommendedPhrasings,
+  findMatchingForbiddenTranslations,
+  formatForbiddenTranslationsBlock,
+  formatPromptExamplesBlock,
+  formatRecommendedPhrasingsBlock,
+  type EditorialCorrection,
+} from "../shared/editorial-corrections";
+import {
+  FOOTBALL_LEXICON,
+  findRelevantLexiconEntries,
+  formatLexiconBlock,
+} from "../shared/football-lexicon";
 import { EDITORIAL_STYLE_GUIDE } from "./style-guide";
 
 const REWRITE_JSON_SCHEMA = {
@@ -26,6 +40,8 @@ export interface EditorialRewriteInput {
   titleHu: string;
   leadHu: string;
   bodyHu: string;
+  /** Szerkesztő által elfogadott, korábbi javítások (legfrissebb elöl) — lásd editorial-corrections.ts. Alapértelmezés: üres lista, ha a hívó nem ad meg semmit. */
+  learnedCorrections?: EditorialCorrection[];
 }
 
 export interface EditorialRewriteResult {
@@ -40,7 +56,9 @@ const SYSTEM_PROMPT = `${EDITORIAL_STYLE_GUIDE}
 
 A felhasználói üzenet egy JSON "facts" tömböt (a hír mögötti, ellenőrzött tények — ehhez képest kell tényhűnek maradnod) és a jelenlegi "title_hu"/"lead_hu"/"body_hu" mezőket tartalmazza. Add vissza a stilizált változatot "rewritten_title_hu"/"rewritten_lead_hu"/"rewritten_body_hu" mezőkben.
 
-Ha a rendszerüzenet végén egy "FUTBALLNYELVI SZÓTÁR" blokk szerepel, az a bemeneti szövegben (idézetekben vagy a cím/lead/törzsben) felismert angol futballkifejezések/szleng/idióma természetes magyar megfelelőit adja meg — ha a bemenet ezek valamelyikét tükörfordításban vagy angolul tartalmazza, a stilizált változatban a szótár szerinti természetes magyar formát használd. Ez a megfogalmazás javítása, NEM új tény hozzáadása.`;
+Ha a rendszerüzenet végén egy "FUTBALLNYELVI SZÓTÁR" blokk szerepel, az a bemeneti szövegben (idézetekben vagy a cím/lead/törzsben) felismert angol futballkifejezések/szleng/idióma természetes magyar megfelelőit adja meg — ha a bemenet ezek valamelyikét tükörfordításban vagy angolul tartalmazza, a stilizált változatban a szótár szerinti természetes magyar formát használd. Ez a megfogalmazás javítása, NEM új tény hozzáadása.
+
+Ha a rendszerüzenet végén "TILTOTT TÜKÖRFORDÍTÁSOK", "AJÁNLOTT MAGYAR SPORTÚJSÁGÍRÓI MEGFOGALMAZÁSOK" vagy "PROMPT PÉLDATÁR" blokk szerepel, azok korábbi, emberi szerkesztő által ténylegesen elfogadott javítások — a tiltott tükörfordítást SOSEM ismételheted meg, a másik kettőt pedig mintaként kövesd; ezek nálad megbízhatóbb forrásból származnak, mint egy általános stílusszabály.`;
 
 /**
  * Ugyanaz a "csak idézet, sosem nyers forráscikk" határ vonatkozik ide is,
@@ -49,7 +67,10 @@ Ha a rendszerüzenet végén egy "FUTBALLNYELVI SZÓTÁR" blokk szerepel, az a b
  * ellen, mert egy korábban átcsúszott tükörfordítás vagy angolul maradt
  * szakkifejezés pont ebben a lépésben javítható stilisztikailag.
  */
-function buildLexiconBlock(input: EditorialRewriteInput): string {
+function buildLexiconBlock(
+  input: EditorialRewriteInput,
+  learnedCorrections: EditorialCorrection[],
+): string {
   const englishQuotes = input.facts
     .map((fact) => fact.quoteOriginal)
     .filter((quote): quote is string => Boolean(quote))
@@ -60,9 +81,35 @@ function buildLexiconBlock(input: EditorialRewriteInput): string {
   if (!searchText) {
     return "";
   }
-  const entries = findRelevantLexiconEntries(searchText);
+  const combinedLexicon = [...FOOTBALL_LEXICON, ...correctionsToLexiconEntries(learnedCorrections)];
+  const entries = findRelevantLexiconEntries(searchText, 20, combinedLexicon);
   const block = formatLexiconBlock(entries);
   return block ? `\n\n${block}` : "";
+}
+
+/**
+ * A statikus lexikonon és a felismert idézeteken/draftszövegen túl a
+ * szerkesztő eddig elfogadott javításaiból épít egy blokkot: a jelenlegi
+ * draftban ténylegesen előforduló tiltott tükörfordításokat (lásd
+ * editorial-corrections.ts findMatchingForbiddenTranslations), valamint az
+ * ajánlott megfogalmazásokat és a prompt-példatárat.
+ */
+function buildLearnedGuidanceBlock(
+  input: EditorialRewriteInput,
+  learnedCorrections: EditorialCorrection[],
+): string {
+  const draftText = [input.titleHu, input.leadHu, input.bodyHu].filter(Boolean).join("\n");
+  const forbidden = findMatchingForbiddenTranslations(
+    draftText,
+    correctionsToForbiddenLiteralTranslations(learnedCorrections),
+  );
+  const forbiddenBlock = formatForbiddenTranslationsBlock(forbidden);
+  const phrasingsBlock = formatRecommendedPhrasingsBlock(
+    correctionsToRecommendedPhrasings(learnedCorrections),
+  );
+  const examplesBlock = formatPromptExamplesBlock(learnedCorrections);
+  const blocks = [forbiddenBlock, phrasingsBlock, examplesBlock].filter(Boolean);
+  return blocks.length > 0 ? `\n\n${blocks.join("\n\n")}` : "";
 }
 
 /**
@@ -77,9 +124,13 @@ export async function rewriteForStyle(
   llm: LlmClient,
   input: EditorialRewriteInput,
 ): Promise<EditorialRewriteResult> {
+  const learnedCorrections = input.learnedCorrections ?? [];
   const result = await llm.completeJson({
     model: MODEL_TIERS.editorialRewrite,
-    system: SYSTEM_PROMPT + buildLexiconBlock(input),
+    system:
+      SYSTEM_PROMPT +
+      buildLexiconBlock(input, learnedCorrections) +
+      buildLearnedGuidanceBlock(input, learnedCorrections),
     messages: [
       {
         role: "user",
