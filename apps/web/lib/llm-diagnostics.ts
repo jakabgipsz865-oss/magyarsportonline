@@ -27,6 +27,14 @@ const DIAGNOSTIC_REQUEST: JsonCompletionRequest = {
   },
 };
 
+/** First 8 chars only, rest masked — enough to visually confirm "is this the new account ID" without exposing the full credential in a log/response body. */
+function maskAccountId(accountId: string | undefined): string | null {
+  if (!accountId) return null;
+  const prefix = accountId.slice(0, 8);
+  const maskedLength = Math.max(accountId.length - 8, 0);
+  return `${prefix}${"*".repeat(maskedLength)}`;
+}
+
 interface RawCallOutcome {
   ok: boolean;
   inputTokens?: number;
@@ -85,10 +93,26 @@ export async function runLlmDiagnostics(): Promise<{
   config: {
     llmProvider: string;
     cloudflareModel: string;
+    /** First 8 chars, rest masked — see maskAccountId. Null when CLOUDFLARE_ACCOUNT_ID isn't set at all. */
+    cloudflareAccountIdMasked: string | null;
     cloudflareAccountIdConfigured: boolean;
     cloudflareApiTokenConfigured: boolean;
     monthlyBudgetUsd: number;
     budgetGuardAppliesToThisProvider: boolean;
+    /**
+     * "production" | "preview" | "development" | null — Vercel injects
+     * `VERCEL_ENV` automatically into every deployment (docs.vercel.com
+     * runtime env vars), so this tells us which environment's variables
+     * this specific running instance actually loaded — the concrete way to
+     * settle "did the new Cloudflare credentials really reach Production,
+     * or did they land in Preview/Development instead". Read directly from
+     * `process.env` (not threaded through lib/env.ts's validated schema)
+     * because it's a Vercel-provided introspection value, not app config —
+     * a deliberate, narrow exception for this diagnostic only.
+     */
+    vercelEnv: string | null;
+    /** The unique ID of the deployment currently serving this request, if Vercel set one — lets you cross-check against the Vercel dashboard's deployment list. */
+    vercelDeploymentId: string | null;
   };
   usage: {
     currentMonthCostUsd: number;
@@ -130,6 +154,7 @@ export async function runLlmDiagnostics(): Promise<{
     config: {
       llmProvider: env.LLM_PROVIDER,
       cloudflareModel: env.CLOUDFLARE_AI_MODEL,
+      cloudflareAccountIdMasked: maskAccountId(env.CLOUDFLARE_ACCOUNT_ID),
       cloudflareAccountIdConfigured: Boolean(env.CLOUDFLARE_ACCOUNT_ID),
       cloudflareApiTokenConfigured: Boolean(env.CLOUDFLARE_API_TOKEN),
       monthlyBudgetUsd: env.LLM_MONTHLY_BUDGET_USD,
@@ -137,6 +162,8 @@ export async function runLlmDiagnostics(): Promise<{
       // (apps/web/lib/llm.ts getLlmClient) — cloudflare/gemini use
       // ProviderFallbackLlmClient instead, which has no budget concept at all.
       budgetGuardAppliesToThisProvider: env.LLM_PROVIDER === "anthropic",
+      vercelEnv: process.env["VERCEL_ENV"] ?? null,
+      vercelDeploymentId: process.env["VERCEL_DEPLOYMENT_ID"] ?? null,
     },
     usage: {
       currentMonthCostUsd,
