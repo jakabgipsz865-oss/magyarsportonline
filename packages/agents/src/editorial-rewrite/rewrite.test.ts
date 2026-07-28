@@ -70,4 +70,61 @@ describe("rewriteForStyle", () => {
 
     expect(result.isFallback).toBe(true);
   });
+
+  it("adds a lexicon glossary block when a known term appears in a quote", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: { rewritten_title_hu: "T", rewritten_lead_hu: "L", rewritten_body_hu: "B" },
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+
+    await rewriteForStyle(llm, {
+      facts: [
+        {
+          factType: "quote",
+          detailHu: "",
+          quoteOriginal: "The goalkeeper kept a clean sheet tonight.",
+          quoteSpeaker: "Manager",
+        },
+      ],
+      titleHu: "T",
+      leadHu: "L",
+      bodyHu: "B",
+    });
+
+    expect(llm.jsonRequests[0]?.system).toContain("clean sheet");
+    expect(llm.jsonRequests[0]?.system).toContain("→");
+  });
+
+  it("also matches known terms left untranslated in the current Hungarian draft", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: { rewritten_title_hu: "T", rewritten_lead_hu: "L", rewritten_body_hu: "B" },
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+
+    await rewriteForStyle(llm, {
+      facts: [],
+      titleHu: "T",
+      leadHu: "L",
+      bodyHu: "A csapat clean sheet-tel zárta a mérkőzést.",
+    });
+
+    expect(llm.jsonRequests[0]?.system).toContain("clean sheet");
+  });
+
+  it("omits the lexicon block when nothing matches", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: { rewritten_title_hu: "T", rewritten_lead_hu: "L", rewritten_body_hu: "B" },
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+
+    await rewriteForStyle(llm, { facts: [], titleHu: "T", leadHu: "L", bodyHu: "B" });
+
+    expect(llm.jsonRequests[0]?.system).not.toContain("→");
+  });
 });

@@ -1,6 +1,7 @@
 import { MODEL_TIERS, type LlmClient } from "@magyarsportonline/llm";
 import { z } from "zod";
 import type { WriterFact } from "../hungarian-writer/facts";
+import { findRelevantLexiconEntries, formatLexiconBlock } from "../shared/football-lexicon";
 import { EDITORIAL_STYLE_GUIDE } from "./style-guide";
 
 const REWRITE_JSON_SCHEMA = {
@@ -37,7 +38,32 @@ export interface EditorialRewriteResult {
 
 const SYSTEM_PROMPT = `${EDITORIAL_STYLE_GUIDE}
 
-A felhasználói üzenet egy JSON "facts" tömböt (a hír mögötti, ellenőrzött tények — ehhez képest kell tényhűnek maradnod) és a jelenlegi "title_hu"/"lead_hu"/"body_hu" mezőket tartalmazza. Add vissza a stilizált változatot "rewritten_title_hu"/"rewritten_lead_hu"/"rewritten_body_hu" mezőkben.`;
+A felhasználói üzenet egy JSON "facts" tömböt (a hír mögötti, ellenőrzött tények — ehhez képest kell tényhűnek maradnod) és a jelenlegi "title_hu"/"lead_hu"/"body_hu" mezőket tartalmazza. Add vissza a stilizált változatot "rewritten_title_hu"/"rewritten_lead_hu"/"rewritten_body_hu" mezőkben.
+
+Ha a rendszerüzenet végén egy "FUTBALLNYELVI SZÓTÁR" blokk szerepel, az a bemeneti szövegben (idézetekben vagy a cím/lead/törzsben) felismert angol futballkifejezések/szleng/idióma természetes magyar megfelelőit adja meg — ha a bemenet ezek valamelyikét tükörfordításban vagy angolul tartalmazza, a stilizált változatban a szótár szerinti természetes magyar formát használd. Ez a megfogalmazás javítása, NEM új tény hozzáadása.`;
+
+/**
+ * Ugyanaz a "csak idézet, sosem nyers forráscikk" határ vonatkozik ide is,
+ * mint a Hungarian Writer generation.ts-re — DE itt a már meglévő magyar
+ * title_hu/lead_hu/body_hu szöveget is átnézzük a lexikon angol kifejezései
+ * ellen, mert egy korábban átcsúszott tükörfordítás vagy angolul maradt
+ * szakkifejezés pont ebben a lépésben javítható stilisztikailag.
+ */
+function buildLexiconBlock(input: EditorialRewriteInput): string {
+  const englishQuotes = input.facts
+    .map((fact) => fact.quoteOriginal)
+    .filter((quote): quote is string => Boolean(quote))
+    .join("\n");
+  const searchText = [englishQuotes, input.titleHu, input.leadHu, input.bodyHu]
+    .filter(Boolean)
+    .join("\n");
+  if (!searchText) {
+    return "";
+  }
+  const entries = findRelevantLexiconEntries(searchText);
+  const block = formatLexiconBlock(entries);
+  return block ? `\n\n${block}` : "";
+}
 
 /**
  * Editorial Rewrite Agent's LLM call: takes the Hungarian Writer Agent's
@@ -53,7 +79,7 @@ export async function rewriteForStyle(
 ): Promise<EditorialRewriteResult> {
   const result = await llm.completeJson({
     model: MODEL_TIERS.editorialRewrite,
-    system: SYSTEM_PROMPT,
+    system: SYSTEM_PROMPT + buildLexiconBlock(input),
     messages: [
       {
         role: "user",

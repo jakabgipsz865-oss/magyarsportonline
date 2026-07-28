@@ -66,4 +66,44 @@ describe("generateStoryVersion", () => {
     const content = llm.jsonRequests[0]?.messages[0]?.content ?? "";
     expect(content).toContain("Old title");
   });
+
+  it("adds a lexicon glossary block to the system prompt when a quote contains a known football term", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: { title_hu: "T", lead_hu: "L", body_hu: "B", change_summary_hu: null },
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+
+    await generateStoryVersion(llm, {
+      facts: [
+        {
+          factType: "quote",
+          detailHu: "",
+          quoteOriginal: "The goalkeeper kept a clean sheet tonight.",
+          quoteSpeaker: "Manager",
+        },
+      ],
+      previousVersion: null,
+    });
+
+    expect(llm.jsonRequests[0]?.system).toContain("clean sheet");
+    expect(llm.jsonRequests[0]?.system).toContain("→");
+  });
+
+  it("omits the lexicon block when no quote contains a known term", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: { title_hu: "T", lead_hu: "L", body_hu: "B", change_summary_hu: null },
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+
+    await generateStoryVersion(llm, {
+      facts: [{ factType: "score", detailHu: "3-1", quoteOriginal: null, quoteSpeaker: null }],
+      previousVersion: null,
+    });
+
+    expect(llm.jsonRequests[0]?.system).not.toContain("→");
+  });
 });
