@@ -78,6 +78,20 @@
       "when": 1785262820399,
       "tag": "0010_charming_tigra",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785269089084,
+      "tag": "0011_superb_thunderbolt_ross",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1785269591310,
+      "tag": "0012_giant_slipstream",
+      "breakpoints": true
     }
   ]
 }

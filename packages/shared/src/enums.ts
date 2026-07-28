@@ -31,6 +31,35 @@ export type StorySourceContributionType = (typeof STORY_SOURCE_CONTRIBUTION_TYPE
 export const SOURCE_RELIABILITY_TIERS = ["A", "B", "C"] as const;
 export type SourceReliabilityTier = (typeof SOURCE_RELIABILITY_TIERS)[number];
 
+/**
+ * Source Registry kategória (2026-07-28-i többforrásos irány,
+ * docs/source-registry.md) — kinek a hangja a forrás: a klubé/ligáé saját
+ * maga, egy bizalmi médiáé, egy bulvárlapé, egy közösségi posztoé, vagy egy
+ * strukturált adat-API-é. Használva a hitelességi pontszámításban (hivatalos
+ * forrás súlya) és a discovery/fact-extraction döntésben.
+ */
+export const SOURCE_CATEGORIES = [
+  "official",
+  "league",
+  "club",
+  "trusted_media",
+  "tabloid",
+  "social",
+  "data_api",
+] as const;
+export type SourceCategory = (typeof SOURCE_CATEGORIES)[number];
+
+/**
+ * Mire használjuk a forrás tartalmát: `full_text` = a teljes cikktörzs
+ * felhasználható a magyar Story megírásához (Source Fetcher célja);
+ * `fact_only` = csak konkrét állítások (pl. eredmény, idézet) kinyerésére
+ * használjuk, a szöveg maga nem; `discovery_only` = csak arra jó, hogy
+ * felfedezzünk vele egy történést, a tartalmát sosem használjuk fel
+ * (pl. egy közösségi poszt, ami csak jelzi, hogy történt valami).
+ */
+export const SOURCE_CONTENT_MODES = ["full_text", "fact_only", "discovery_only"] as const;
+export type SourceContentMode = (typeof SOURCE_CONTENT_MODES)[number];
+
 export const REVIEW_QUEUE_REASONS = [
   "high_risk",
   "contradiction",
