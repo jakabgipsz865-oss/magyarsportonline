@@ -12,4 +12,6 @@ export const MODEL_TIERS = {
   selfCheck: "claude-haiku-4-5",
   /** Hungarian Writer Agent: final Hungarian title/lead/body generation. */
   writing: "claude-sonnet-5",
+  /** Editorial Rewrite Agent: stylistic polish pass, same quality bar as writing. */
+  editorialRewrite: "claude-sonnet-5",
 } as const;

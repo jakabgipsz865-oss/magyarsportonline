@@ -1,0 +1,1 @@
+ALTER TABLE "story_versions" ADD COLUMN "editorial_rewrite_applied" boolean DEFAULT false NOT NULL;

@@ -1,5 +1,6 @@
 import {
   deduplication,
+  editorialRewrite,
   factVerification,
   hungarianWriter,
   publishGate,
@@ -13,7 +14,12 @@ import {
   createInProcessDispatcher,
   type InProcessDispatcher,
 } from "@magyarsportonline/events";
-import { MODEL_TIERS, NOT_AI_TRANSLATED_NOTICE, NO_LLM_MODEL_LABEL } from "@magyarsportonline/llm";
+import {
+  MODEL_TIERS,
+  NOT_AI_TRANSLATED_NOTICE,
+  NO_LLM_MODEL_LABEL,
+  NoLlmClient,
+} from "@magyarsportonline/llm";
 import { createRepositories, type Repositories } from "./db";
 import { env } from "./env";
 import { getLlmClient } from "./llm";
@@ -105,7 +111,22 @@ export function buildDispatcher(repos: Repositories = createRepositories()): InP
   );
 
   dispatcher.on("story/content.drafted", (event) =>
-    seo.handleStoryContentDrafted(
+    editorialRewrite.handleStoryContentDrafted(
+      {
+        storyRepository: repos.storyRepository,
+        storyVersionRepository: repos.storyVersionRepository,
+        factRepository: repos.factRepository,
+        llm,
+        agentRunRepository: repos.agentRunRepository,
+        dispatcher,
+        logger,
+      },
+      event,
+    ),
+  );
+
+  dispatcher.on("story/editorial.rewritten", (event) =>
+    seo.handleStoryEditorialRewritten(
       {
         storyRepository: repos.storyRepository,
         storyVersionRepository: repos.storyVersionRepository,
@@ -332,4 +353,58 @@ export async function backfillMislabeledAiGenerated(): Promise<{ correctedCount:
   );
 
   return { correctedCount };
+}
+
+/**
+ * Entry point for `/api/internal/editorial-ab-test`: the 50-article A/B
+ * comparison the "MagyarSportOnline editorial style" sprint asked for
+ * (current pipeline output vs. the Editorial Rewrite Agent pass — see
+ * packages/agents/src/editorial-rewrite/ab-test.ts). Read-only — never
+ * writes to the database, only calls the LLM to produce a candidate rewrite
+ * and a blind judge verdict in memory.
+ *
+ * Batched like `reprocessNoLlmStories` (Vercel Hobby's 60s `maxDuration`
+ * can't fit 50 articles' worth of sequential LLM calls in one request) — the
+ * caller (a GitHub Actions workflow, not a human) pages through with
+ * `offset`/`limit` until `nextOffset` is null.
+ */
+export async function runEditorialAbTestBatch(options: { offset: number; limit: number }): Promise<{
+  results: Awaited<ReturnType<typeof editorialRewrite.runAbComparison>>[];
+  totalCandidates: number;
+  nextOffset: number | null;
+}> {
+  const repos = createRepositories();
+  const llm = getLlmClient();
+  if (llm instanceof NoLlmClient) {
+    throw new Error(
+      "editorial-ab-test: LLM_PROVIDER=none — nothing to compare without a real provider",
+    );
+  }
+
+  // Only AI-generated versions are meaningful to compare — a No-LLM
+  // passthrough has no "style" of its own to rewrite.
+  const candidates = (await repos.storyVersionRepository.listLatestVersionSummaries()).filter(
+    (summary) => summary.isAiGenerated,
+  );
+  const batch = candidates.slice(options.offset, options.offset + options.limit);
+
+  const results = await Promise.all(
+    batch.map(async (summary) => {
+      const facts = (await repos.factRepository.listByStoryId(summary.storyId)).map(
+        hungarianWriter.toWriterFact,
+      );
+      return editorialRewrite.runAbComparison(llm, {
+        storyId: summary.storyId,
+        facts,
+        titleHu: summary.titleHu,
+        leadHu: summary.leadHu,
+        bodyHu: summary.bodyHu,
+      });
+    }),
+  );
+
+  const nextOffset =
+    options.offset + options.limit < candidates.length ? options.offset + options.limit : null;
+
+  return { results, totalCandidates: candidates.length, nextOffset };
 }

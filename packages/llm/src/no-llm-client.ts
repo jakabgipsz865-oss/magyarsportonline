@@ -36,6 +36,29 @@ interface ParsedGenerationPayload {
   hasPreviousVersion: boolean;
 }
 
+interface ParsedEditorialRewritePayload {
+  titleHu: string;
+  leadHu: string;
+  bodyHu: string;
+}
+
+function parseEditorialRewritePayload(userContent: string): ParsedEditorialRewritePayload {
+  try {
+    const parsed = JSON.parse(userContent) as {
+      title_hu?: unknown;
+      lead_hu?: unknown;
+      body_hu?: unknown;
+    };
+    return {
+      titleHu: typeof parsed.title_hu === "string" ? parsed.title_hu : "",
+      leadHu: typeof parsed.lead_hu === "string" ? parsed.lead_hu : "",
+      bodyHu: typeof parsed.body_hu === "string" ? parsed.body_hu : "",
+    };
+  } catch {
+    return { titleHu: "", leadHu: "", bodyHu: "" };
+  }
+}
+
 function parseGenerationPayload(userContent: string): ParsedGenerationPayload {
   try {
     // Matches `WriterFact`'s camelCase shape (hungarian-writer/facts.ts) —
@@ -91,6 +114,9 @@ export class NoLlmClient implements LlmClient {
     if (hasSchemaProperty(request.jsonSchema, "consistent")) {
       return this.selfCheckFallback();
     }
+    if (hasSchemaProperty(request.jsonSchema, "rewritten_title_hu")) {
+      return this.editorialRewriteFallback(userContent);
+    }
     throw new Error(
       "NoLlmClient: unrecognized JSON schema shape — no deterministic fallback defined for this call site",
     );
@@ -140,6 +166,22 @@ export class NoLlmClient implements LlmClient {
   private selfCheckFallback(): JsonCompletionResult {
     return {
       data: { consistent: true, fact_consistency_score: 1, issues: [] },
+      inputTokens: 0,
+      outputTokens: 0,
+    };
+  }
+
+  /**
+   * Editorial Rewrite Agent's fallback: an identity passthrough. With no
+   * real LLM available there is no safe way to "polish" phrasing, so the
+   * correct deterministic behaviour is to echo the Hungarian Writer Agent's
+   * title/lead/body back unchanged rather than guessing — the agent reads
+   * this as "no rewrite happened" (see editorialRewriteApplied labeling).
+   */
+  private editorialRewriteFallback(userContent: string): JsonCompletionResult {
+    const { titleHu, leadHu, bodyHu } = parseEditorialRewritePayload(userContent);
+    return {
+      data: { rewritten_title_hu: titleHu, rewritten_lead_hu: leadHu, rewritten_body_hu: bodyHu },
       inputTokens: 0,
       outputTokens: 0,
     };

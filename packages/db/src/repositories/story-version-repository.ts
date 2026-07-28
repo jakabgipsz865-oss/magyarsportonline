@@ -109,6 +109,33 @@ export class StoryVersionRepository {
     return row ?? null;
   }
 
+  /**
+   * Editorial Rewrite Agent's write path (packages/agents/src/editorial-rewrite)
+   * — the ONE narrow, deliberate exception to `story_versions`' otherwise
+   * immutable-history invariant (see the table comment). Guarded by
+   * `WHERE is_published = false` so a version already shown to readers can
+   * never be rewritten after the fact; only the still-in-flight draft this
+   * pipeline stage is polishing before Publish Gate sees it. Returns false
+   * (no-op) if the version was already published by the time this runs,
+   * so the caller can log instead of silently losing the rewrite.
+   */
+  async updateDraftContent(
+    versionId: string,
+    content: { titleHu: string; leadHu: string; bodyHu: string; editorialRewriteApplied: boolean },
+  ): Promise<boolean> {
+    const rows = await this.db
+      .update(storyVersions)
+      .set({
+        titleHu: content.titleHu,
+        leadHu: content.leadHu,
+        bodyHu: content.bodyHu,
+        editorialRewriteApplied: content.editorialRewriteApplied,
+      })
+      .where(and(eq(storyVersions.id, versionId), eq(storyVersions.isPublished, false)))
+      .returning({ id: storyVersions.id });
+    return rows.length > 0;
+  }
+
   async markPublished(versionId: string): Promise<void> {
     await this.db
       .update(storyVersions)

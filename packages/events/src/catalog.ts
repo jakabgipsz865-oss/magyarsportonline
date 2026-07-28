@@ -91,6 +91,15 @@ export const storyContentDraftedEvent = defineEvent(
   }),
 );
 
+export const storyEditorialRewrittenEvent = defineEvent(
+  "story/editorial.rewritten",
+  z.object({
+    story_id: z.string().uuid(),
+    story_version_id: z.string().uuid(),
+    editorial_rewrite_applied: z.boolean(),
+  }),
+);
+
 export const storySeoReadyEvent = defineEvent(
   "story/seo.ready",
   z.object({
@@ -158,6 +167,7 @@ export const eventCatalog = {
   "story/merge.completed": storyMergeCompletedEvent,
   "story/facts.verified": storyFactsVerifiedEvent,
   "story/content.drafted": storyContentDraftedEvent,
+  "story/editorial.rewritten": storyEditorialRewrittenEvent,
   "story/seo.ready": storySeoReadyEvent,
   "story/published": storyPublishedEvent,
   "story/updated.published": storyUpdatedPublishedEvent,
@@ -176,6 +186,7 @@ export const sportsNewsEventSchema = z.discriminatedUnion("type", [
   storyMergeCompletedEvent,
   storyFactsVerifiedEvent,
   storyContentDraftedEvent,
+  storyEditorialRewrittenEvent,
   storySeoReadyEvent,
   storyPublishedEvent,
   storyUpdatedPublishedEvent,

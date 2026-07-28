@@ -166,6 +166,42 @@ describe("NoLlmClient", () => {
     expect(result.data).toEqual({ consistent: true, fact_consistency_score: 1, issues: [] });
   });
 
+  it("echoes the title/lead/body back unchanged for the editorial rewrite call site", async () => {
+    const client = new NoLlmClient();
+    const result = await client.completeJson({
+      model: "m",
+      system: "s",
+      maxTokens: 10,
+      jsonSchema: {
+        type: "object",
+        properties: {
+          rewritten_title_hu: { type: "string" },
+          rewritten_lead_hu: { type: "string" },
+          rewritten_body_hu: { type: "string" },
+        },
+        required: ["rewritten_title_hu", "rewritten_lead_hu", "rewritten_body_hu"],
+        additionalProperties: false,
+      },
+      messages: [
+        {
+          role: "user",
+          content: JSON.stringify({
+            facts: [],
+            title_hu: "Cím",
+            lead_hu: "Lead szöveg.",
+            body_hu: "Törzsszöveg.",
+          }),
+        },
+      ],
+    });
+
+    expect(result.data).toEqual({
+      rewritten_title_hu: "Cím",
+      rewritten_lead_hu: "Lead szöveg.",
+      rewritten_body_hu: "Törzsszöveg.",
+    });
+  });
+
   it("throws on an unrecognized JSON schema shape", async () => {
     const client = new NoLlmClient();
     await expect(

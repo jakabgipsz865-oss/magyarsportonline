@@ -1,0 +1,148 @@
+# Editorial style A/B test — a szerkesztőségi stílus sprint kért mérése:
+# lefuttatja a jelenlegi pipeline kimenetét (Pipeline A) és az Editorial
+# Rewrite Agent stilizált változatát (Pipeline B) ugyanazokon a már publikált
+# cikkeken, olvashatósági metrikákkal és egy vak LLM-judge összehasonlítással.
+#
+# Kizárólag olvasás — a `/api/internal/editorial-ab-test` végpont sosem ír az
+# adatbázisba. Kötegelve fut (alapértelmezés: 5 cikk/hívás), mert a Vercel
+# Hobby csomag 60 másodperces `maxDuration`-je nem bírná el 50 cikk összes
+# LLM-hívását egyetlen kérésben.
+name: Editorial style A/B test
+
+on:
+  workflow_dispatch:
+    inputs:
+      sample_size:
+        description: "Hány cikket hasonlítson össze (Pipeline A vs Editorial Rewrite)"
+        required: false
+        default: "50"
+      batch_size:
+        description: "Cikk/HTTP-hívás (max 10, a Vercel 60s limit miatt)"
+        required: false
+        default: "5"
+
+permissions: {}
+
+jobs:
+  ab-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Run batched A/B comparison
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SAMPLE_SIZE: ${{ inputs.sample_size }}
+          BATCH_SIZE: ${{ inputs.batch_size }}
+        run: |
+          set -u
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET repo secret hiányzik — nincs mit futtatni." >&2
+            exit 1
+          fi
+          BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
+          echo "Target: $BASE"
+          echo "[]" > all-results.json
+
+          offset=0
+          fetched=0
+          while [ "$fetched" -lt "$SAMPLE_SIZE" ]; do
+            limit=$BATCH_SIZE
+            remaining=$((SAMPLE_SIZE - fetched))
+            if [ "$remaining" -lt "$limit" ]; then limit=$remaining; fi
+
+            echo "== batch offset=$offset limit=$limit =="
+            code=$(curl -sS -o batch.json -w '%{http_code}' --max-time 60 \
+              -X POST "$BASE/api/internal/editorial-ab-test?offset=$offset&limit=$limit" \
+              -H "Authorization: Bearer $CRON_SECRET" || echo 000)
+            echo "HTTP $code"
+            if [ "$code" != "200" ]; then
+              cat batch.json
+              exit 1
+            fi
+
+            batch_count=$(jq '.results | length' batch.json)
+            jq -s '.[0] + .[1].results' all-results.json batch.json > merged.json && mv merged.json all-results.json
+            fetched=$((fetched + batch_count))
+
+            next_offset=$(jq -r '.nextOffset' batch.json)
+            total_candidates=$(jq -r '.totalCandidates' batch.json)
+            echo "fetched so far: $fetched / totalCandidates in DB: $total_candidates"
+
+            if [ "$batch_count" -eq 0 ] || [ "$next_offset" = "null" ]; then
+              echo "Nincs több AI-generált cikk a DB-ben — a teszt a rendelkezésre álló mennyiséggel zárul."
+              break
+            fi
+            offset=$next_offset
+          done
+
+          echo "total collected: $(jq 'length' all-results.json)"
+
+      - name: Summarize results
+        run: |
+          python3 << 'PYEOF'
+          import json
+
+          with open("all-results.json") as f:
+              results = json.load(f)
+
+          n = len(results)
+          accepted = [r for r in results if r["pipelineB"]["rewriteAccepted"]]
+          judged = [r for r in results if r["judge"] is not None]
+
+          def avg(xs):
+              return sum(xs) / len(xs) if xs else 0.0
+
+          a_sent = avg([r["pipelineA"]["readability"]["avgSentenceLengthWords"] for r in results])
+          b_sent = avg([r["pipelineB"]["readability"]["avgSentenceLengthWords"] for r in results])
+          a_word = avg([r["pipelineA"]["readability"]["avgWordLengthChars"] for r in results])
+          b_word = avg([r["pipelineB"]["readability"]["avgWordLengthChars"] for r in results])
+
+          wins_a = sum(1 for r in judged if r["judge"]["winner"] == "A")
+          wins_b = sum(1 for r in judged if r["judge"]["winner"] == "B")
+          ties = sum(1 for r in judged if r["judge"]["winner"] == "tie")
+          score_a = avg([r["judge"]["scoreA"] for r in judged])
+          score_b = avg([r["judge"]["scoreB"] for r in judged])
+
+          lines = []
+          lines.append(f"# Editorial style A/B teszt — {n} cikk\n")
+          lines.append(f"- Rewrite elfogadva (tény-konzisztens): **{len(accepted)}/{n}**")
+          lines.append(f"- LLM-judge által megítélt cikkek: **{len(judged)}/{n}** (a nem-elfogadott rewrite-oknál nincs mit megítélni)\n")
+          lines.append("## Olvashatósági metrikák (átlag, kisebb = tömörebb/olvashatóbb mondat-/szóhossz)\n")
+          lines.append("| Metrika | Pipeline A (jelenlegi) | Pipeline B (Editorial Rewrite) |")
+          lines.append("|---|---|---|")
+          lines.append(f"| Átlagos mondathossz (szó) | {a_sent:.1f} | {b_sent:.1f} |")
+          lines.append(f"| Átlagos szóhossz (karakter) | {a_word:.2f} | {b_word:.2f} |\n")
+          lines.append("## LLM-judge vak összehasonlítás (0-10 olvashatósági pont)\n")
+          lines.append(f"- A (jelenlegi) győzött: **{wins_a}**")
+          lines.append(f"- B (Editorial Rewrite) győzött: **{wins_b}**")
+          lines.append(f"- Döntetlen: **{ties}**")
+          lines.append(f"- Átlagpontszám A: **{score_a:.2f}** / B: **{score_b:.2f}**\n")
+
+          verdict = "B (Editorial Rewrite) olvashatóbb" if wins_b > wins_a and score_b > score_a else (
+              "A (jelenlegi) olvashatóbb" if wins_a > wins_b and score_a > score_b else "nincs egyértelmű különbség"
+          )
+          lines.append(f"## Összegzés: **{verdict}**\n")
+
+          lines.append("<details><summary>Minta (első 3 cikk cím-összevetése)</summary>\n")
+          for r in results[:3]:
+              lines.append(f"- A: {r['pipelineA']['titleHu']}")
+              lines.append(f"  B: {r['pipelineB']['titleHu']}")
+              if r["judge"]:
+                  lines.append(f"  judge: {r['judge']['winner']} ({r['judge']['rationaleHu']})")
+          lines.append("\n</details>\n")
+
+          report = "\n".join(lines)
+          print(report)
+          with open("report.md", "w") as f:
+              f.write(report)
+          PYEOF
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload full results
+        uses: actions/upload-artifact@v4
+        with:
+          name: editorial-ab-test-results
+          path: |
+            all-results.json
+            report.md
