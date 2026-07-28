@@ -1,4 +1,8 @@
-import type { EditorialCorrectionCategory, EditorialCorrectionInput } from "@magyarsportonline/db";
+import type {
+  EditorialCorrectionCategory,
+  EditorialCorrectionInput,
+  EditorialCorrectionRow,
+} from "@magyarsportonline/db";
 import { createRepositories, type Repositories } from "./db";
 import { getLogger } from "./logger";
 
@@ -15,7 +19,9 @@ export function isEditorialCorrectionCategory(value: string): value is Editorial
   return (EDITORIAL_CORRECTION_CATEGORIES as string[]).includes(value);
 }
 
-export type SubmitCorrectionResult = { ok: true } | { ok: false; error: "missing_required_field" };
+export type SubmitCorrectionResult =
+  | { ok: true; correction: EditorialCorrectionRow }
+  | { ok: false; error: "missing_required_field" };
 
 /**
  * "Tanítható szerkesztői felület" (2026-07-28 sprint,
@@ -23,7 +29,10 @@ export type SubmitCorrectionResult = { ok: true } | { ok: false; error: "missing
  * mondatszintű javítás mentése. Sosem módosít már generált/publikált
  * tartalmat — kizárólag tanítóanyagot ment, amit a Hungarian Writer és az
  * Editorial Rewrite Agent a KÖVETKEZŐ cikkeknél olvas fel (lásd
- * packages/agents/src/shared/editorial-corrections.ts).
+ * packages/agents/src/shared/editorial-corrections.ts). A létrehozott sort
+ * visszaadja, hogy a hívó (pl. a gyors tanítási munkafolyamat) frissíthesse
+ * a saját állapotát anélkül, hogy meg kéne várnia egy teljes oldal-
+ * újratöltést.
  */
 export async function submitEditorialCorrection(
   input: EditorialCorrectionInput,
@@ -38,10 +47,10 @@ export async function submitEditorialCorrection(
     return { ok: false, error: "missing_required_field" };
   }
 
-  await repos.editorialCorrectionRepository.create(input);
+  const correction = await repos.editorialCorrectionRepository.create(input);
   getLogger().info(
     { storyId: input.storyId, category: input.category },
     "editorial correction accepted",
   );
-  return { ok: true };
+  return { ok: true, correction };
 }

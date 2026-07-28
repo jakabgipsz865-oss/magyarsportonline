@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import type {
   CorrectionApplicationVerdict,
+  EditorialAbSnapshotRow,
   EditorialCorrectionRow,
   OriginalSourceContent,
 } from "@magyarsportonline/db";
 import {
   correctionEffectiveness,
+  correctionSimilarity,
   editorialCorrections,
-  type footballLexicon,
+  footballLexicon,
 } from "@magyarsportonline/agents";
 import { revalidatePath } from "next/cache";
 import type { ReactNode } from "react";
@@ -16,6 +18,8 @@ import {
   isEditorialCorrectionCategory,
   submitEditorialCorrection,
 } from "../../../lib/editorial-corrections";
+import { FastTrainingWorkbench } from "./FastTrainingWorkbench";
+import type { TrainingItem, TrainingSuggestion } from "./types";
 
 const CORRECTION_CATEGORY_LABELS_HU = editorialCorrections.CORRECTION_CATEGORY_LABELS_HU;
 const EDITORIAL_CORRECTION_CATEGORIES = Object.keys(
@@ -388,6 +392,134 @@ function CorrectionHistory({
   );
 }
 
+function toEditorialCorrection(
+  row: EditorialCorrectionRow,
+): editorialCorrections.EditorialCorrection {
+  return {
+    id: row.id,
+    category: row.category,
+    termEn: row.termEn,
+    originalSentenceEn: row.originalSentenceEn,
+    currentSentenceHu: row.currentSentenceHu,
+    correctedSentenceHu: row.correctedSentenceHu,
+    note: row.note,
+  };
+}
+
+/**
+ * "Gyors tanítási munkafolyamat" (2026-07-28 sprint) — az összes cikk
+ * cím/lead/törzs mondatait EGYETLEN, folytonos sorba fűzi (nem
+ * cikkenkénti accordionokba), hogy a szerkesztő görgetés/kattintgatás
+ * nélkül, billentyűzettel pörgethessen át napi 100-200 mondatot. Minden
+ * mondathoz előre kiszámolja:
+ * - a lexikon-alapú "ugyanaz a szleng/hiba" felismerést (statikus +
+ *   tanult lexikon együtt, lásd football-lexicon.ts
+ *   findLexiconMatchesInHungarianText) — NEM AI-hívás, szövegegyezés;
+ * - a legjobban hasonlító korábbi javításokat (correction-similarity.ts
+ *   Jaccard-index) — szintén NEM AI-hívás.
+ * A már pontosan (cikk+mondat szinten) betanított mondatokat kihagyja —
+ * újratanítani ugyanazt nem növeli az áttekinthetőséget, csak lassítja a
+ * szerkesztőt.
+ */
+function buildTrainingItems(
+  rows: EditorialAbSnapshotRow[],
+  allCorrections: EditorialCorrectionRow[],
+): TrainingItem[] {
+  const editorialCorrectionList = allCorrections.map(toEditorialCorrection);
+  const combinedLexicon = [
+    ...footballLexicon.FOOTBALL_LEXICON,
+    ...editorialCorrections.correctionsToLexiconEntries(editorialCorrectionList),
+  ];
+  const alreadyTaught = new Set(
+    allCorrections.map((correction) => `${correction.storyId}::${correction.currentSentenceHu}`),
+  );
+
+  function suggestionsFor(sentenceHu: string): TrainingSuggestion[] {
+    const suggestions: TrainingSuggestion[] = [];
+    const [lexiconMatch] = footballLexicon.findLexiconMatchesInHungarianText(
+      sentenceHu,
+      combinedLexicon,
+    );
+    if (lexiconMatch) {
+      suggestions.push({
+        kind: "lexicon",
+        matchedAvoidHu: lexiconMatch.avoidLiteralHu,
+        naturalHu: lexiconMatch.naturalHu,
+        termEn: lexiconMatch.en,
+        exampleEn: lexiconMatch.exampleEn,
+        suggestedSentenceHu: footballLexicon.applyLexiconSuggestion(sentenceHu, lexiconMatch),
+      });
+    }
+    const similar = correctionSimilarity.findSimilarCorrections(
+      sentenceHu,
+      editorialCorrectionList,
+      3,
+    );
+    for (const match of similar) {
+      suggestions.push({
+        kind: "similar",
+        correctionId: match.correction.id,
+        score: match.score,
+        category: match.correction.category,
+        currentSentenceHu: match.correction.currentSentenceHu,
+        correctedSentenceHu: match.correction.correctedSentenceHu,
+        originalSentenceEn: match.correction.originalSentenceEn,
+        termEn: match.correction.termEn,
+      });
+    }
+    return suggestions;
+  }
+
+  const items: TrainingItem[] = [];
+  for (const row of rows) {
+    const originalSources = row.originalSources as unknown as OriginalSourceContent[];
+    const originalSourcesText = originalSources.map((source) => source.bodyOriginal).join("\n\n");
+
+    if (!alreadyTaught.has(`${row.storyId}::${row.titleB}`)) {
+      items.push({
+        itemId: `${row.storyId}:title`,
+        storyId: row.storyId,
+        field: "title",
+        sentenceHu: row.titleB,
+        changed: row.titleA.trim() !== row.titleB.trim(),
+        originalSourcesText,
+        suggestions: suggestionsFor(row.titleB),
+      });
+    }
+
+    if (!alreadyTaught.has(`${row.storyId}::${row.leadB}`)) {
+      items.push({
+        itemId: `${row.storyId}:lead`,
+        storyId: row.storyId,
+        field: "lead",
+        sentenceHu: row.leadB,
+        changed: row.leadA.trim() !== row.leadB.trim(),
+        originalSourcesText,
+        suggestions: suggestionsFor(row.leadB),
+      });
+    }
+
+    const normalizedA = new Set(
+      splitSentences(row.bodyA).map((sentence) => sentence.toLowerCase()),
+    );
+    splitSentences(row.bodyB).forEach((sentence, index) => {
+      if (alreadyTaught.has(`${row.storyId}::${sentence}`)) {
+        return;
+      }
+      items.push({
+        itemId: `${row.storyId}:body:${index}`,
+        storyId: row.storyId,
+        field: "body",
+        sentenceHu: sentence,
+        changed: !normalizedA.has(sentence.toLowerCase()),
+        originalSourcesText,
+        suggestions: suggestionsFor(sentence),
+      });
+    });
+  }
+  return items;
+}
+
 const STATUS_LABELS: Record<string, { label: string; bg: string; color: string }> = {
   accepted: { label: "Elfogadva — valódi stílusjavítás", bg: "#e6f4ea", color: "#1e7e34" },
   fact_check_failed: {
@@ -440,6 +572,8 @@ export default async function EditorialAbReviewPage(): Promise<ReactNode> {
     sequenceByCorrectionId.set(correction.id, index + 1);
   });
 
+  const trainingItems = buildTrainingItems(rows, allCorrections);
+
   return (
     <main
       style={{ maxWidth: 1000, margin: "0 auto", padding: "24px 16px", fontFamily: "sans-serif" }}
@@ -456,6 +590,14 @@ export default async function EditorialAbReviewPage(): Promise<ReactNode> {
           : `${rows.length} cikk legutóbbi A/B eredménye, legfrissebb elöl.`}
       </p>
 
+      <FastTrainingWorkbench
+        items={trainingItems}
+        initialCorrections={allCorrections}
+        categoryLabels={CORRECTION_CATEGORY_LABELS_HU}
+        categories={EDITORIAL_CORRECTION_CATEGORIES}
+      />
+
+      <h2 style={{ marginTop: 32 }}>Részletes cikkenkénti nézet</h2>
       {rows.map((row) => {
         const status = row.rewriteAccepted ? "accepted" : (row.rejectionKind ?? "fallback");
         const statusMeta = STATUS_LABELS[status] ?? STATUS_LABELS["fallback"];

@@ -10,3 +10,4 @@ export * as readModelProjector from "./read-model-projector/index";
 export * as footballLexicon from "./shared/football-lexicon";
 export * as editorialCorrections from "./shared/editorial-corrections";
 export * as correctionEffectiveness from "./shared/correction-effectiveness";
+export * as correctionSimilarity from "./shared/correction-similarity";

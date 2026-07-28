@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   FOOTBALL_LEXICON,
+  applyLexiconSuggestion,
+  findLexiconMatchesInHungarianText,
   findRelevantLexiconEntries,
   formatLexiconBlock,
 } from "./football-lexicon";
@@ -66,6 +68,66 @@ describe("findRelevantLexiconEntries", () => {
   it("returns an empty array when nothing matches", () => {
     const matches = findRelevantLexiconEntries("A csendes délután semmi különöset nem hozott.");
     expect(matches).toEqual([]);
+  });
+});
+
+describe("findLexiconMatchesInHungarianText", () => {
+  it("finds a lexicon entry whose avoidLiteralHu phrase appears in the given Hungarian text", () => {
+    const matches = findLexiconMatchesInHungarianText("A kapus tiszta lapot tartott a mérkőzésen.");
+    expect(matches.some((entry) => entry.en === "clean sheet")).toBe(true);
+  });
+
+  it("is case-insensitive", () => {
+    const matches = findLexiconMatchesInHungarianText("TISZTA LAPOT tartott a kapus.");
+    expect(matches.some((entry) => entry.en === "clean sheet")).toBe(true);
+  });
+
+  it("returns an empty array when no known literal-translation phrase is present", () => {
+    const matches = findLexiconMatchesInHungarianText("A csapat magabiztosan nyert idegenben.");
+    expect(matches).toEqual([]);
+  });
+
+  it("sorts the longest (most specific) avoidLiteralHu match first", () => {
+    const entries = [
+      { ...FOOTBALL_LEXICON[0]!, avoidLiteralHu: "lap" },
+      { ...FOOTBALL_LEXICON[0]!, avoidLiteralHu: "tiszta lap" },
+    ];
+    const matches = findLexiconMatchesInHungarianText("A kapus tiszta lapot tartott.", entries);
+    expect(matches[0]?.avoidLiteralHu).toBe("tiszta lap");
+  });
+});
+
+describe("applyLexiconSuggestion", () => {
+  it("replaces a whole-word (non-inflected) occurrence with the natural Hungarian phrasing", () => {
+    const entry = FOOTBALL_LEXICON.find((e) => e.en === "clean sheet");
+    if (!entry) throw new Error("expected a 'clean sheet' lexicon entry");
+    const result = applyLexiconSuggestion("Ismét tiszta lap volt a mérkőzés végén.", entry);
+    expect(result).toContain(entry.naturalHu);
+    expect(result).not.toContain("tiszta lap");
+  });
+
+  it("replaces every whole-word occurrence, case-insensitively", () => {
+    const entry = FOOTBALL_LEXICON.find((e) => e.en === "clean sheet");
+    if (!entry) throw new Error("expected a 'clean sheet' lexicon entry");
+    const result = applyLexiconSuggestion("Tiszta lap. Megint TISZTA LAP.", entry);
+    expect(result.toLowerCase()).not.toContain("tiszta lap");
+  });
+
+  it("returns the text unchanged when the avoid phrase does not appear", () => {
+    const entry = FOOTBALL_LEXICON.find((e) => e.en === "clean sheet");
+    if (!entry) throw new Error("expected a 'clean sheet' lexicon entry");
+    const result = applyLexiconSuggestion("A csapat magabiztosan nyert.", entry);
+    expect(result).toBe("A csapat magabiztosan nyert.");
+  });
+
+  it("does NOT splice into an inflected (suffixed) occurrence of the avoid phrase", () => {
+    // Magyar toldalékolás: "tiszta lapOT" a "tiszta lap" ragozott alakja — egy
+    // vak szövegcsere itt "...meccsetOT"-féle, összefércelt szót eredményezne
+    // (ez volt a valódi hiba, amit egy Playwright e2e teszt buktatott le).
+    const entry = FOOTBALL_LEXICON.find((e) => e.en === "clean sheet");
+    if (!entry) throw new Error("expected a 'clean sheet' lexicon entry");
+    const result = applyLexiconSuggestion("A kapus tiszta lapot tartott a mérkőzésen.", entry);
+    expect(result).toBe("A kapus tiszta lapot tartott a mérkőzésen.");
   });
 });
 
