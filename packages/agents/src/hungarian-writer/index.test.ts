@@ -38,15 +38,30 @@ const FACT: Fact = {
   extractedAt: new Date(),
 };
 
+const LEARNED_CORRECTION = {
+  id: "correction-1",
+  storyId: "some-other-story",
+  category: "terminology" as const,
+  termEn: "super-sub",
+  originalSentenceEn: "He is a real super-sub for this team.",
+  currentSentenceHu: "szuper csere",
+  correctedSentenceHu: "ütőkártya a cserepadról",
+  note: null,
+  createdAt: new Date(),
+};
+
 function buildDeps(overrides?: {
   previousVersion?: { titleHu: string; leadHu: string; bodyHu: string } | null;
+  learnedCorrections?: (typeof LEARNED_CORRECTION)[];
 }): HungarianWriterDeps & {
   emitted: unknown[];
   createNextVersionCalls: unknown[];
+  applicationCreateCalls: unknown[];
   llm: FakeLlmClient;
 } {
   const emitted: unknown[] = [];
   const createNextVersionCalls: unknown[] = [];
+  const applicationCreateCalls: unknown[] = [];
   const llm = new FakeLlmClient();
 
   const previousVersion =
@@ -106,7 +121,23 @@ function buildDeps(overrides?: {
       ),
     },
     factRepository: { listByStoryId: vi.fn(async () => [FACT]) },
-    editorialCorrectionRepository: { listRecent: vi.fn(async () => []) },
+    editorialCorrectionRepository: {
+      listRecent: vi.fn(async () => overrides?.learnedCorrections ?? []),
+    },
+    editorialCorrectionApplicationRepository: {
+      create: vi.fn(async (input: unknown) => {
+        applicationCreateCalls.push(input);
+        return {
+          id: "application-1",
+          correctionId: "correction-1",
+          storyId: STORY.id,
+          stage: "hungarian_writer" as const,
+          verdict: "applied" as const,
+          evidence: null,
+          detectedAt: new Date(),
+        };
+      }),
+    },
     llm,
     agentRunRepository: { record: vi.fn(async () => undefined) },
     dispatcher: {
@@ -119,6 +150,7 @@ function buildDeps(overrides?: {
     }),
     emitted,
     createNextVersionCalls,
+    applicationCreateCalls,
   };
 }
 
@@ -350,5 +382,76 @@ describe("handleStoryFactsVerified", () => {
     deps.storyRepository.getById = vi.fn(async () => null);
 
     await expect(handleStoryFactsVerified(deps, triggerEvent())).rejects.toThrow("not found");
+  });
+
+  it("records an 'applied' correction-application event when the generated body uses the corrected phrasing", async () => {
+    const deps = buildDeps({ learnedCorrections: [LEARNED_CORRECTION] });
+    deps.factRepository.listByStoryId = vi.fn(async () => [
+      {
+        ...FACT,
+        payload: {
+          detail_hu: "",
+          quote_original: "He is a real super-sub for this team.",
+          quote_speaker: "Manager",
+        },
+      },
+    ]);
+    queueGeneration(deps.llm, { body_hu: "A csapat ütőkártya a cserepadról embere döntött." });
+    queueSelfCheck(deps.llm, true, 1);
+
+    await handleStoryFactsVerified(deps, triggerEvent());
+
+    expect(deps.applicationCreateCalls).toEqual([
+      expect.objectContaining({
+        correctionId: "correction-1",
+        storyId: STORY.id,
+        stage: "hungarian_writer",
+        verdict: "applied",
+      }),
+    ]);
+  });
+
+  it("records a 'not_applied' correction-application event when the old, flagged phrasing recurs", async () => {
+    const deps = buildDeps({ learnedCorrections: [LEARNED_CORRECTION] });
+    deps.factRepository.listByStoryId = vi.fn(async () => [
+      {
+        ...FACT,
+        payload: {
+          detail_hu: "",
+          quote_original: "He is a real super-sub for this team.",
+          quote_speaker: "Manager",
+        },
+      },
+    ]);
+    queueGeneration(deps.llm, { body_hu: "A csapat szuper csere embere döntött." });
+    queueSelfCheck(deps.llm, true, 1);
+
+    await handleStoryFactsVerified(deps, triggerEvent());
+
+    expect(deps.applicationCreateCalls).toEqual([
+      expect.objectContaining({
+        correctionId: "correction-1",
+        verdict: "not_applied",
+      }),
+    ]);
+  });
+
+  it("records no correction-application event when the correction's topic never comes up", async () => {
+    const deps = buildDeps({ learnedCorrections: [LEARNED_CORRECTION] });
+    queueGeneration(deps.llm);
+    queueSelfCheck(deps.llm, true, 1);
+
+    await handleStoryFactsVerified(deps, triggerEvent());
+
+    expect(deps.applicationCreateCalls).toHaveLength(0);
+  });
+
+  it("never measures correction application for a No-LLM passthrough", async () => {
+    const deps = buildDeps({ learnedCorrections: [LEARNED_CORRECTION] });
+    deps.llm = new NoLlmClient() as unknown as FakeLlmClient;
+
+    await handleStoryFactsVerified(deps, triggerEvent());
+
+    expect(deps.applicationCreateCalls).toHaveLength(0);
   });
 });

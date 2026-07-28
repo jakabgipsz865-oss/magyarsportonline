@@ -30,6 +30,8 @@ export const CORRECTION_CATEGORY_LABELS_HU: Record<CorrectionCategory, string> =
 
 /** Plain adatalak — a hívó (DB-hozzáféréssel rendelkező kód) tölti fel a repository sorokból. */
 export interface EditorialCorrection {
+  /** A repository sor elsődleges kulcsa — a mérési eseménynapló (correction-effectiveness.ts) ezzel köti össze a javítást a jövőbeli generálásokkal. */
+  id: string;
   category: CorrectionCategory;
   termEn: string | null;
   originalSentenceEn: string;

@@ -28,15 +28,30 @@ function storyVersion(overrides?: Partial<Record<string, unknown>>) {
   };
 }
 
+const LEARNED_CORRECTION = {
+  id: "correction-1",
+  storyId: "some-other-story",
+  category: "literal_translation" as const,
+  termEn: null,
+  originalSentenceEn: "The team won in a five-goal thriller.",
+  currentSentenceHu: "gólos drámában nyert",
+  correctedSentenceHu: "izgalmas, gólgazdag meccsen nyert",
+  note: null,
+  createdAt: new Date(),
+};
+
 function buildDeps(overrides?: {
   llm?: FakeLlmClient | NoLlmClient;
   version?: ReturnType<typeof storyVersion>;
+  learnedCorrections?: (typeof LEARNED_CORRECTION)[];
 }): EditorialRewriteDeps & {
   emitted: unknown[];
   updateDraftContentCalls: unknown[];
+  applicationCreateCalls: unknown[];
 } {
   const emitted: unknown[] = [];
   const updateDraftContentCalls: unknown[] = [];
+  const applicationCreateCalls: unknown[] = [];
 
   return {
     storyRepository: { getById: vi.fn(async () => ({ id: "story-1" }) as never) },
@@ -48,7 +63,23 @@ function buildDeps(overrides?: {
       }),
     },
     factRepository: { listByStoryId: vi.fn(async () => []) },
-    editorialCorrectionRepository: { listRecent: vi.fn(async () => []) },
+    editorialCorrectionRepository: {
+      listRecent: vi.fn(async () => overrides?.learnedCorrections ?? []),
+    },
+    editorialCorrectionApplicationRepository: {
+      create: vi.fn(async (input: unknown) => {
+        applicationCreateCalls.push(input);
+        return {
+          id: "application-1",
+          correctionId: "correction-1",
+          storyId: "story-1",
+          stage: "editorial_rewrite" as const,
+          verdict: "applied" as const,
+          evidence: null,
+          detectedAt: new Date(),
+        };
+      }),
+    },
     llm: overrides?.llm ?? new FakeLlmClient(),
     agentRunRepository: { record: vi.fn(async () => undefined) },
     dispatcher: {
@@ -61,6 +92,7 @@ function buildDeps(overrides?: {
     }),
     emitted,
     updateDraftContentCalls,
+    applicationCreateCalls,
   };
 }
 
@@ -185,5 +217,99 @@ describe("handleStoryContentDrafted (Editorial Rewrite Agent)", () => {
     deps.storyVersionRepository.getById = vi.fn(async () => null);
 
     await expect(handleStoryContentDrafted(deps, triggerEvent())).rejects.toThrow("not found");
+  });
+
+  it("records an 'applied' correction-application event when the rewrite drops a flagged literal translation", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: {
+        rewritten_title_hu: "Bombagóllal nyert a Liverpool",
+        rewritten_lead_hu: "A csapat izgalmas, gólgazdag meccsen nyert.",
+        rewritten_body_hu: "Stilizált részletek.",
+      },
+      inputTokens: 10,
+      outputTokens: 10,
+    });
+    llm.queueJson({
+      data: { consistent: true, fact_consistency_score: 0.98, issues: [] },
+      inputTokens: 5,
+      outputTokens: 5,
+    });
+    const deps = buildDeps({
+      llm,
+      version: storyVersion({ bodyHu: "A csapat gólos drámában nyert." }),
+      learnedCorrections: [LEARNED_CORRECTION],
+    });
+
+    await handleStoryContentDrafted(deps, triggerEvent());
+
+    expect(deps.applicationCreateCalls).toEqual([
+      expect.objectContaining({
+        correctionId: "correction-1",
+        storyId: "story-1",
+        stage: "editorial_rewrite",
+        verdict: "applied",
+      }),
+    ]);
+  });
+
+  it("records a 'not_applied' correction-application event when the rewrite keeps the flagged literal translation", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: {
+        rewritten_title_hu: "Bombagóllal nyert a Liverpool",
+        rewritten_lead_hu: "A csapat gólos drámában nyert.",
+        rewritten_body_hu: "Stilizált részletek.",
+      },
+      inputTokens: 10,
+      outputTokens: 10,
+    });
+    llm.queueJson({
+      data: { consistent: true, fact_consistency_score: 0.98, issues: [] },
+      inputTokens: 5,
+      outputTokens: 5,
+    });
+    const deps = buildDeps({
+      llm,
+      version: storyVersion({ bodyHu: "A csapat gólos drámában nyert." }),
+      learnedCorrections: [LEARNED_CORRECTION],
+    });
+
+    await handleStoryContentDrafted(deps, triggerEvent());
+
+    expect(deps.applicationCreateCalls).toEqual([
+      expect.objectContaining({ correctionId: "correction-1", verdict: "not_applied" }),
+    ]);
+  });
+
+  it("never measures correction application when the rewrite is discarded (fact-check failed)", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: {
+        rewritten_title_hu: "Kitalált cím",
+        rewritten_lead_hu: "Kitalált lead.",
+        rewritten_body_hu: "Kitalált törzs.",
+      },
+      inputTokens: 10,
+      outputTokens: 10,
+    });
+    llm.queueJson({
+      data: { consistent: false, fact_consistency_score: 0.2, issues: ["hiba"] },
+      inputTokens: 5,
+      outputTokens: 5,
+    });
+    const deps = buildDeps({ llm, learnedCorrections: [LEARNED_CORRECTION] });
+
+    await handleStoryContentDrafted(deps, triggerEvent());
+
+    expect(deps.applicationCreateCalls).toHaveLength(0);
+  });
+
+  it("never measures correction application for the No-LLM client", async () => {
+    const deps = buildDeps({ llm: new NoLlmClient(), learnedCorrections: [LEARNED_CORRECTION] });
+
+    await handleStoryContentDrafted(deps, triggerEvent());
+
+    expect(deps.applicationCreateCalls).toHaveLength(0);
   });
 });
