@@ -86,6 +86,19 @@ describe("ProviderFallbackLlmClient", () => {
     expect(sink.entries).toHaveLength(0);
   });
 
+  it("attaches the describeError reason to the fallback result", async () => {
+    const client = new ProviderFallbackLlmClient({
+      inner: makeClient("inner", { fails: true }),
+      fallback: makeClient("fallback"),
+      providerName: "cloudflare",
+      logger: silentLogger,
+      describeError: () => "quota_exceeded",
+    });
+    const result = await client.completeText(textRequest);
+    expect(result.isFallback).toBe(true);
+    expect(result.fallbackReason).toBe("quota_exceeded");
+  });
+
   it("falls back for completeJson the same way", async () => {
     const client = new ProviderFallbackLlmClient({
       inner: makeClient("inner", { fails: true }),

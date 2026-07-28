@@ -18,6 +18,16 @@ export interface LlmUsage {
    * becsomagolt kliens fallback-ága esetén is (lásd hungarian-writer/index.ts).
    */
   isFallback?: boolean | undefined;
+  /**
+   * Machine-readable reason the fallback branch fired (e.g. Cloudflare's
+   * "quota_exceeded" for an HTTP 429) — set only alongside `isFallback:
+   * true`, only by `ProviderFallbackLlmClient` (which already computes this
+   * via its `describeError` option for logging; this just also attaches it
+   * to the result so a caller can tell "quota exhausted" apart from any
+   * other failure without re-deriving it). `BudgetGuardedLlmClient` never
+   * sets this — its fallback isn't an error category, it's a proactive cap.
+   */
+  fallbackReason?: string | undefined;
 }
 
 export interface TextCompletionRequest {

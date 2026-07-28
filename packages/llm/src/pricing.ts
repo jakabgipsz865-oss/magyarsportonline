@@ -54,3 +54,20 @@ export function estimateCloudflareCostUsd(
     (inputTokens * pricing.inputUsdPerMTok + outputTokens * pricing.outputUsdPerMTok) / 1_000_000
   );
 }
+
+/**
+ * Cloudflare Workers AI's own list price for Neurons (the compute-unit its
+ * dashboard and free daily allocation — 10,000/day — are denominated in):
+ * $0.011 per 1,000 Neurons (developers.cloudflare.com/workers-ai/platform/pricing).
+ * The chat-completions response never returns a Neuron count directly (only
+ * `prompt_tokens`/`completion_tokens` — see cloudflare-client.ts), so this
+ * back-derives an ESTIMATE from the already-computed dollar cost. Always
+ * label a value produced by this as an estimate, never as a measured
+ * Cloudflare figure — the dashboard (Workers AI → Analytics) is the only
+ * source of truth for actual Neuron consumption.
+ */
+const CLOUDFLARE_USD_PER_NEURON = 0.011 / 1000;
+
+export function estimateNeuronsFromCostUsd(costUsd: number): number {
+  return costUsd / CLOUDFLARE_USD_PER_NEURON;
+}

@@ -16,7 +16,7 @@ on:
       sample_size:
         description: "Hány cikket hasonlítson össze (Pipeline A vs Editorial Rewrite)"
         required: false
-        default: "50"
+        default: "10"
       batch_size:
         description: "Cikk/HTTP-hívás (max 10, a Vercel 60s limit miatt)"
         required: false
@@ -130,9 +130,30 @@ jobs:
           score_a = avg([r["judge"]["scoreA"] for r in judged])
           score_b = avg([r["judge"]["scoreB"] for r in judged])
 
-          total_input_tokens = sum(r["llmUsage"]["inputTokens"] for r in results)
-          total_output_tokens = sum(r["llmUsage"]["outputTokens"] for r in results)
-          total_calls = sum(r["llmUsage"]["calls"] for r in results)
+          def calls_of(kind):
+              return [r["perCallUsage"][kind] for r in results if r["perCallUsage"][kind] is not None]
+
+          def call_stats(kind):
+              calls = calls_of(kind)
+              n_calls = len(calls)
+              fallbacks = [c for c in calls if c["isFallback"]]
+              quota_429 = [c for c in calls if c.get("fallbackReason") == "quota_exceeded"]
+              return {
+                  "n": n_calls,
+                  "input_tokens": sum(c["inputTokens"] for c in calls),
+                  "output_tokens": sum(c["outputTokens"] for c in calls),
+                  "neurons": sum(c["estimatedNeurons"] for c in calls),
+                  "fallback_rate": pct(len(fallbacks), n_calls),
+                  "rate_429": pct(len(quota_429), n_calls),
+              }
+
+          rewrite_stats = call_stats("rewrite")
+          self_check_stats = call_stats("selfCheck")
+          judge_stats = call_stats("judge")
+
+          total_input_tokens = sum(r["totalUsage"]["inputTokens"] for r in results)
+          total_output_tokens = sum(r["totalUsage"]["outputTokens"] for r in results)
+          total_neurons = sum(r["totalUsage"]["estimatedNeurons"] for r in results)
           avg_duration_ms = avg([r["durationMs"] for r in results])
 
           lines = []
@@ -161,13 +182,21 @@ jobs:
           lines.append("- FONTOS: ez önmagában NEM elégséges bizonyíték — lásd a mennyiségi metrikákat is fent és a cím/lead párokat lent.\n")
 
           lines.append("## 4) Erőforrás-fogyasztás és megbízhatóság\n")
-          lines.append(f"- Összes Cloudflare token (input+output), a mintában: **{total_input_tokens + total_output_tokens}** ({total_input_tokens} input / {total_output_tokens} output), {total_calls} hívásból")
+          lines.append(f"- Összes Cloudflare token (input+output), a mintában: **{total_input_tokens + total_output_tokens}** ({total_input_tokens} input / {total_output_tokens} output)")
           lines.append(f"- Átlagos token/cikk: **{(total_input_tokens + total_output_tokens) / n if n else 0:.0f}**")
-          lines.append("- Neuron-fogyasztás: **nem lekérdezhető innen** — a Cloudflare Workers AI chat-completions válasza csak `prompt_tokens`/`completion_tokens` mezőt ad vissza, Neuron-számot nem; ez kizárólag a Cloudflare dashboardon (Workers AI → Analytics) ellenőrizhető fiókszinten.")
+          lines.append(f"- **Becsült összes Neuron-fogyasztás: {total_neurons:.1f}** (Cloudflare listaár alapján számolva: $0.011/1000 Neuron — a Workers AI válasza csak tokent ad vissza, Neuront nem; a pontos, mért érték kizárólag a Cloudflare dashboardon [Workers AI → Analytics] ellenőrizhető)")
+          lines.append(f"- **Becsült Neuron/cikk: {(total_neurons / n if n else 0):.1f}**\n")
+          lines.append("| Hívás típusa | Hívások | Input token | Output token | Becsült Neuron | Fallback arány | Ebből 429 (kvóta) arány |")
+          lines.append("|---|---|---|---|---|---|---|")
+          for label, stats in (("Rewrite", rewrite_stats), ("Self-check", self_check_stats), ("Judge", judge_stats)):
+              lines.append(
+                  f"| {label} | {stats['n']} | {stats['input_tokens']} | {stats['output_tokens']} | "
+                  f"{stats['neurons']:.1f} | {stats['fallback_rate']:.1f}% | {stats['rate_429']:.1f}% |"
+              )
+          lines.append("")
           lines.append(f"- Átlagos feldolgozási idő/cikk: **{avg_duration_ms:.0f} ms**")
-          lines.append(f"- Fallback arány (No-LLM/hiba miatt nem történt átírás): **{pct(len(rejected_fallback), n):.1f}%**")
           lines.append(f"- Feldolgozási hiba arány (a kísérlet szintjén — nem a live pipeline-ban): **{pct(len(errors), attempted):.1f}%**")
-          lines.append("- Külön „timeout” arány: a jelenlegi LLM-kliens réteg (ProviderFallbackLlmClient/BudgetGuardedLlmClient) minden hibát — hálózati hibát, kvótát, timeoutot — ugyanabba a fallback-ágba terel, nincs elkülönített timeout-jelző; egy esetleges timeout emiatt vagy a fenti feldolgozási hiba arányban, vagy a fallback arányban jelenik meg, külön nem bontható.\n")
+          lines.append("- Külön „timeout” arány: a jelenlegi LLM-kliens réteg (ProviderFallbackLlmClient) minden hibát — hálózati hibát, kvótát, timeoutot — ugyanabba a fallback-ágba terel; a fenti táblázat \"429 (kvóta)\" oszlopa csak azt méri, amit a `describeError` kifejezetten HTTP 429-ként azonosít, minden más hibatípus a \"fallback arány\"-ban jelenik meg, külön nem bontható tovább.\n")
 
           verdict = "B (Editorial Rewrite) olvashatóbb" if wins_b > wins_a and score_b > score_a else (
               "A (jelenlegi) olvashatóbb" if wins_a > wins_b and score_a > score_b else "nincs egyértelmű különbség"

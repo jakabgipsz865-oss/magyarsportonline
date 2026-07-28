@@ -52,7 +52,28 @@ describe("runAbComparison", () => {
       scoreB: 9,
       rationaleHu: "Verzió 2 olvasmányosabb.",
     });
-    expect(result.llmUsage).toEqual({ inputTokens: 38, outputTokens: 12, calls: 3 });
+    expect(result.perCallUsage.rewrite).toEqual({
+      inputTokens: 10,
+      outputTokens: 5,
+      estimatedNeurons: 0,
+      isFallback: false,
+      fallbackReason: null,
+    });
+    expect(result.perCallUsage.selfCheck).toEqual({
+      inputTokens: 8,
+      outputTokens: 3,
+      estimatedNeurons: 0,
+      isFallback: false,
+      fallbackReason: null,
+    });
+    expect(result.perCallUsage.judge).toEqual({
+      inputTokens: 20,
+      outputTokens: 4,
+      estimatedNeurons: 0,
+      isFallback: false,
+      fallbackReason: null,
+    });
+    expect(result.totalUsage).toEqual({ inputTokens: 38, outputTokens: 12, estimatedNeurons: 0 });
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
     expect(Array.isArray(result.pipelineA.quality.issues)).toBe(true);
     expect(Array.isArray(result.pipelineB.quality.issues)).toBe(true);
@@ -82,7 +103,7 @@ describe("runAbComparison", () => {
     expect(result.pipelineB.rejectionReason).toEqual(["hallucinated fact"]);
     expect(result.pipelineB.titleHu).toBe(result.pipelineA.titleHu);
     expect(result.judge).toBeNull();
-    expect(result.llmUsage.calls).toBe(2); // no judge call made
+    expect(result.perCallUsage.judge).toBeNull(); // no judge call made
   });
 
   it("reports a fallback rejection when the rewrite call itself came from a fallback", async () => {
@@ -96,6 +117,7 @@ describe("runAbComparison", () => {
       inputTokens: 0,
       outputTokens: 0,
       isFallback: true,
+      fallbackReason: "quota_exceeded",
     });
     llm.queueJson({
       data: { consistent: true, fact_consistency_score: 1, issues: [] },
@@ -107,6 +129,7 @@ describe("runAbComparison", () => {
 
     expect(result.pipelineB.rewriteAccepted).toBe(false);
     expect(result.pipelineB.rejectionKind).toBe("fallback");
+    expect(result.perCallUsage.rewrite.fallbackReason).toBe("quota_exceeded");
     expect(result.judge).toBeNull();
   });
 });

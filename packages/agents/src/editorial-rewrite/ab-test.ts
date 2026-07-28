@@ -2,10 +2,12 @@ import type {
   JsonCompletionRequest,
   JsonCompletionResult,
   LlmClient,
-  TextCompletionRequest,
-  TextCompletionResult,
 } from "@magyarsportonline/llm";
-import { MODEL_TIERS } from "@magyarsportonline/llm";
+import {
+  MODEL_TIERS,
+  estimateCloudflareCostUsd,
+  estimateNeuronsFromCostUsd,
+} from "@magyarsportonline/llm";
 import { z } from "zod";
 import type { WriterFact } from "../hungarian-writer/facts";
 import { selfCheckContent } from "../hungarian-writer/self-check";
@@ -34,22 +36,30 @@ const judgeResponseSchema = z.object({
 
 const JUDGE_SYSTEM_PROMPT = `Magyar sportújság szerkesztője vagy. Két, egymástól függetlenül megfogalmazott verziót kapsz UGYANARRÓL a hírről (azonos tények, más megfogalmazás: "verzió 1" és "verzió 2"). Kizárólag OLVASHATÓSÁG és MAGYAR SPORTÚJSÁGÍRÓI STÍLUS szempontjából értékeld őket, NE a tényeket — mindkettő ugyanazokra a tényekre épül. Adj 0-10 pontot mindkettőre, mondd meg melyik olvasmányosabb ("winner": "1", "2" vagy "tie", ha nincs érdemi különbség), és röviden indokold magyarul.`;
 
+export interface CallUsage {
+  inputTokens: number;
+  outputTokens: number;
+  /** Derived from the real token counts via Cloudflare's published Neuron price — NOT a value the API returns directly. See packages/llm/src/pricing.ts estimateNeuronsFromCostUsd. */
+  estimatedNeurons: number;
+  isFallback: boolean;
+  /** e.g. "quota_exceeded" for an HTTP 429 — see ProviderFallbackLlmClient. Null when the call succeeded or when no describeError was configured. */
+  fallbackReason: string | null;
+}
+
 /**
- * Thin per-comparison usage meter: wraps the real `LlmClient` so
- * `runAbComparison` can report real Cloudflare token consumption without
- * touching `rewriteForStyle`/`selfCheckContent`'s return shapes (those are
- * shared with the production Editorial Rewrite Agent — widening their
- * result types purely to serve this diagnostic tool isn't worth the churn
- * on already-tested, live code). NOT a Neuron counter: Cloudflare Workers
- * AI's chat-completions response only ever includes `prompt_tokens`/
- * `completion_tokens` (see packages/llm/src/cloudflare-client.ts) — Neuron
- * usage is an account-level Cloudflare dashboard metric this app has no API
- * call for, so it cannot be reported here.
+ * Captures exactly the one `completeJson`/`completeText` call it's used
+ * for — `rewriteForStyle` and `selfCheckContent` each make exactly one, so
+ * a fresh instance per call gives a clean per-call-type usage breakdown
+ * (the diagnostic sprint's explicit ask: "rewrite, self-check és judge
+ * fogyasztása külön") instead of one aggregate number.
  */
-class UsageMeteringLlmClient implements LlmClient {
-  inputTokens = 0;
-  outputTokens = 0;
-  calls = 0;
+class CapturingLlmClient implements LlmClient {
+  private lastResult: {
+    inputTokens: number;
+    outputTokens: number;
+    isFallback?: boolean | undefined;
+    fallbackReason?: string | undefined;
+  } | null = null;
 
   constructor(private readonly inner: LlmClient) {}
 
@@ -57,22 +67,29 @@ class UsageMeteringLlmClient implements LlmClient {
     return this.inner.modelLabel;
   }
 
-  async completeText(request: TextCompletionRequest): Promise<TextCompletionResult> {
+  async completeText(request: Parameters<LlmClient["completeText"]>[0]) {
     const result = await this.inner.completeText(request);
-    this.record(result);
+    this.lastResult = result;
     return result;
   }
 
   async completeJson(request: JsonCompletionRequest): Promise<JsonCompletionResult> {
     const result = await this.inner.completeJson(request);
-    this.record(result);
+    this.lastResult = result;
     return result;
   }
 
-  private record(result: { inputTokens: number; outputTokens: number }): void {
-    this.inputTokens += result.inputTokens;
-    this.outputTokens += result.outputTokens;
-    this.calls += 1;
+  toCallUsage(model: string | undefined): CallUsage {
+    const inputTokens = this.lastResult?.inputTokens ?? 0;
+    const outputTokens = this.lastResult?.outputTokens ?? 0;
+    const costUsd = model ? estimateCloudflareCostUsd(model, inputTokens, outputTokens) : 0;
+    return {
+      inputTokens,
+      outputTokens,
+      estimatedNeurons: estimateNeuronsFromCostUsd(costUsd),
+      isFallback: this.lastResult?.isFallback ?? false,
+      fallbackReason: this.lastResult?.fallbackReason ?? null,
+    };
   }
 }
 
@@ -108,13 +125,34 @@ export interface AbTestArticleResult {
     rejectionReason: string[] | null;
   };
   judge: JudgeVerdict | null;
-  /** Real Cloudflare token usage across every LLM call this comparison made (rewrite + self-check + judge, when run). Neuron consumption is NOT included — see UsageMeteringLlmClient's comment. */
-  llmUsage: { inputTokens: number; outputTokens: number; calls: number };
+  /** Per-call-type usage — the rewrite/self-check calls always run; judge only when the rewrite was accepted (see runAbComparison's comment on why). */
+  perCallUsage: {
+    rewrite: CallUsage;
+    selfCheck: CallUsage;
+    judge: CallUsage | null;
+  };
+  /** Sum of rewrite + self-check + judge (when run) — convenience total matching perCallUsage. */
+  totalUsage: { inputTokens: number; outputTokens: number; estimatedNeurons: number };
   durationMs: number;
 }
 
 function fullText(content: AbTestArticleContent): string {
   return `${content.titleHu}\n\n${content.leadHu}\n\n${content.bodyHu}`;
+}
+
+function sumUsage(calls: Array<CallUsage | null>): {
+  inputTokens: number;
+  outputTokens: number;
+  estimatedNeurons: number;
+} {
+  return calls.reduce(
+    (acc, call) => ({
+      inputTokens: acc.inputTokens + (call?.inputTokens ?? 0),
+      outputTokens: acc.outputTokens + (call?.outputTokens ?? 0),
+      estimatedNeurons: acc.estimatedNeurons + (call?.estimatedNeurons ?? 0),
+    }),
+    { inputTokens: 0, outputTokens: 0, estimatedNeurons: 0 },
+  );
 }
 
 /**
@@ -141,7 +179,7 @@ export async function runAbComparison(
   input: AbTestArticleInput,
 ): Promise<AbTestArticleResult> {
   const startedAt = Date.now();
-  const metered = new UsageMeteringLlmClient(llm);
+  const model = llm.modelLabel;
 
   const pipelineA: AbTestArticleContent = {
     titleHu: input.titleHu,
@@ -149,13 +187,19 @@ export async function runAbComparison(
     bodyHu: input.bodyHu,
   };
 
-  const rewritten = await rewriteForStyle(metered, {
+  const rewriteMeter = new CapturingLlmClient(llm);
+  const rewritten = await rewriteForStyle(rewriteMeter, {
     facts: input.facts,
     titleHu: input.titleHu,
     leadHu: input.leadHu,
     bodyHu: input.bodyHu,
   });
-  const check = await selfCheckContent(metered, { facts: input.facts, ...rewritten });
+  const rewriteCallUsage = rewriteMeter.toCallUsage(model);
+
+  const selfCheckMeter = new CapturingLlmClient(llm);
+  const check = await selfCheckContent(selfCheckMeter, { facts: input.facts, ...rewritten });
+  const selfCheckCallUsage = selfCheckMeter.toCallUsage(model);
+
   const rewriteAccepted = check.consistent && !rewritten.isFallback;
   const rejectionKind: RejectionKind = rewriteAccepted
     ? null
@@ -168,6 +212,7 @@ export async function runAbComparison(
     : pipelineA;
 
   let judge: JudgeVerdict | null = null;
+  let judgeCallUsage: CallUsage | null = null;
   // Only worth judging if the two pipelines actually produced different
   // text — a rejected/fallback rewrite means B === A, nothing to compare.
   if (rewriteAccepted) {
@@ -175,7 +220,8 @@ export async function runAbComparison(
     const first = aIsFirst ? pipelineA : pipelineB;
     const second = aIsFirst ? pipelineB : pipelineA;
 
-    const result = await metered.completeJson({
+    const judgeMeter = new CapturingLlmClient(llm);
+    const result = await judgeMeter.completeJson({
       model: MODEL_TIERS.selfCheck,
       system: JUDGE_SYSTEM_PROMPT,
       messages: [
@@ -187,6 +233,7 @@ export async function runAbComparison(
       maxTokens: 512,
       jsonSchema: JUDGE_JSON_SCHEMA,
     });
+    judgeCallUsage = judgeMeter.toCallUsage(model);
     const parsed = judgeResponseSchema.parse(result.data);
 
     const winner: JudgeVerdict["winner"] =
@@ -223,11 +270,12 @@ export async function runAbComparison(
       rejectionReason: rewriteAccepted ? null : check.issues,
     },
     judge,
-    llmUsage: {
-      inputTokens: metered.inputTokens,
-      outputTokens: metered.outputTokens,
-      calls: metered.calls,
+    perCallUsage: {
+      rewrite: rewriteCallUsage,
+      selfCheck: selfCheckCallUsage,
+      judge: judgeCallUsage,
     },
+    totalUsage: sumUsage([rewriteCallUsage, selfCheckCallUsage, judgeCallUsage]),
     durationMs: Date.now() - startedAt,
   };
 }
