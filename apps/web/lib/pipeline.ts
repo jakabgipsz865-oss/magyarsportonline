@@ -1,5 +1,6 @@
 import {
   deduplication,
+  editorialRewrite,
   factVerification,
   hungarianWriter,
   publishGate,
@@ -13,7 +14,12 @@ import {
   createInProcessDispatcher,
   type InProcessDispatcher,
 } from "@magyarsportonline/events";
-import { MODEL_TIERS, NOT_AI_TRANSLATED_NOTICE, NO_LLM_MODEL_LABEL } from "@magyarsportonline/llm";
+import {
+  MODEL_TIERS,
+  NOT_AI_TRANSLATED_NOTICE,
+  NO_LLM_MODEL_LABEL,
+  NoLlmClient,
+} from "@magyarsportonline/llm";
 import { createRepositories, type Repositories } from "./db";
 import { env } from "./env";
 import { getLlmClient } from "./llm";
@@ -105,7 +111,22 @@ export function buildDispatcher(repos: Repositories = createRepositories()): InP
   );
 
   dispatcher.on("story/content.drafted", (event) =>
-    seo.handleStoryContentDrafted(
+    editorialRewrite.handleStoryContentDrafted(
+      {
+        storyRepository: repos.storyRepository,
+        storyVersionRepository: repos.storyVersionRepository,
+        factRepository: repos.factRepository,
+        llm,
+        agentRunRepository: repos.agentRunRepository,
+        dispatcher,
+        logger,
+      },
+      event,
+    ),
+  );
+
+  dispatcher.on("story/editorial.rewritten", (event) =>
+    seo.handleStoryEditorialRewritten(
       {
         storyRepository: repos.storyRepository,
         storyVersionRepository: repos.storyVersionRepository,
@@ -332,4 +353,77 @@ export async function backfillMislabeledAiGenerated(): Promise<{ correctedCount:
   );
 
   return { correctedCount };
+}
+
+/**
+ * Entry point for `/api/internal/editorial-ab-test`: the 50-article A/B
+ * comparison the "MagyarSportOnline editorial style" sprint asked for
+ * (current pipeline output vs. the Editorial Rewrite Agent pass — see
+ * packages/agents/src/editorial-rewrite/ab-test.ts). Read-only — never
+ * writes to the database, only calls the LLM to produce a candidate rewrite
+ * and a blind judge verdict in memory.
+ *
+ * Batched like `reprocessNoLlmStories` (Vercel Hobby's 60s `maxDuration`
+ * can't fit 50 articles' worth of sequential LLM calls in one request) — the
+ * caller (a GitHub Actions workflow, not a human) pages through with
+ * `offset`/`limit` until `nextOffset` is null.
+ */
+export async function runEditorialAbTestBatch(options: { offset: number; limit: number }): Promise<{
+  results: Awaited<ReturnType<typeof editorialRewrite.runAbComparison>>[];
+  errors: Array<{ storyId: string; message: string }>;
+  totalCandidates: number;
+  nextOffset: number | null;
+}> {
+  const repos = createRepositories();
+  const llm = getLlmClient();
+  if (llm instanceof NoLlmClient) {
+    throw new Error(
+      "editorial-ab-test: LLM_PROVIDER=none — nothing to compare without a real provider",
+    );
+  }
+
+  // Only AI-generated versions are meaningful to compare — a No-LLM
+  // passthrough has no "style" of its own to rewrite.
+  const candidates = (await repos.storyVersionRepository.listLatestVersionSummaries()).filter(
+    (summary) => summary.isAiGenerated,
+  );
+  const batch = candidates.slice(options.offset, options.offset + options.limit);
+
+  // Sequential, not Promise.all: each article is already up to three
+  // sequential LLM round-trips, and running several articles' calls
+  // concurrently risks tripping Cloudflare Workers AI rate limits — this
+  // is a diagnostic tool, not the latency-sensitive publish path. Each
+  // article's failure (a schema-validation error, a provider error the
+  // fallback chain didn't fully absorb, an effective per-call timeout) is
+  // caught here so one bad article doesn't lose the rest of the batch —
+  // the LLM client stack itself has no distinct "timeout" signal (see
+  // ab-test.ts's UsageMeteringLlmClient comment), so every such failure is
+  // reported together as a processing error.
+  const results: Awaited<ReturnType<typeof editorialRewrite.runAbComparison>>[] = [];
+  const errors: Array<{ storyId: string; message: string }> = [];
+  for (const summary of batch) {
+    try {
+      const facts = (await repos.factRepository.listByStoryId(summary.storyId)).map(
+        hungarianWriter.toWriterFact,
+      );
+      const result = await editorialRewrite.runAbComparison(llm, {
+        storyId: summary.storyId,
+        facts,
+        titleHu: summary.titleHu,
+        leadHu: summary.leadHu,
+        bodyHu: summary.bodyHu,
+      });
+      results.push(result);
+    } catch (error) {
+      errors.push({
+        storyId: summary.storyId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const nextOffset =
+    options.offset + options.limit < candidates.length ? options.offset + options.limit : null;
+
+  return { results, errors, totalCandidates: candidates.length, nextOffset };
 }

@@ -47,6 +47,13 @@ export const storyVersions = pgTable(
       precision: 4,
       scale: 3,
     }),
+    // Editorial Rewrite Agent (packages/agents/src/editorial-rewrite):
+    // true only when a real LLM rewrite was generated AND passed the
+    // post-rewrite fact-consistency re-check. False both when no rewrite was
+    // attempted (No-LLM provider) and when a rewrite was attempted but
+    // discarded for failing the fact-check — in both cases title_hu/lead_hu/
+    // body_hu remain the Hungarian Writer Agent's original content.
+    editorialRewriteApplied: boolean("editorial_rewrite_applied").notNull().default(false),
     isPublished: boolean("is_published").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

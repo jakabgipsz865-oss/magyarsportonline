@@ -1,7 +1,7 @@
 import { createEventEnvelope } from "@magyarsportonline/events";
 import { createLogger } from "@magyarsportonline/observability";
 import { describe, expect, it, vi } from "vitest";
-import { handleStoryContentDrafted, type SeoDeps } from "./index";
+import { handleStoryEditorialRewritten, type SeoDeps } from "./index";
 
 function story(overrides?: Partial<Record<string, unknown>>) {
   return {
@@ -58,6 +58,7 @@ function buildDeps(overrides?: {
         isAiGenerated: true,
         promptVersion: "hungarian-writer@0.1.0",
         factConsistencyScore: "1.000",
+        editorialRewriteApplied: false,
         isPublished: false,
         qualityIssues: null,
         createdAt: new Date(),
@@ -80,16 +81,16 @@ function buildDeps(overrides?: {
 function triggerEvent() {
   return {
     ...createEventEnvelope({ correlationId: "77777777-7777-4777-8777-777777777777" }),
-    type: "story/content.drafted" as const,
-    payload: { story_id: "story-1", story_version_id: "v1", fact_consistency_score: 0.9 },
+    type: "story/editorial.rewritten" as const,
+    payload: { story_id: "story-1", story_version_id: "v1", editorial_rewrite_applied: false },
   };
 }
 
-describe("handleStoryContentDrafted", () => {
+describe("handleStoryEditorialRewritten", () => {
   it("assigns a slug derived from the latest version's title and emits story/seo.ready", async () => {
     const deps = buildDeps();
 
-    await handleStoryContentDrafted(deps, triggerEvent());
+    await handleStoryEditorialRewritten(deps, triggerEvent());
 
     expect(deps.slugAttempts).toEqual(["liverpool-nagy-gyozelmet-aratott"]);
     expect(deps.emitted).toEqual([
@@ -103,7 +104,7 @@ describe("handleStoryContentDrafted", () => {
   it("retries with a numeric suffix on a slug collision", async () => {
     const deps = buildDeps({ trySetSlugResults: [false, false, true] });
 
-    await handleStoryContentDrafted(deps, triggerEvent());
+    await handleStoryEditorialRewritten(deps, triggerEvent());
 
     expect(deps.slugAttempts).toEqual([
       "liverpool-nagy-gyozelmet-aratott",
@@ -115,7 +116,7 @@ describe("handleStoryContentDrafted", () => {
   it("does not touch the slug when the Story already has one", async () => {
     const deps = buildDeps({ story: story({ slug: "already-set" }) });
 
-    await handleStoryContentDrafted(deps, triggerEvent());
+    await handleStoryEditorialRewritten(deps, triggerEvent());
 
     expect(deps.storyRepository.trySetSlug).not.toHaveBeenCalled();
     expect(deps.emitted).toHaveLength(1);
@@ -125,6 +126,6 @@ describe("handleStoryContentDrafted", () => {
     const deps = buildDeps();
     deps.storyRepository.getById = vi.fn(async () => null);
 
-    await expect(handleStoryContentDrafted(deps, triggerEvent())).rejects.toThrow("not found");
+    await expect(handleStoryEditorialRewritten(deps, triggerEvent())).rejects.toThrow("not found");
   });
 });

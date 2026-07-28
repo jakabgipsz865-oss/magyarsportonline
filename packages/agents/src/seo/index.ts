@@ -22,7 +22,7 @@ export interface SeoDeps {
   logger: Logger;
 }
 
-type Trigger = Extract<SportsNewsEvent, { type: "story/content.drafted" }>;
+type Trigger = Extract<SportsNewsEvent, { type: "story/editorial.rewritten" }>;
 
 /**
  * SEO Agent, MVP scope (docs/architecture/02-agents.md §2.6,
@@ -31,8 +31,13 @@ type Trigger = Extract<SportsNewsEvent, { type: "story/content.drafted" }>;
  * description, tag/category taxonomy assignment, and schema.org JSON-LD
  * generation are Fázis 8 — `story_versions.meta_description`/`.seo_tags`/
  * `.structured_data` stay `null` until then.
+ *
+ * Triggered by `story/editorial.rewritten`, not `story/content.drafted`
+ * directly — the Editorial Rewrite Agent (packages/agents/src/editorial-rewrite)
+ * sits between the Hungarian Writer and this agent so the slug is always
+ * derived from the final (possibly stylistically rewritten) title.
  */
-export async function handleStoryContentDrafted(deps: SeoDeps, event: Trigger): Promise<void> {
+export async function handleStoryEditorialRewritten(deps: SeoDeps, event: Trigger): Promise<void> {
   await withAgentRun(
     {
       agentRunRepository: deps.agentRunRepository,

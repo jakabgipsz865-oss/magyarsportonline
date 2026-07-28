@@ -52,6 +52,7 @@ function version(qualityIssues: unknown[] | null = null) {
     isAiGenerated: true,
     promptVersion: "hungarian-writer@0.1.0",
     factConsistencyScore: "1.000",
+    editorialRewriteApplied: false,
     isPublished: false,
     qualityIssues,
     createdAt: new Date(),
