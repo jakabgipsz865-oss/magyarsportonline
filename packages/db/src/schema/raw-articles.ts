@@ -19,7 +19,12 @@ export const rawArticles = pgTable("raw_articles", {
     .references(() => sources.id),
   sourceUrl: text("source_url").notNull().unique(),
   titleOriginal: text("title_original").notNull(),
+  // Source Fetcher (2026-07-28-i sprint, packages/agents/src/source-ingest/
+  // article-fetcher/): teljes cikk letöltésekor a forrás-specifikus
+  // extractor tölti ki, ha talál ilyet — RSS-only cikkeknél mindig null.
+  subtitleOriginal: text("subtitle_original"),
   bodyOriginal: text("body_original").notNull(),
+  authorOriginal: text("author_original"),
   // RSS media:thumbnail/enclosure image, if the source provided one — frontend
   // hero/thumbnail display (Real Sports Portal UX sprint). Never re-hosted,
   // just the source URL.

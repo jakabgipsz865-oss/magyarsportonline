@@ -1,0 +1,37 @@
+# Egyszeri diagnosztikai futtatás (2026-07-28-i "Source Fetcher" sprint):
+# valódi, aktuális BBC Sport cikken bizonyítja, hogy a bbcSportExtractor
+# ténylegesen működik. A fejlesztői sandbox nem ér el kifelé élő internetet
+# (bbc.co.uk közvetlen letöltése onnan 403-at ad a proxyn), ezért ez a
+# bizonyíték csak itt, egy valódi hálózati hozzáféréssel rendelkező
+# GitHub Actions runneren szerezhető be. Nem ír adatbázisba.
+name: BBC extractor diagnostic (one-off)
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run BBC Sport extractor against a live article
+        run: pnpm --filter @magyarsportonline/agents diagnose:bbc | tee "$GITHUB_STEP_SUMMARY"

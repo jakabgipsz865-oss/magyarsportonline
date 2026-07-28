@@ -5,6 +5,8 @@ import type { AgentRunRecorder } from "../shared/with-agent-run";
 import { withAgentRun } from "../shared/with-agent-run";
 import type { SourceAdapter } from "./types";
 
+export * from "./article-enriching-adapter";
+export * from "./article-fetcher/index";
 export * from "./rss-adapter";
 export * from "./types";
 
@@ -116,7 +118,9 @@ async function ingestOneSource(
       sourceId: source.id,
       sourceUrl: article.sourceUrl,
       titleOriginal: article.titleOriginal,
+      subtitleOriginal: article.subtitleOriginal,
       bodyOriginal: article.bodyOriginal,
+      authorOriginal: article.authorOriginal,
       language: source.language,
       publishedAtSource: article.publishedAtSource,
       imageUrl: article.imageUrl,

@@ -201,13 +201,26 @@ export async function runIngestPipeline(): Promise<
   const repos = createRepositories();
   const dispatcher = buildDispatcher(repos);
 
+  const logger = getLogger();
   return sourceIngest.runSourceIngest({
     sourceRepository: repos.sourceRepository,
     rawArticleRepository: repos.rawArticleRepository,
     agentRunRepository: repos.agentRunRepository,
     dispatcher,
-    adapters: { rss: new sourceIngest.RssSourceAdapter() },
-    logger: getLogger(),
+    // Source Fetcher (2026-07-28-i sprint): az RSS-adaptert becsomagoljuk
+    // egy dekorátorral, ami a rövid contentSnippet helyett a cikkoldalról
+    // letöltött, teljes törzset adja tovább, HA van a domainhez
+    // regisztrált extractor (jelenleg csak BBC Sport) — minden más forrás,
+    // vagy bármilyen letöltési/kinyerési hiba esetén az eredeti RSS
+    // snippetre esik vissza, a pipeline sosem áll le emiatt.
+    adapters: {
+      rss: new sourceIngest.ArticleEnrichingSourceAdapter(
+        new sourceIngest.RssSourceAdapter(),
+        new sourceIngest.ArticleFetcher(undefined, undefined, logger),
+        logger,
+      ),
+    },
+    logger,
     maxNewArticlesPerRun: DEFAULT_MAX_NEW_ARTICLES_PER_RUN,
   });
 }

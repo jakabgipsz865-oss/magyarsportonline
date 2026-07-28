@@ -1,7 +1,11 @@
 export interface NormalizedArticle {
   sourceUrl: string;
   titleOriginal: string;
+  /** Alcím/standfirst, ha a forrás megadja — az RSS-adapter mindig `null`-t ad, a Source Fetcher (article-fetcher/) tölti ki, ha talál ilyet. */
+  subtitleOriginal: string | null;
   bodyOriginal: string;
+  /** Szerző neve, ha a forrás megadja — sok sporthír-oldal (pl. BBC Sport) ezt nem közli, ilyenkor `null`. */
+  authorOriginal: string | null;
   publishedAtSource: Date | null;
   /** RSS media:thumbnail/enclosure image URL, if the feed item provided one. */
   imageUrl: string | null;

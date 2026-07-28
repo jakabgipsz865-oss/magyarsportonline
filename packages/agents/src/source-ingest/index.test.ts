@@ -65,7 +65,9 @@ function buildDeps(overrides?: {
             {
               sourceUrl: "https://example.com/1",
               titleOriginal: "Title",
+              subtitleOriginal: null,
               bodyOriginal: "Body",
+              authorOriginal: null,
               publishedAtSource: null,
               imageUrl: null,
             },
