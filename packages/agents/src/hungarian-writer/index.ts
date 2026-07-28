@@ -1,4 +1,5 @@
 import type {
+  EditorialCorrectionRepository,
   FactRepository,
   StoryRepository,
   StoryVersionRepository,
@@ -19,8 +20,12 @@ import {
 } from "./generation";
 import { assessContentQuality } from "./quality-gate";
 import { selfCheckContent } from "./self-check";
+import type { EditorialCorrection } from "../shared/editorial-corrections";
 import type { AgentRunRecorder } from "../shared/with-agent-run";
 import { withAgentRun } from "../shared/with-agent-run";
+
+/** A modell hány legfrissebb szerkesztői javítást lásson híváskánt — lásd editorial-corrections.ts blokk-limitjeit (10), ennél bőven adunk neki keresési alapanyagot. */
+const LEARNED_CORRECTIONS_LIMIT = 50;
 
 export * from "./facts";
 export * from "./generation";
@@ -42,6 +47,7 @@ export interface HungarianWriterDeps {
   storyRepository: Pick<StoryRepository, "getById">;
   storyVersionRepository: Pick<StoryVersionRepository, "getLatest" | "createNextVersion">;
   factRepository: Pick<FactRepository, "listByStoryId">;
+  editorialCorrectionRepository: Pick<EditorialCorrectionRepository, "listRecent">;
   llm: LlmClient;
   agentRunRepository: AgentRunRecorder;
   dispatcher: Emitter;
@@ -86,8 +92,24 @@ export async function handleStoryFactsVerified(
             bodyHu: previousVersionRow.bodyHu,
           }
         : null;
+      const learnedCorrections: EditorialCorrection[] = await deps.editorialCorrectionRepository
+        .listRecent(LEARNED_CORRECTIONS_LIMIT)
+        .then((rows) =>
+          rows.map((row) => ({
+            category: row.category,
+            termEn: row.termEn,
+            originalSentenceEn: row.originalSentenceEn,
+            currentSentenceHu: row.currentSentenceHu,
+            correctedSentenceHu: row.correctedSentenceHu,
+            note: row.note,
+          })),
+        );
 
-      let generated = await generateStoryVersion(deps.llm, { facts, previousVersion });
+      let generated = await generateStoryVersion(deps.llm, {
+        facts,
+        previousVersion,
+        learnedCorrections,
+      });
       let check = await selfCheckContent(deps.llm, { facts, ...generated });
 
       for (let attempt = 1; attempt < MAX_SELF_CHECK_ATTEMPTS && !check.consistent; attempt++) {
@@ -95,7 +117,11 @@ export async function handleStoryFactsVerified(
           { correlationId: event.correlation_id, storyId: story.id, issues: check.issues },
           "self-check flagged the draft as inconsistent, regenerating",
         );
-        generated = await generateStoryVersion(deps.llm, { facts, previousVersion });
+        generated = await generateStoryVersion(deps.llm, {
+          facts,
+          previousVersion,
+          learnedCorrections,
+        });
         check = await selfCheckContent(deps.llm, { facts, ...generated });
       }
 
@@ -120,6 +146,7 @@ export async function handleStoryFactsVerified(
         generated = await regenerateWithQualityFix(deps.llm, {
           facts,
           previousVersion,
+          learnedCorrections,
           previousAttempt: {
             titleHu: generated.titleHu,
             leadHu: generated.leadHu,

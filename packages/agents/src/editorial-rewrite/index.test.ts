@@ -48,6 +48,7 @@ function buildDeps(overrides?: {
       }),
     },
     factRepository: { listByStoryId: vi.fn(async () => []) },
+    editorialCorrectionRepository: { listRecent: vi.fn(async () => []) },
     llm: overrides?.llm ?? new FakeLlmClient(),
     agentRunRepository: { record: vi.fn(async () => undefined) },
     dispatcher: {

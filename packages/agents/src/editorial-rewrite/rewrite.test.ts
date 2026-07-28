@@ -127,4 +127,102 @@ describe("rewriteForStyle", () => {
 
     expect(llm.jsonRequests[0]?.system).not.toContain("→");
   });
+
+  it("flags a learned forbidden literal translation that appears in the current draft", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: { rewritten_title_hu: "T", rewritten_lead_hu: "L", rewritten_body_hu: "B" },
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+
+    await rewriteForStyle(llm, {
+      facts: [],
+      titleHu: "T",
+      leadHu: "L",
+      bodyHu: "A csapat gólos drámában nyert.",
+      learnedCorrections: [
+        {
+          category: "literal_translation",
+          termEn: null,
+          originalSentenceEn: "The team won in a five-goal thriller.",
+          currentSentenceHu: "gólos drámában nyert",
+          correctedSentenceHu: "izgalmas, gólgazdag meccsen nyert",
+          note: null,
+        },
+      ],
+    });
+
+    expect(llm.jsonRequests[0]?.system).toContain("TILTOTT TÜKÖRFORDÍTÁSOK");
+    expect(llm.jsonRequests[0]?.system).toContain("gólos drámában nyert");
+    expect(llm.jsonRequests[0]?.system).toContain("izgalmas, gólgazdag meccsen nyert");
+  });
+
+  it("adds a learned lexicon entry and a prompt example block for slang/terminology corrections", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: { rewritten_title_hu: "T", rewritten_lead_hu: "L", rewritten_body_hu: "B" },
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+
+    await rewriteForStyle(llm, {
+      facts: [
+        {
+          factType: "quote",
+          detailHu: "",
+          quoteOriginal: "He is a real super-sub for this team.",
+          quoteSpeaker: "Manager",
+        },
+      ],
+      titleHu: "T",
+      leadHu: "L",
+      bodyHu: "B",
+      learnedCorrections: [
+        {
+          category: "terminology",
+          termEn: "super-sub",
+          originalSentenceEn: "He is a real super-sub for this team.",
+          currentSentenceHu: "szuper csere",
+          correctedSentenceHu: "ütőkártya a cserepadról",
+          note: "bevált csereember, aki rendszeresen eldönti a meccseket",
+        },
+      ],
+    });
+
+    const system = llm.jsonRequests[0]?.system ?? "";
+    expect(system).toContain("super-sub");
+    expect(system).toContain("ütőkártya a cserepadról");
+    expect(system).toContain("PROMPT PÉLDATÁR");
+  });
+
+  it("adds a recommended phrasing block for style/grammar corrections", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: { rewritten_title_hu: "T", rewritten_lead_hu: "L", rewritten_body_hu: "B" },
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+
+    await rewriteForStyle(llm, {
+      facts: [],
+      titleHu: "T",
+      leadHu: "L",
+      bodyHu: "B",
+      learnedCorrections: [
+        {
+          category: "style",
+          termEn: null,
+          originalSentenceEn: "The manager praised the team's effort.",
+          currentSentenceHu: "A menedzser dicsérte a csapat erőfeszítését.",
+          correctedSentenceHu: "A vezetőedző elismerően nyilatkozott a csapat teljesítményéről.",
+          note: null,
+        },
+      ],
+    });
+
+    const system = llm.jsonRequests[0]?.system ?? "";
+    expect(system).toContain("AJÁNLOTT MAGYAR SPORTÚJSÁGÍRÓI MEGFOGALMAZÁSOK");
+    expect(system).toContain("A vezetőedző elismerően nyilatkozott a csapat teljesítményéről.");
+  });
 });

@@ -1,8 +1,18 @@
 import type { Metadata } from "next";
-import type { OriginalSourceContent } from "@magyarsportonline/db";
-import type { footballLexicon } from "@magyarsportonline/agents";
+import type { EditorialCorrectionRow, OriginalSourceContent } from "@magyarsportonline/db";
+import { editorialCorrections, type footballLexicon } from "@magyarsportonline/agents";
+import { revalidatePath } from "next/cache";
 import type { ReactNode } from "react";
 import { createRepositories } from "../../../lib/db";
+import {
+  isEditorialCorrectionCategory,
+  submitEditorialCorrection,
+} from "../../../lib/editorial-corrections";
+
+const CORRECTION_CATEGORY_LABELS_HU = editorialCorrections.CORRECTION_CATEGORY_LABELS_HU;
+const EDITORIAL_CORRECTION_CATEGORIES = Object.keys(
+  CORRECTION_CATEGORY_LABELS_HU,
+) as editorialCorrections.CorrectionCategory[];
 
 // Sosem indexelhető — belső, ADMIN_SECRET-tel védett review felület
 // (docs/editorial-style-guide.md, 2026-07-28 sprint). Lásd még
@@ -69,20 +79,6 @@ function splitSentences(text: string): string[] {
     .split(/(?<=[.!?])\s+/)
     .map((sentence) => sentence.trim())
     .filter((sentence) => sentence.length > 0);
-}
-
-function renderChangedSentences(textA: string, textB: string): ReactNode {
-  const normalizedA = new Set(splitSentences(textA).map((sentence) => sentence.toLowerCase()));
-  return splitSentences(textB).map((sentence, index) => {
-    const changed = !normalizedA.has(sentence.toLowerCase());
-    return changed ? (
-      <mark key={index} style={{ background: "#fff3a3", padding: "0 2px" }}>
-        {sentence}{" "}
-      </mark>
-    ) : (
-      <span key={index}>{sentence} </span>
-    );
-  });
 }
 
 function QualityBadges({
@@ -176,6 +172,148 @@ function OriginalSources({ sources }: { sources: OriginalSourceContent[] }): Rea
   );
 }
 
+/**
+ * "Tanítható szerkesztői felület" (2026-07-28 sprint) — a szerkesztő itt
+ * fogad el egy mondatszintű javítást. A `lib/editorial-corrections.ts`
+ * függvénye validál és ment; ez a wrapper csak a FormData-t alakítja
+ * struktúrált inputtá és frissíti az oldalt (ugyanaz a minta, mint
+ * app/admin/review/page.tsx approveAction/rejectAction párja).
+ */
+async function submitCorrectionAction(formData: FormData): Promise<void> {
+  "use server";
+  const storyId = formData.get("storyId");
+  const currentSentenceHu = formData.get("currentSentenceHu");
+  const originalSentenceEn = formData.get("originalSentenceEn");
+  const correctedSentenceHu = formData.get("correctedSentenceHu");
+  const category = formData.get("category");
+  const termEn = formData.get("termEn");
+  const note = formData.get("note");
+
+  if (
+    typeof storyId === "string" &&
+    typeof currentSentenceHu === "string" &&
+    typeof originalSentenceEn === "string" &&
+    typeof correctedSentenceHu === "string" &&
+    typeof category === "string" &&
+    isEditorialCorrectionCategory(category) &&
+    storyId.length > 0 &&
+    currentSentenceHu.length > 0 &&
+    originalSentenceEn.trim().length > 0 &&
+    correctedSentenceHu.trim().length > 0
+  ) {
+    await submitEditorialCorrection({
+      storyId,
+      category,
+      termEn: typeof termEn === "string" && termEn.trim().length > 0 ? termEn.trim() : null,
+      originalSentenceEn: originalSentenceEn.trim(),
+      currentSentenceHu,
+      correctedSentenceHu: correctedSentenceHu.trim(),
+      note: typeof note === "string" && note.trim().length > 0 ? note.trim() : null,
+    });
+  }
+  revalidatePath("/internal/editorial-ab-review");
+}
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  fontSize: "0.85em",
+  padding: "4px 6px",
+  marginTop: 2,
+  boxSizing: "border-box",
+};
+
+function TeachableSentence({
+  storyId,
+  sentenceHu,
+}: {
+  storyId: string;
+  sentenceHu: string;
+}): ReactNode {
+  return (
+    <details style={{ marginBottom: 2 }}>
+      <summary style={{ cursor: "pointer", fontSize: "0.72em", color: "#0645ad" }}>
+        ✎ Tanítás erre a mondatra
+      </summary>
+      <form
+        action={submitCorrectionAction}
+        style={{
+          display: "grid",
+          gap: 6,
+          marginTop: 6,
+          marginBottom: 10,
+          padding: 8,
+          background: "#fffbe6",
+          borderRadius: 6,
+        }}
+      >
+        <input type="hidden" name="storyId" value={storyId} />
+        <input type="hidden" name="currentSentenceHu" value={sentenceHu} />
+        <label style={{ fontSize: "0.72em", color: "#666" }}>
+          Eredeti angol mondat (illeszd be az eredeti forrásból):
+          <textarea name="originalSentenceEn" rows={2} required style={inputStyle} />
+        </label>
+        <label style={{ fontSize: "0.72em", color: "#666" }}>
+          Javított magyar megfogalmazás:
+          <textarea
+            name="correctedSentenceHu"
+            rows={2}
+            required
+            defaultValue={sentenceHu}
+            style={inputStyle}
+          />
+        </label>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <label style={{ fontSize: "0.72em", color: "#666", flex: "1 1 160px" }}>
+            Hiba kategóriája:
+            <select name="category" required defaultValue="terminology" style={inputStyle}>
+              {EDITORIAL_CORRECTION_CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>
+                  {CORRECTION_CATEGORY_LABELS_HU[cat]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label style={{ fontSize: "0.72em", color: "#666", flex: "1 1 160px" }}>
+            Angol kifejezés (opcionális, szleng/terminológia esetén):
+            <input type="text" name="termEn" style={inputStyle} />
+          </label>
+        </div>
+        <label style={{ fontSize: "0.72em", color: "#666" }}>
+          Megjegyzés (opcionális):
+          <input type="text" name="note" style={inputStyle} />
+        </label>
+        <button type="submit" style={{ justifySelf: "start", fontSize: "0.8em" }}>
+          ✅ Javítás elfogadása és tanítása
+        </button>
+      </form>
+    </details>
+  );
+}
+
+function CorrectionHistory({ corrections }: { corrections: EditorialCorrectionRow[] }): ReactNode {
+  if (corrections.length === 0) {
+    return null;
+  }
+  return (
+    <details style={{ marginTop: 10 }}>
+      <summary style={{ cursor: "pointer", fontSize: "0.8em", color: "#0645ad" }}>
+        Eddig elfogadott javítások ehhez a cikkhez ({corrections.length})
+      </summary>
+      <ul style={{ fontSize: "0.82em", margin: "6px 0" }}>
+        {corrections.map((correction) => (
+          <li key={correction.id} style={{ marginBottom: 4 }}>
+            <span style={{ color: "#999" }}>
+              [{CORRECTION_CATEGORY_LABELS_HU[correction.category]}]
+            </span>{" "}
+            &quot;{correction.currentSentenceHu}&quot; → &quot;{correction.correctedSentenceHu}
+            &quot;
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 const STATUS_LABELS: Record<string, { label: string; bg: string; color: string }> = {
   accepted: { label: "Elfogadva — valódi stílusjavítás", bg: "#e6f4ea", color: "#1e7e34" },
   fact_check_failed: {
@@ -187,8 +325,17 @@ const STATUS_LABELS: Record<string, { label: string; bg: string; color: string }
 };
 
 export default async function EditorialAbReviewPage(): Promise<ReactNode> {
-  const { editorialAbSnapshotRepository } = createRepositories();
-  const rows = await editorialAbSnapshotRepository.listAll();
+  const { editorialAbSnapshotRepository, editorialCorrectionRepository } = createRepositories();
+  const [rows, allCorrections] = await Promise.all([
+    editorialAbSnapshotRepository.listAll(),
+    editorialCorrectionRepository.listAll(),
+  ]);
+  const correctionsByStoryId = new Map<string, EditorialCorrectionRow[]>();
+  for (const correction of allCorrections) {
+    const existing = correctionsByStoryId.get(correction.storyId) ?? [];
+    existing.push(correction);
+    correctionsByStoryId.set(correction.storyId, existing);
+  }
 
   return (
     <main
@@ -288,14 +435,39 @@ export default async function EditorialAbReviewPage(): Promise<ReactNode> {
                   }}
                 >
                   B · Editorial Rewrite + lexikon (a sárgával kiemelt mondatok változtak A-hoz
-                  képest)
+                  képest — mondatonként itt taníthatod is a rendszert)
                 </p>
                 <h3 style={{ margin: "4px 0" }}>{row.titleB}</h3>
+                <TeachableSentence storyId={row.storyId} sentenceHu={row.titleB} />
                 <p style={{ color: "#555" }}>{row.leadB}</p>
-                <p style={{ fontSize: "0.92em" }}>{renderChangedSentences(row.bodyA, row.bodyB)}</p>
+                <TeachableSentence storyId={row.storyId} sentenceHu={row.leadB} />
+                <div style={{ fontSize: "0.92em" }}>
+                  {(() => {
+                    const normalizedA = new Set(
+                      splitSentences(row.bodyA).map((sentence) => sentence.toLowerCase()),
+                    );
+                    return splitSentences(row.bodyB).map((sentence, index) => {
+                      const changed = !normalizedA.has(sentence.toLowerCase());
+                      return (
+                        <div key={index} style={{ marginBottom: 4 }}>
+                          {changed ? (
+                            <mark style={{ background: "#fff3a3", padding: "0 2px" }}>
+                              {sentence}
+                            </mark>
+                          ) : (
+                            <span>{sentence}</span>
+                          )}
+                          <TeachableSentence storyId={row.storyId} sentenceHu={sentence} />
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
                 <QualityBadges quality={qualityB} label="B" />
               </div>
             </div>
+
+            <CorrectionHistory corrections={correctionsByStoryId.get(row.storyId) ?? []} />
 
             {rejectionReason && rejectionReason.length > 0 && (
               <div style={{ marginTop: 10, background: "#fdecea", borderRadius: 6, padding: 10 }}>
