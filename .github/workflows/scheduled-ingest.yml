@@ -6,9 +6,17 @@
 # gyakoriságot, Vercel-csomagtól függetlenül.
 #
 # Előfeltétel (repo Settings → Secrets and variables → Actions):
-#   PRODUCTION_URL  — pl. https://magyarsportonline-web.vercel.app
-#   CRON_SECRET     — ugyanaz az érték, mint a Vercel env-ben
-# Amíg ezek nincsenek beállítva, a workflow csendben (sikeresen) kilép.
+#   PRODUCTION_URL  — pl. https://magyarsportonline-web.vercel.app (opcionális,
+#                      hiányában ugyanaz az alapértelmezett Vercel URL, mint
+#                      a production-smoke.yml és editorial-ab-test.yml-ben)
+#   CRON_SECRET     — ugyanaz az érték, mint a Vercel env-ben (kötelező)
+# Amíg a CRON_SECRET nincs beállítva, a workflow csendben (sikeresen) kilép.
+#
+# ŐSZINTE MEGJEGYZÉS (2026-07-28): ez a workflow korábban PRODUCTION_URL
+# hiányában is csendben kilépett, HOLOTT lett volna alapértelmezett URL —
+# emiatt a "30 percenkénti" ingest a gyakorlatban sosem futott le ténylegesen
+# éles hívásként, amíg ezt a hibát ki nem javítottuk (lásd a másik két
+# workflow már helyesen alkalmazott `${PRODUCTION_URL:-...}` mintáját).
 name: Scheduled ingest
 
 on:
@@ -28,13 +36,16 @@ jobs:
           PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          if [ -z "$PRODUCTION_URL" ] || [ -z "$CRON_SECRET" ]; then
-            echo "PRODUCTION_URL / CRON_SECRET secrets not configured — skipping."
+          set -u
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET repo secret not configured — skipping."
             exit 0
           fi
+          BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
+          echo "Target: $BASE"
           http_code=$(curl -sS -o /tmp/body.json -w '%{http_code}' \
             --max-time 300 --retry 2 --retry-delay 5 \
-            -X POST "$PRODUCTION_URL/api/internal/cron/dispatch-ingest" \
+            -X POST "$BASE/api/internal/cron/dispatch-ingest" \
             -H "Authorization: Bearer $CRON_SECRET")
           echo "HTTP $http_code"
           cat /tmp/body.json
