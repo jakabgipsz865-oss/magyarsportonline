@@ -1,0 +1,116 @@
+# Hitelesség-magyarázat "bizonyító riport" (2026-07-28) — a felhasználó
+# explicit kérésére: mutassa meg, Storynként, valódi (nem demo-) production
+# adatokon, hogy a `/api/internal/credibility-proof-report` végpont hány
+# forrásból építette fel az adott Storyt, melyik állítás melyik forrásból
+# származik, volt-e ellentmondás és hogyan lett feloldva (a rendszer
+# sosem választ oldalt — mindkét állítást megjeleníti "nem megerősített"
+# státusszal), a végső hitelességi pont, és pontosan mely források
+# növelték/csökkentették azt.
+#
+# Egyetlen HTTP hívás (a végpont a write-oldali táblákból, egy request alatt
+# olvas — nincs szükség kötegelésre, mint az editorial-ab-test.yml-nél,
+# mert itt nincs LLM-hívás, csak DB lekérdezés).
+name: Credibility proof report
+
+on:
+  workflow_dispatch:
+    inputs:
+      scan_limit:
+        description: "Hány legutóbb frissített Storyt vizsgáljon (1-300)"
+        required: false
+        default: "100"
+
+permissions: {}
+
+jobs:
+  proof-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Fetch proof report
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SCAN_LIMIT: ${{ inputs.scan_limit }}
+        run: |
+          set -u
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET repo secret hiányzik — nincs mit futtatni." >&2
+            exit 1
+          fi
+          BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
+          echo "Target: $BASE"
+
+          code=$(curl -sS -o report.json -w '%{http_code}' --max-time 60 \
+            "$BASE/api/internal/credibility-proof-report?scanLimit=$SCAN_LIMIT" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          echo "HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "A riport-végpont hibát adott vissza:" >&2
+            cat report.json >&2
+            exit 1
+          fi
+          cat report.json
+
+      - name: Summarize report
+        run: |
+          python3 << 'PYEOF'
+          import json
+
+          with open("report.json") as f:
+              data = json.load(f)
+
+          lines = []
+          lines.append("# Hitelesség-magyarázat bizonyító riport\n")
+          lines.append(f"- Generálva: {data['generatedAt']}")
+          lines.append(f"- Vizsgált Story (legutóbb frissítettek): **{data['storiesScanned']}**")
+          lines.append(f"- Ebből 2+ (valódi, aktív) forrásból épült Story: **{data['dualOrMoreSourceStoriesFound']}**")
+          lines.append(f"- Egyetlen forrásból épült, kihagyva: {data['singleSourceStoriesSkipped']}\n")
+
+          stories = data["stories"]
+          target_met = len(stories) >= 5
+          lines.append(
+              f"## Cél: legalább 5 valódi, két külön médiumból épült Story — {'✅ TELJESÜLT' if target_met else '❌ NEM TELJESÜLT'} ({len(stories)}/5)\n"
+          )
+
+          for i, s in enumerate(stories, start=1):
+              lines.append(f"### {i}. {s['title']}")
+              if s["slug"]:
+                  lines.append(f"- Slug: `{s['slug']}`")
+              lines.append(f"- Hány forrásból épült fel: **{s['sourceCount']}** ({', '.join(s['sourceNames'])})")
+              lines.append("- Állítások forrásonként:")
+              for claim in s["claims"]:
+                  flag = " ⚠ ellentmondó" if claim["isContradicted"] else ""
+                  lines.append(
+                      f"  - [{claim['sourceName']}] {claim['factTypeLabelHu']}: {claim['detailHu']}{flag}"
+                  )
+              lines.append(f"- Volt-e ellentmondás: **{'igen' if s['hasContradiction'] else 'nem'}**")
+              if s["contradictions"]:
+                  for c in s["contradictions"]:
+                      lines.append(f"  - Ellentmondás ({c['factTypeLabelHu']}):")
+                      for claim in c["claims"]:
+                          lines.append(f"    - {claim['sourceName']} szerint: {claim['detailHu']}")
+                      lines.append(f"    - Jelenlegi állapot: {c['statusHu']}")
+              lines.append(f"- Hogyan oldotta fel: {s['resolutionHu']}")
+              lines.append(f"- Végső hitelességi pont: **{s['finalScore']}/100** ({s['labelHu']}, band: {s['band']})")
+              lines.append(f"- Miért kapta ezt a pontot: {s['justificationHu']}")
+              lines.append("- Mely tényezők növelték/csökkentették a pontot:")
+              for entry in s["scoreBreakdown"]:
+                  sign = "+" if entry["points"] >= 0 else ""
+                  lines.append(f"  - {sign}{entry['points']} — {entry['labelHu']}")
+              lines.append("")
+
+          report = "\n".join(lines)
+          print(report)
+          with open("report.md", "w") as f:
+              f.write(report)
+          PYEOF
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload full report
+        uses: actions/upload-artifact@v4
+        with:
+          name: credibility-proof-report
+          path: |
+            report.json
+            report.md
