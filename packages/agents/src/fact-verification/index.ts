@@ -21,6 +21,7 @@ import { classifyRisk } from "./risk-classifier";
 export * from "./claim-merge";
 export * from "./confidence-score";
 export * from "./contradiction-check";
+export * from "./credibility-explanation";
 export * from "./credibility-score";
 export * from "./extraction";
 export * from "./recompute-credibility";
@@ -50,7 +51,11 @@ export interface FactVerificationDeps {
   sourceRepository: Pick<SourceRepository, "getById">;
   factRepository: Pick<
     FactRepository,
-    "insertMany" | "markContradicted" | "bumpCorroboration" | "listByStoryId"
+    | "insertMany"
+    | "markContradicted"
+    | "bumpCorroboration"
+    | "listByStoryId"
+    | "listByStoryIdWithSourceName"
   >;
   storySourceRepository: Pick<StorySourceRepository, "sourcesWithMetaByStoryId">;
   storyCredibilityHistoryRepository: Pick<StoryCredibilityHistoryRepository, "insert">;

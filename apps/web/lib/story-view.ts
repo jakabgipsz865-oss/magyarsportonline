@@ -24,6 +24,32 @@ const credibilityHistoryEntrySchema = z.object({
   recordedAt: z.string(),
 });
 
+// Hitelesség-magyarázat (2026-07-28-i bővítés) — forrásonkénti bontás,
+// ellentmondás-részletezés, forrásra hivatkozó pontszám-indoklás. Mind
+// `.optional().default([])`, mert egy korábban projektált read-model sor
+// (a bővítés előtti) még nem tartalmazza ezeket — a publikus oldal ekkor
+// egyszerűen üres listaként kezeli, nem hibaként.
+const sourceBreakdownItemSchema = z.object({
+  sourceId: z.string(),
+  name: z.string(),
+  category: z.string().nullable(),
+  badgeEmoji: z.string(),
+  reliabilityDisplayScore: z.number(),
+  factCount: z.number(),
+  factCountLabelHu: z.string(),
+});
+
+const contradictionClaimSchema = z.object({ sourceName: z.string(), detailHu: z.string() });
+
+const contradictionDetailSchema = z.object({
+  factType: z.string(),
+  factTypeLabelHu: z.string(),
+  claims: z.array(contradictionClaimSchema),
+  statusHu: z.string(),
+});
+
+const scoreBreakdownEntrySchema = z.object({ labelHu: z.string(), points: z.number() });
+
 const credibilitySummarySchema = z.object({
   score: z.number(),
   band: z.string().nullable(),
@@ -33,6 +59,9 @@ const credibilitySummarySchema = z.object({
   corroboratingSourceCount: z.number().nullable(),
   updatedAt: z.string().nullable(),
   history: z.array(credibilityHistoryEntrySchema),
+  sourceBreakdown: z.array(sourceBreakdownItemSchema).optional().default([]),
+  contradictions: z.array(contradictionDetailSchema).optional().default([]),
+  scoreBreakdown: z.array(scoreBreakdownEntrySchema).optional().default([]),
 });
 
 export interface CredibilityView {
@@ -44,6 +73,22 @@ export interface CredibilityView {
   corroboratingSourceCount: number | null;
   updatedAt: string | null;
   history: Array<{ score: number; band: string; labelHu: string; recordedAt: string }>;
+  sourceBreakdown: Array<{
+    sourceId: string;
+    name: string;
+    category: string | null;
+    badgeEmoji: string;
+    reliabilityDisplayScore: number;
+    factCount: number;
+    factCountLabelHu: string;
+  }>;
+  contradictions: Array<{
+    factType: string;
+    factTypeLabelHu: string;
+    claims: Array<{ sourceName: string; detailHu: string }>;
+    statusHu: string;
+  }>;
+  scoreBreakdown: Array<{ labelHu: string; points: number }>;
 }
 
 function parseCredibility(value: unknown): CredibilityView | null {

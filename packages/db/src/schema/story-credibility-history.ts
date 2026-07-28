@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { stories } from "./stories";
 
 /**
@@ -23,5 +23,17 @@ export const storyCredibilityHistory = pgTable("story_credibility_history", {
   corroboratingSourceCount: integer("corroborating_source_count").notNull(),
   /** "auto" (Fact Verification Agent / admin újraszámolás) vagy "manual_override" (admin közvetlen felülbírálás). */
   source: text("source").notNull().default("auto"),
+  /**
+   * A hitelesség-magyarázat PILLANATKÉPE (2026-07-28-i bővítés):
+   * { sourceBreakdown, contradictions, scoreBreakdown } — pontosan azokkal
+   * az adatokkal, amikkel ez a pontszám ténylegesen kiszámolódott.
+   * SZÁNDÉKOSAN nem a publikálás pillanatában újraszámolt, "élő" adat —
+   * enélkül egy Story első verziójának publikálásakor a `stories.version_count`
+   * már eggyel magasabb lenne, mint amivel a pontszám ténylegesen készült
+   * (a "korábbi Story-frissítések" bónusz tévesen bekapcsolna), és a
+   * megjelenített indoklás összege nem egyezne a ténylegesen mutatott
+   * pontszámmal. `null`, ha egy régebbi sor még e bővítés előtt készült.
+   */
+  explanation: jsonb("explanation"),
   recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
 });

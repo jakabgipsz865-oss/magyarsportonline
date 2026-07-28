@@ -24,6 +24,12 @@ export interface ReadModelProjectorDeps {
 
 type Trigger = Extract<SportsNewsEvent, { type: "story/published" }>;
 
+interface CredibilityExplanationSnapshot {
+  sourceBreakdown?: unknown[];
+  contradictions?: unknown[];
+  scoreBreakdown?: unknown[];
+}
+
 /**
  * CQRS read-model projector (docs/architecture/01-data-model.md §1.5.2,
  * 09-architecture-review.md §5) — deliberately NOT an "agent" in the
@@ -67,7 +73,24 @@ export async function handleStoryPublished(
   // Hitelességi mutató v1 (2026-07-28) — a `stories.credibility*` mezők a
   // legutolsó számítást tükrözik, a `story_credibility_history` a teljes
   // "hitelességi változások története" nézetet adja a publikus oldalnak.
+  //
+  // Hitelesség-magyarázat (2026-07-28-i bővítés): a legutolsó history-sor
+  // `explanation` mezőjéből olvassuk vissza a PILLANATKÉPET (sourceBreakdown/
+  // contradictions/scoreBreakdown) — SZÁNDÉKOSAN nem számoljuk újra
+  // publikáláskor. Ha itt élőben újraszámolnánk a jelenlegi
+  // állítás-/forrás-adatokból, egy Story ELSŐ verziójának publikálásakor a
+  // `stories.version_count` már eggyel magasabb lenne, mint amivel a
+  // pontszám ténylegesen készült (a "korábbi Story-frissítések" bónusz
+  // tévesen bekapcsolna) — a megjelenített indoklás összege ekkor nem
+  // egyezne a ténylegesen mutatott pontszámmal. A history sor a
+  // Fact Verification Agent (vagy admin "Újraszámolás") futásakor rögzíti
+  // ezt a pillanatképet, lásd recompute-credibility.ts.
   const credibilityHistory = await deps.storyCredibilityHistoryRepository.listByStoryId(story.id);
+  const latestExplanation = credibilityHistory.at(-1)?.explanation as
+    | CredibilityExplanationSnapshot
+    | null
+    | undefined;
+
   const credibilitySummary =
     story.credibilityScore === null
       ? null
@@ -85,6 +108,9 @@ export async function handleStoryPublished(
             labelHu: entry.labelHu,
             recordedAt: entry.recordedAt.toISOString(),
           })),
+          sourceBreakdown: latestExplanation?.sourceBreakdown ?? [],
+          contradictions: latestExplanation?.contradictions ?? [],
+          scoreBreakdown: latestExplanation?.scoreBreakdown ?? [],
         };
 
   await deps.storyReadModelRepository.upsert({

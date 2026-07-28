@@ -103,6 +103,7 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
   const primaryEntity = primaryEntityMatch
     ? (entities.find((entity) => entity.id === primaryEntityMatch.entityId) ?? null)
     : null;
+  const sourceUrlByName = new Map(story.sources.map((source) => [source.name, source.url]));
 
   return (
     <main>
@@ -154,12 +155,59 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
 
       {story.credibility && (
         <section className="story-section story-credibility">
-          <h2>Hitelesség</h2>
+          <h2>Hitelesség: {story.credibility.score}/100</h2>
           <p className="story-credibility__band">
-            <strong>{story.credibility.labelHu ?? "Nincs értékelve"}</strong> (
-            {story.credibility.score}/100)
+            <strong>{story.credibility.labelHu ?? "Nincs értékelve"}</strong>
           </p>
           {story.credibility.justificationHu ? <p>{story.credibility.justificationHu}</p> : null}
+
+          {story.credibility.sourceBreakdown.length > 0 && (
+            <div className="story-credibility__source-breakdown">
+              <h3>Források</h3>
+              <ul>
+                {story.credibility.sourceBreakdown.map((item) => {
+                  const url = sourceUrlByName.get(item.name);
+                  return (
+                    <li key={item.sourceId}>
+                      <span className="story-credibility__source-name">
+                        {item.badgeEmoji}{" "}
+                        {url ? (
+                          <a href={url} target="_blank" rel="noreferrer">
+                            {item.name}
+                          </a>
+                        ) : (
+                          item.name
+                        )}
+                      </span>
+                      <br />
+                      Megbízhatóság: {item.reliabilityDisplayScore}
+                      <br />
+                      {item.factCountLabelHu}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {story.credibility.contradictions.map((contradiction) => (
+            <div className="story-credibility__contradiction" key={contradiction.factType}>
+              <p>
+                <strong>⚠ Ellentmondás — {contradiction.factTypeLabelHu}:</strong>
+              </p>
+              <ul>
+                {contradiction.claims.map((claim) => (
+                  <li key={claim.sourceName}>
+                    {claim.sourceName} szerint: {claim.detailHu}
+                  </li>
+                ))}
+              </ul>
+              <p>
+                <strong>Jelenlegi állapot:</strong> {contradiction.statusHu}
+              </p>
+            </div>
+          ))}
+
           <ul className="story-credibility__meta">
             <li>
               {story.credibility.corroboratingSourceCount ?? 0} megerősítő forrás a legjobban
@@ -175,6 +223,20 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
               </li>
             ) : null}
           </ul>
+
+          {story.credibility.scoreBreakdown.length > 0 && (
+            <details className="story-credibility__score-breakdown">
+              <summary>Miért ennyi a pontszám?</summary>
+              <ul>
+                {story.credibility.scoreBreakdown.map((entry, index) => (
+                  <li key={`${entry.labelHu}-${index}`}>
+                    {entry.points > 0 ? `+${entry.points}` : entry.points} — {entry.labelHu}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+
           {story.credibility.history.length > 1 && (
             <details className="story-credibility__history">
               <summary>Hitelességi változások története</summary>

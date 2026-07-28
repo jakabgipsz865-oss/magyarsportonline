@@ -83,6 +83,26 @@ function buildDeps(overrides?: {
           corroboratingSourceCount: 1,
           source: "auto",
           recordedAt: new Date("2026-07-27T20:10:00.000Z"),
+          explanation: {
+            sourceBreakdown: [
+              {
+                sourceId: "source-1",
+                name: "BBC Sport - Football",
+                category: null,
+                badgeEmoji: "🔵",
+                reliabilityDisplayScore: 70,
+                factCount: 1,
+                factCountLabelHu: "1 állítás",
+              },
+            ],
+            contradictions: [],
+            scoreBreakdown: [
+              {
+                labelHu: "Egyetlen forrásból származik, még nincs független megerősítés",
+                points: 5,
+              },
+            ],
+          },
         },
       ]),
     },
@@ -132,6 +152,25 @@ describe("handleStoryPublished", () => {
         ],
       }),
     ]);
+  });
+
+  it("includes a source breakdown and score breakdown in the projected credibilitySummary", async () => {
+    const deps = buildDeps();
+
+    await handleStoryPublished(deps, publishedEvent());
+
+    const [row] = deps.upserts as Array<{
+      credibilitySummary: {
+        sourceBreakdown: Array<{ name: string; factCount: number }>;
+        contradictions: unknown[];
+        scoreBreakdown: Array<{ labelHu: string; points: number }>;
+      };
+    }>;
+    expect(row?.credibilitySummary.sourceBreakdown).toEqual([
+      expect.objectContaining({ name: "BBC Sport - Football", factCount: 1 }),
+    ]);
+    expect(row?.credibilitySummary.contradictions).toEqual([]);
+    expect(row?.credibilitySummary.scoreBreakdown.length).toBeGreaterThan(0);
   });
 
   it("throws when the Story has no slug", async () => {
