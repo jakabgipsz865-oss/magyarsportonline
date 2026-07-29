@@ -47,9 +47,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       credibilityLabelHu: item.credibilityLabelHu,
       credibilityJustificationHu: item.credibilityJustificationHu,
       isAiGenerated: item.isAiGenerated,
+      factConsistencyScore:
+        item.factConsistencyScore === null ? null : Number(item.factConsistencyScore),
+      selfCheckFallback: item.selfCheckFallback,
       qualityIssues: item.qualityIssues,
       triageReasonsHu: item.triageReasonsHu,
       sources: item.sources,
+      fullArticleSourceCount: item.fullArticleSourceCount,
       contradictions: item.contradictions,
       originalSources: requestedItemId
         ? await repos.storySourceRepository.originalContentByStoryId(item.storyId)

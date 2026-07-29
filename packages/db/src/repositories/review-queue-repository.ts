@@ -34,6 +34,8 @@ export interface PendingReviewItem {
   lastUpdatedAt: Date;
   /** `false` means the No-LLM passthrough produced this version's content — never real AI-translated Hungarian text (2026-07-29, triage sprint). */
   isAiGenerated: boolean;
+  factConsistencyScore: string | null;
+  selfCheckFallback: boolean;
   /** Content Quality Gate findings for this version (hungarian-writer/quality-gate.ts) — empty/null means none found. */
   qualityIssues: unknown;
 }
@@ -92,6 +94,8 @@ export class ReviewQueueRepository {
         credibilityJustificationHu: stories.credibilityJustificationHu,
         lastUpdatedAt: stories.lastUpdatedAt,
         isAiGenerated: storyVersions.isAiGenerated,
+        factConsistencyScore: storyVersions.factConsistencyScore,
+        selfCheckFallback: storyVersions.selfCheckFallback,
         qualityIssues: storyVersions.qualityIssues,
       })
       .from(reviewQueueItems)

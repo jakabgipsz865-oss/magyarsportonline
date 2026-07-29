@@ -20,6 +20,7 @@ export interface ReviewImageInfo {
 
 export interface PendingReviewDetail extends PendingReviewItem {
   sources: ReviewSourceInfo[];
+  fullArticleSourceCount: number;
   contradictions: ContradictionDetail[];
   image: ReviewImageInfo | null;
 }
@@ -56,6 +57,9 @@ async function enrich(item: PendingReviewItem, repos: Repositories): Promise<Pen
       url: source.url,
       reliabilityTier: source.reliabilityTier,
     })),
+    fullArticleSourceCount: rawArticles.filter(
+      (article) => article.contentOrigin === "full_article",
+    ).length,
     contradictions,
     image,
   };
