@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  claimDetailHu,
   recomputeCredibilityForStory,
   type RecomputeCredibilityDeps,
 } from "./recompute-credibility";
@@ -307,5 +308,36 @@ describe("recomputeCredibilityForStory", () => {
     // Specifically: no entry should claim "2 independent sources agree" here
     // — that was the actual bug a real Postgres end-to-end run caught.
     expect(result.scoreBreakdown.some((e) => e.labelHu.includes("2 független forrás"))).toBe(false);
+  });
+});
+
+describe("claimDetailHu", () => {
+  it("prefers the verbatim quote for a quote fact", () => {
+    const result = claimDetailHu({
+      factType: "quote",
+      payload: { detail_hu: "3-1", quote_original: "We played well." },
+    });
+    expect(result).toBe("We played well.");
+  });
+
+  it("falls back to the raw detail for a quote fact with no quote_original", () => {
+    const result = claimDetailHu({
+      factType: "quote",
+      payload: { detail_hu: "3-1", quote_original: null },
+    });
+    expect(result).toBe("3-1");
+  });
+
+  it("prefers the raw detail for a non-quote fact even if a quote is present", () => {
+    const result = claimDetailHu({
+      factType: "score",
+      payload: { detail_hu: "3-1", quote_original: "We played well." },
+    });
+    expect(result).toBe("3-1");
+  });
+
+  it("returns a placeholder when neither a quote nor a raw detail exists", () => {
+    const result = claimDetailHu({ factType: "score", payload: {} });
+    expect(result).toBe("(nincs részlet)");
   });
 });
