@@ -107,6 +107,15 @@ Formátum soronként: **Kérdés** → Jelenlegi válasz/döntés → Bizonyít�
 - **Következő teendő:** A `Sky Sports extractor diagnostic (one-off)` workflow lefuttatása a PR merge-je után egy valódi Sky Sports cikken.
 - **Felelős/státusz:** Lezárva (döntés), a diagnosztikai futtatás még nyitva.
 
+## 12. Ingest pipeline: szinkron HTTP-timeout mint architekturális korlát → aszinkron job-motor
+
+- **Kérdés:** A bizonyító riport előkészítése közben (2026-07-28/29) kiderült: éles production adatban NULLA valódi BBC+Sky kétforrásos Story létezik. Miért, és mi a végleges megoldás?
+- **Jelenlegi döntés:** Két összefüggő, valós hiba azonosítva és a második részben javítva: (1) a Sky Sports forrás sosem kapott esélyt, mert a BBC mindig elsőként futott, és minden korábbi ingest-futás időtúllépéssel halt meg még a BBC feldolgozása közben — javítva forrás-rotációval (`source-repository.ts` `listActive()` `last_fetched_at ASC NULLS FIRST`); (2) még EGYETLEN cikk teljes szinkron pipeline-lánca (dedup → story-merge → fact-verification → Hungarian Writer → Editorial Rewrite → SEO → publish-gate, mind egy HTTP-kérésben) is túllépi a Vercel-timeoutot — ez egy valódi architekturális korlát, NEM oldható meg a cikk-limit további csökkentésével (már 1-en van, a gyakorlati minimumon). A felhasználó explicit döntése: az Editorial Rewrite Agent NEM kerül ki a pipeline-ból, és a végleges megoldás a pipeline teljes aszinkronizálása (Postgres-alapú `pipeline_jobs` job-queue, szakaszonként külön, retry/resume-képes job), NEM a platform limitjéhez való további igazodás. Rövid távú stabilizálásként a `dispatch-ingest` route `maxDuration`-je 60→300mp-re emelve (Vercel Fluid Compute — 2025 áprilisa óta minden ÚJ projekten alapértelmezett, ez a projekt 2026-07-27-én jött létre, Hobby csomagon így 300mp engedélyezett) — ez KIFEJEZETTEN ideiglenes, nem helyettesíti az aszinkron átépítést.
+- **Bizonyíték:** Két valódi, egymást követő HTTP 504 (`FUNCTION_INVOCATION_TIMEOUT`) production-smoke.yml futásban (2026-07-29 00:15 és 04:58 UTC), mindkettő pontosan ~60,1-60,2mp-nél; a `credibility-proof-report` végpont valós lekérdezése megerősítette: `articleCountBySourceName: {"BBC Sport - Football": 86}`, Sky Sports 0 (a rotációs javítás előtt).
+- **Nyitott kockázat:** A `maxDuration=300` bump-ot még nem erősítette meg egy sikeres, valós ingest-futás — ha a Vercel Fluid Compute mégsem aktív ezen a projekten, a route deploy sikeres lehet, de a tényleges limit a dashboardon állítható csak át (emberi beavatkozást igényel). Az aszinkron job-motor (tervdokumentum: a session ezen pontján készült terv) még nincs implementálva.
+- **Következő teendő:** A `maxDuration=300` deploy utáni valós teszt eredményének rögzítése; ezután a job-alapú pipeline megépítése (külön PR-ok: `pipeline_jobs` tábla+repo, majd a queueing dispatcher+worker route+ingest átkötés), majd csak ezután a valós BBC+Sky ingest újraindítása és a bizonyító riport tényleges, ≥1 valódi dual-source Storyt tartalmazó lefuttatása.
+- **Felelős/státusz:** Döntés lezárva (aszinkron irány, Editorial Rewrite marad a láncban), implementáció folyamatban.
+
 ---
 
 ## Összegzés — mi vár még felhasználói döntésre
