@@ -34,6 +34,12 @@ export interface ProviderFallbackOptions {
   estimateCostUsd?: (model: string, inputTokens: number, outputTokens: number) => number;
   /** Csak a naplóüzenet tartalmához — nem befolyásolja, hogy történik-e fallback. */
   describeError?: (error: unknown) => string;
+  /**
+   * Production content generation must never turn a provider outage into a
+   * schema-valid No-LLM article. When true, the provider error is logged and
+   * rethrown so the durable pipeline job can retry with backoff.
+   */
+  failClosed?: boolean;
 }
 
 /**
@@ -60,7 +66,10 @@ export class ProviderFallbackLlmClient implements LlmClient {
       await this.recordUsage(result.inputTokens, result.outputTokens);
       return result;
     } catch (error) {
-      const reason = this.logFallback(error);
+      const reason = this.logProviderFailure(error);
+      if (this.options.failClosed) {
+        throw error;
+      }
       const fallbackResult = await this.options.fallback.completeText(request);
       return { ...fallbackResult, isFallback: true, fallbackReason: reason };
     }
@@ -72,13 +81,16 @@ export class ProviderFallbackLlmClient implements LlmClient {
       await this.recordUsage(result.inputTokens, result.outputTokens);
       return result;
     } catch (error) {
-      const reason = this.logFallback(error);
+      const reason = this.logProviderFailure(error);
+      if (this.options.failClosed) {
+        throw error;
+      }
       const fallbackResult = await this.options.fallback.completeJson(request);
       return { ...fallbackResult, isFallback: true, fallbackReason: reason };
     }
   }
 
-  private logFallback(error: unknown): string {
+  private logProviderFailure(error: unknown): string {
     const reason = this.options.describeError?.(error) ?? "unknown";
     this.options.logger.warn(
       {
@@ -86,7 +98,9 @@ export class ProviderFallbackLlmClient implements LlmClient {
         reason,
         error: error instanceof Error ? error.message : String(error),
       },
-      `${this.options.providerName}: LLM call failed — falling back to No-LLM mode`,
+      this.options.failClosed
+        ? `${this.options.providerName}: LLM call failed — failing closed for durable retry`
+        : `${this.options.providerName}: LLM call failed — falling back to No-LLM mode`,
     );
     return reason;
   }

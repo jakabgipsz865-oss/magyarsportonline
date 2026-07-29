@@ -1,0 +1,121 @@
+name: Automatic production content rollout
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_count:
+        description: "Number of automatically generated stories to publish"
+        required: false
+        default: "20"
+        type: string
+
+permissions: {}
+
+jobs:
+  rollout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Enqueue full automatic regeneration
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          TARGET_COUNT: ${{ inputs.target_count }}
+        run: |
+          set -euo pipefail
+          BASE="https://magyarsportonline-web.vercel.app"
+          STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          echo "$STARTED_AT" > /tmp/started-at
+          CANDIDATE_COUNT=$((TARGET_COUNT + 15))
+          ingest_code=$(curl -sS -o /tmp/ingest.json -w '%{http_code}' --max-time 90 \
+            -X POST "$BASE/api/internal/cron/dispatch-ingest" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          jq . /tmp/ingest.json
+          test "$ingest_code" = "200"
+          code=$(curl -sS -o /tmp/reprocess.json -w '%{http_code}' --max-time 60 \
+            -X POST "$BASE/api/internal/reprocess-no-llm?limit=$CANDIDATE_COUNT&includePublished=true&forceRegeneration=true" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          jq . /tmp/reprocess.json
+          test "$code" = "200"
+
+      - name: Drain the durable pipeline queue
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          BASE="https://magyarsportonline-web.vercel.app"
+          empty_passes=0
+          for i in $(seq 1 60); do
+            code=$(curl -sS -o /tmp/jobs.json -w '%{http_code}' --max-time 90 \
+              -X POST "$BASE/api/internal/jobs/process" \
+              -H "Authorization: Bearer $CRON_SECRET")
+            test "$code" = "200"
+            jq . /tmp/jobs.json
+            processed=$(jq -r '.processed' /tmp/jobs.json)
+            failed=$(jq -r '.failed' /tmp/jobs.json)
+            dead_lettered=$(jq -r '.deadLettered' /tmp/jobs.json)
+            test "$dead_lettered" = "0"
+            if [ "$failed" -gt "0" ]; then
+              empty_passes=0
+              sleep 35
+              continue
+            fi
+            if [ "$processed" = "0" ]; then
+              empty_passes=$((empty_passes + 1))
+              if [ "$empty_passes" -ge 2 ]; then
+                break
+              fi
+              sleep 35
+            else
+              empty_passes=0
+            fi
+          done
+
+      - name: Publish only fresh automatic drafts that pass every gate
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          TARGET_COUNT: ${{ inputs.target_count }}
+        run: |
+          set -euo pipefail
+          BASE="https://magyarsportonline-web.vercel.app"
+          STARTED_AT=$(cat /tmp/started-at)
+          code=$(curl -sS -o /tmp/approved.json -w '%{http_code}' --max-time 60 \
+            -X POST "$BASE/api/internal/review-queue/approve-ready?createdAfter=$STARTED_AT&limit=$TARGET_COUNT" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          jq . /tmp/approved.json
+          test "$code" = "200"
+          approved=$(jq -r '.approvedCount' /tmp/approved.json)
+          test "$approved" -ge "$TARGET_COUNT"
+
+      - name: Retract every public article not regenerated in this rollout
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          BASE="https://magyarsportonline-web.vercel.app"
+          STARTED_AT=$(cat /tmp/started-at)
+          code=$(curl -sS -o /tmp/retracted.json -w '%{http_code}' --max-time 60 \
+            -X POST "$BASE/api/internal/story-repair/retract-stale-public?publishedBefore=$STARTED_AT" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          jq . /tmp/retracted.json
+          test "$code" = "200"
+
+      - name: Capture public production evidence
+        if: always()
+        run: |
+          mkdir -p evidence
+          cp /tmp/ingest.json evidence/ 2>/dev/null || true
+          cp /tmp/reprocess.json evidence/ 2>/dev/null || true
+          cp /tmp/approved.json evidence/ 2>/dev/null || true
+          cp /tmp/retracted.json evidence/ 2>/dev/null || true
+          curl -fsS "https://magyarsportonline-web.vercel.app/api/v1/stories?limit=30&page=1" \
+            -o evidence/public-stories.json
+          jq -r '.data[] | "https://magyarsportonline-web.vercel.app/hir/" + .slug' \
+            evidence/public-stories.json
+
+      - name: Upload rollout evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: automatic-production-rollout-${{ github.run_id }}
+          path: evidence/
+          retention-days: 30

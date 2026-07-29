@@ -113,6 +113,24 @@ describe("ProviderFallbackLlmClient", () => {
     expect(result.data).toEqual({ from: "fallback" });
   });
 
+  it("rethrows provider failures in fail-closed mode so a durable job can retry", async () => {
+    const client = new ProviderFallbackLlmClient({
+      inner: makeClient("inner", { fails: true }),
+      fallback: makeClient("fallback"),
+      providerName: "cloudflare",
+      logger: silentLogger,
+      failClosed: true,
+    });
+
+    await expect(client.completeText(textRequest)).rejects.toThrow("inner failed");
+    await expect(
+      client.completeJson({
+        ...textRequest,
+        jsonSchema: { type: "object", additionalProperties: false },
+      }),
+    ).rejects.toThrow("inner failed");
+  });
+
   it("exposes the inner client's modelLabel even after a fallback", async () => {
     const client = new ProviderFallbackLlmClient({
       inner: makeClient("inner", { fails: true, modelLabel: "gemini-2.0-flash-lite" }),

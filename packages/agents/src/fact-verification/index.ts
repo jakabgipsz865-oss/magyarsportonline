@@ -51,7 +51,7 @@ export interface FactVerificationDeps {
   sourceRepository: Pick<SourceRepository, "getById">;
   factRepository: Pick<
     FactRepository,
-    | "insertMany"
+    | "replaceForStory"
     | "markContradicted"
     | "bumpCorroboration"
     | "listByStoryId"
@@ -96,9 +96,12 @@ export async function handleFactVerificationTrigger(
       }
 
       const rawArticles = await deps.rawArticleRepository.listByStoryId(story.id);
-      const sortedArticles = [...rawArticles].sort(
-        (a, b) => a.ingestedAt.getTime() - b.ingestedAt.getTime(),
-      );
+      const sortedArticles = [...rawArticles].sort((a, b) => {
+        if (a.contentOrigin !== b.contentOrigin) {
+          return a.contentOrigin === "full_article" ? -1 : 1;
+        }
+        return a.ingestedAt.getTime() - b.ingestedAt.getTime();
+      });
       const articlesToExtract = sortedArticles.slice(0, EXTRACTION_LIMIT);
 
       const newFacts = [];
@@ -117,7 +120,7 @@ export async function handleFactVerificationTrigger(
           });
         }
       }
-      const savedFacts = await deps.factRepository.insertMany(newFacts);
+      const savedFacts = await deps.factRepository.replaceForStory(story.id, newFacts);
 
       const contradictedIds = findContradictedFactIds(savedFacts);
       for (const factId of contradictedIds) {

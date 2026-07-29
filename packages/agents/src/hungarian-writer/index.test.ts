@@ -192,9 +192,11 @@ function queueGeneration(
 ) {
   llm.queueJson({
     data: {
-      title_hu: "Cím",
-      lead_hu: "Lead",
-      body_hu: "Törzs",
+      title_hu: "A Liverpool megnyerte a rangadót",
+      lead_hu:
+        "A Liverpool fegyelmezett játékkal és pontos befejezésekkel győzött a fontos bajnoki mérkőzésen.",
+      body_hu:
+        "A Liverpool már az első félidőben kezdeményezően futballozott, majd a szünet után is megőrizte a mérkőzés feletti irányítást. A csapat szervezetten védekezett, és a kialakított helyzeteit eredményesen használta ki.",
       change_summary_hu: null,
       ...overrides,
     },

@@ -144,8 +144,9 @@ function buildDeps(): FactVerificationDeps & {
       ),
     },
     factRepository: {
-      insertMany: vi.fn(
+      replaceForStory: vi.fn(
         async (
+          _storyId: string,
           rows: Array<{
             storyId: string;
             rawArticleId: string;
@@ -275,7 +276,7 @@ describe("handleFactVerificationTrigger", () => {
     await handleFactVerificationTrigger(deps, triggerEvent());
 
     expect(deps.llm.jsonRequests).toHaveLength(2);
-    expect(deps.factRepository.insertMany).toHaveBeenCalledTimes(1);
+    expect(deps.factRepository.replaceForStory).toHaveBeenCalledTimes(1);
     expect(deps.factRepository.markContradicted).not.toHaveBeenCalled();
 
     expect(deps.emitted).toHaveLength(1);
@@ -331,6 +332,58 @@ describe("handleFactVerificationTrigger", () => {
     expect(deps.factRepository.markContradicted).toHaveBeenCalledTimes(2);
     const [event] = deps.emitted as Array<{ payload: { has_contradiction: boolean } }>;
     expect(event?.payload.has_contradiction).toBe(true);
+  });
+
+  it("extracts full articles before older RSS snippets", async () => {
+    const deps = buildDeps();
+    deps.rawArticleRepository.listByStoryId = vi.fn(async () => [
+      rawArticle({
+        id: "raw-snippet",
+        sourceId: "source-1",
+        contentOrigin: "rss_snippet",
+        ingestedAt: new Date("2026-07-27T19:00:00.000Z"),
+        titleOriginal: "Old snippet",
+      }),
+      rawArticle({
+        id: "raw-full",
+        sourceId: "source-2",
+        contentOrigin: "full_article",
+        ingestedAt: new Date("2026-07-27T20:00:00.000Z"),
+        titleOriginal: "Complete source article",
+      }),
+    ]);
+    deps.llm.queueJson({
+      data: {
+        facts: [
+          {
+            fact_type: "other",
+            detail_hu: "Teljes forrás",
+            quote_original: null,
+            quote_speaker: null,
+          },
+        ],
+      },
+      inputTokens: 10,
+      outputTokens: 5,
+    });
+    deps.llm.queueJson({
+      data: {
+        facts: [
+          {
+            fact_type: "other",
+            detail_hu: "Rövid kivonat",
+            quote_original: null,
+            quote_speaker: null,
+          },
+        ],
+      },
+      inputTokens: 10,
+      outputTokens: 5,
+    });
+
+    await handleFactVerificationTrigger(deps, triggerEvent());
+
+    expect(deps.llm.jsonRequests[0]?.messages[0]?.content).toContain("Complete source article");
   });
 
   it("throws when the Story cannot be found", async () => {

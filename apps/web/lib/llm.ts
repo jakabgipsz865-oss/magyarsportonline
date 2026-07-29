@@ -63,6 +63,7 @@ export function getLlmClient(): LlmClient {
       estimateCostUsd: estimateCloudflareCostUsd,
       describeError: describeCloudflareError,
       logger: getLogger(),
+      failClosed: true,
     });
   } else if (env.LLM_PROVIDER === "anthropic") {
     if (!env.ANTHROPIC_API_KEY) {
@@ -91,6 +92,7 @@ export function getLlmClient(): LlmClient {
       estimateCostUsd: () => 0,
       describeError: describeGeminiError,
       logger: getLogger(),
+      failClosed: true,
     });
   } else {
     cachedClient = new NoLlmClient();

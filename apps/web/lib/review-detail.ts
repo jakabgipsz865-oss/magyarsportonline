@@ -78,6 +78,6 @@ export async function listPendingReviewDetails(
   repos: Repositories = createRepositories(),
   itemId?: string,
 ): Promise<PendingReviewDetail[]> {
-  const items = await repos.reviewQueueRepository.listPending(itemId);
+  const items = await repos.reviewQueueRepository.listPending(itemId ? { itemId } : {});
   return Promise.all(items.map((item) => enrich(item, repos)));
 }

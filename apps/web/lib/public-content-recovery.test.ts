@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PublicContentRecoveryDeps } from "./public-content-recovery";
-import { recoverUnsafePublicContent } from "./public-content-recovery";
+import {
+  recoverUnsafePublicContent,
+  retractPublicContentOlderThan,
+} from "./public-content-recovery";
 
 const SAFE_BODY =
   "Az első félidő kiegyenlített küzdelmet hozott, egyik fél sem tudott komoly előnyt kialakítani. A fordulás után egy pontos beadást követő fejes döntötte el a találkozót.";
@@ -94,6 +97,27 @@ describe("recoverUnsafePublicContent", () => {
     const result = await recoverUnsafePublicContent(repositories, { apply: true });
 
     expect(result).toEqual(expect.objectContaining({ dryRun: false, kept: 1, retracted: 1 }));
+    expect(repositories.statusUpdates).toEqual(["unsafe"]);
+    expect(repositories.projectionDeletes).toEqual(["unsafe"]);
+  });
+});
+
+describe("retractPublicContentOlderThan", () => {
+  it("keeps freshly regenerated projections and retracts older public content", async () => {
+    const repositories = deps();
+    const result = await retractPublicContentOlderThan(
+      repositories,
+      new Date("2026-07-28T10:30:00.000Z"),
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        scanned: 2,
+        kept: 1,
+        retracted: 1,
+        retractedStories: [expect.objectContaining({ storyId: "unsafe", slug: "unsafe-story" })],
+      }),
+    );
     expect(repositories.statusUpdates).toEqual(["unsafe"]);
     expect(repositories.projectionDeletes).toEqual(["unsafe"]);
   });
