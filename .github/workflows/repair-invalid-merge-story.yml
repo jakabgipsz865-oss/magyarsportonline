@@ -1,0 +1,111 @@
+# Egyszeri javító futtatás (2026-07-29, "bővítsd a specifikus
+# entitásfelismerést" sprint): megkeresi a régi, 16 cikkes hibás Storyt az
+# éles credibility-proof-report végpont adatai alapján (cím szerinti,
+# egyértelmű egyezés — NEM feltételezett, korábbról megjegyzett ID), majd
+# meghívja a `/api/internal/story-repair/invalid-merge` végpontot pontosan
+# arra az egy Storyra. Nem ír semmit, amíg a cím-keresés több mint egy vagy
+# nulla találatot ad — abban az esetben hibával leáll, hogy egyértelműen
+# emberi döntést igényeljen.
+name: Repair invalid-merge story (one-off)
+
+on:
+  workflow_dispatch:
+    inputs:
+      title_contains:
+        description: "A hibás Story címének egyedi részlete (kis/nagybetű-érzéketlen)"
+        required: false
+        default: "Henry Coates"
+      scan_limit:
+        description: "Hány legutóbb frissített Storyt vizsgáljon a proof-report"
+        required: false
+        default: "300"
+
+permissions: {}
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Find the bad Story's current ID via the proof-report endpoint
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SCAN_LIMIT: ${{ inputs.scan_limit }}
+          TITLE_CONTAINS: ${{ inputs.title_contains }}
+        run: |
+          set -eu
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET repo secret hiányzik — nincs mit futtatni." >&2
+            exit 1
+          fi
+          BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
+          echo "Target: $BASE"
+
+          code=$(curl -sS -o report.json -w '%{http_code}' --max-time 60 \
+            "$BASE/api/internal/credibility-proof-report?scanLimit=$SCAN_LIMIT" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          echo "HTTP $code (proof-report)"
+          if [ "$code" != "200" ]; then
+            echo "A proof-report végpont hibát adott vissza:" >&2
+            cat report.json >&2
+            exit 1
+          fi
+
+          MATCHES=$(jq --arg t "$TITLE_CONTAINS" \
+            '[.stories[] | select(.title | test($t; "i"))]' report.json)
+          COUNT=$(echo "$MATCHES" | jq 'length')
+          echo "Talált egyező Story: $COUNT"
+          echo "$MATCHES" | jq '[.[] | {storyId, title, slug, sourceCount, sourceNames}]'
+
+          if [ "$COUNT" != "1" ]; then
+            echo "FAIL: pontosan 1 egyező Storyt várunk, $COUNT-t találtunk — emberi ellenőrzés szükséges, nem javítok automatikusan." >&2
+            exit 1
+          fi
+
+          STORY_ID=$(echo "$MATCHES" | jq -r '.[0].storyId')
+          STORY_TITLE=$(echo "$MATCHES" | jq -r '.[0].title')
+          echo "STORY_ID=$STORY_ID" >> "$GITHUB_ENV"
+          echo "STORY_TITLE=$STORY_TITLE" >> "$GITHUB_ENV"
+
+          {
+            echo "## Megtalált hibás Story"
+            echo "- ID: \`$STORY_ID\`"
+            echo "- Cím: $STORY_TITLE"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Repair the confirmed Story
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -eu
+          BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
+          REASON="Téves entitás-összevonás (2026-07-29 előtti, egyetlen generikus \"Premier League\" entitáson alapuló fingerprint-hiba) — automatikusan javítva a title-alapú megerősítés után, workflow_dispatch run ${{ github.run_id }}."
+
+          BODY=$(jq -n --arg storyId "$STORY_ID" --arg reasonHu "$REASON" '{storyId: $storyId, reasonHu: $reasonHu}')
+
+          code=$(curl -sS -o repair-response.json -w '%{http_code}' --max-time 60 \
+            -X POST "$BASE/api/internal/story-repair/invalid-merge" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d "$BODY")
+          echo "HTTP $code (repair)"
+          cat repair-response.json
+          {
+            echo ""
+            echo "## Javítás eredménye (HTTP $code)"
+            echo '```json'
+            cat repair-response.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$code" = "200" ]
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repair-invalid-merge-story
+          path: |
+            report.json
+            repair-response.json
