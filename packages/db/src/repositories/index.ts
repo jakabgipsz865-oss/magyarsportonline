@@ -6,6 +6,7 @@ export * from "./editorial-correction-repository";
 export * from "./entity-repository";
 export * from "./fact-repository";
 export * from "./llm-usage-repository";
+export * from "./pipeline-job-repository";
 export * from "./raw-article-repository";
 export * from "./review-queue-repository";
 export * from "./source-repository";
