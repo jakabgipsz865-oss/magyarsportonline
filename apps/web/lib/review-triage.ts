@@ -65,10 +65,11 @@ function qualityIssueKindsOf(qualityIssues: unknown): string[] {
  */
 export async function listTriagedReviewItems(
   repos: Repositories = createRepositories(),
+  itemId?: string,
 ): Promise<TriageSummary> {
   const [items, entities, pendingMergeDecisions, comparisonRows, decidedMissedMerges] =
     await Promise.all([
-      listPendingReviewDetails(repos),
+      listPendingReviewDetails(repos, itemId),
       repos.entityRepository.listAll(),
       repos.storyMatchRepository.listPendingReview(1000),
       repos.storyMatchRepository.listAllForMatchComparison(

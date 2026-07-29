@@ -73,7 +73,7 @@ export class ReviewQueueRepository {
   }
 
   /** Nyitott (pending) tételek a Story/verzió megjelenítési mezőivel, legrégebbi elöl. */
-  async listPending(): Promise<PendingReviewItem[]> {
+  async listPending(itemId?: string): Promise<PendingReviewItem[]> {
     return this.db
       .select({
         id: reviewQueueItems.id,
@@ -105,6 +105,7 @@ export class ReviewQueueRepository {
         and(
           eq(reviewQueueItems.status, "pending"),
           or(isNull(reviewQueueItems.snoozedUntil), lte(reviewQueueItems.snoozedUntil, new Date())),
+          itemId ? eq(reviewQueueItems.id, itemId) : undefined,
         ),
       )
       .orderBy(asc(reviewQueueItems.createdAt));
