@@ -2,9 +2,10 @@ import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { approveReviewItem, rejectReviewItem } from "../../../lib/review";
-import { listPendingReviewDetails, type PendingReviewDetail } from "../../../lib/review-detail";
+import { listTriagedReviewItems, type TriagedReviewItem } from "../../../lib/review-triage";
 
-// DB-driven admin nézet — sosem prerendelt, mindig friss.
+// DB-driven admin nézet — sosem prerendelt, mindig friss (a betöltéskor
+// újrafuttatja a triage-osztályozást is, lásd listTriagedReviewItems).
 export const dynamic = "force-dynamic";
 
 const REASON_LABELS_HU: Record<string, string> = {
@@ -25,6 +26,18 @@ const LICENSE_TYPE_LABELS_HU: Record<string, string> = {
   pending_review: "jogi ellenőrzés folyamatban",
 };
 
+type TriageCategory = TriagedReviewItem["triageCategory"];
+
+const CATEGORY_TABS: Array<{ category: TriageCategory; labelHu: string }> = [
+  { category: "human_decision_required", labelHu: "Emberi döntés szükséges" },
+  { category: "ready_for_review", labelHu: "Kész review-ra" },
+  { category: "auto_repair_required", labelHu: "Automatikus javítás alatt" },
+  { category: "reject_or_archive", labelHu: "Elutasítva / archiválva" },
+];
+
+const DEFAULT_CATEGORY: TriageCategory = "human_decision_required";
+const PAGE_SIZE = 10;
+
 async function approveAction(formData: FormData): Promise<void> {
   "use server";
   const itemId = formData.get("itemId");
@@ -43,11 +56,61 @@ async function rejectAction(formData: FormData): Promise<void> {
   revalidatePath("/admin/review");
 }
 
-function ReviewCard({ item }: { item: PendingReviewDetail }): ReactNode {
+/** Groups a Story's sources by name so the same outlet contributing several articles shows once, with a count, instead of repeating. */
+function dedupedSources(sources: TriagedReviewItem["sources"]): Array<{
+  name: string;
+  reliabilityTier: string;
+  url: string;
+  count: number;
+}> {
+  const byName = new Map<
+    string,
+    { name: string; reliabilityTier: string; url: string; count: number }
+  >();
+  for (const source of sources) {
+    const existing = byName.get(source.name);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      byName.set(source.name, { ...source, count: 1 });
+    }
+  }
+  return [...byName.values()];
+}
+
+function ReviewCard({
+  item,
+  decidable,
+}: {
+  item: TriagedReviewItem;
+  decidable: boolean;
+}): ReactNode {
+  const sources = dedupedSources(item.sources);
+  const isConfirmedHungarian =
+    item.triageCategory === "human_decision_required" || item.triageCategory === "ready_for_review";
+
   return (
     <article style={{ border: "1px solid #ccc", borderRadius: 8, padding: 16, marginBottom: 16 }}>
       <h2 style={{ marginTop: 0 }}>{item.titleHu}</h2>
       <p style={{ fontWeight: 600 }}>{item.leadHu}</p>
+
+      <div
+        style={{
+          border: "1px solid #9db8d8",
+          background: "#eef3fb",
+          borderRadius: 6,
+          padding: 10,
+          marginBottom: 12,
+          fontSize: "0.9em",
+        }}
+      >
+        <strong>Triage indoklás:</strong>
+        <ul style={{ margin: "4px 0 0" }}>
+          {item.triageReasonsHu.map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      </div>
 
       {item.image ? (
         <div style={{ marginBottom: 12 }}>
@@ -75,7 +138,11 @@ function ReviewCard({ item }: { item: PendingReviewDetail }): ReactNode {
       ) : null}
 
       <details open style={{ marginBottom: 12 }}>
-        <summary style={{ cursor: "pointer", fontWeight: 600 }}>Teljes magyar cikk</summary>
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>
+          {isConfirmedHungarian
+            ? "Teljes magyar cikk"
+            : "Cikk szövege (automatikus javításra/ellenőrzésre vár)"}
+        </summary>
         <div style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>{item.bodyHu}</div>
       </details>
 
@@ -90,7 +157,7 @@ function ReviewCard({ item }: { item: PendingReviewDetail }): ReactNode {
       >
         <p style={{ margin: 0, fontWeight: 600 }}>
           Hitelességi pont:{" "}
-          {item.credibilityScore === null ? "n/a" : `${item.credibilityScore}/100`}
+          {item.credibilityScore === null ? "n/a (javítás alatt)" : `${item.credibilityScore}/100`}
           {item.credibilityLabelHu ? ` — ${item.credibilityLabelHu}` : ""}
         </p>
         {item.credibilityJustificationHu ? (
@@ -131,12 +198,13 @@ function ReviewCard({ item }: { item: PendingReviewDetail }): ReactNode {
         <strong>Eredeti források és linkek:</strong>
       </p>
       <ul style={{ marginTop: 0 }}>
-        {item.sources.length === 0 ? (
+        {sources.length === 0 ? (
           <li>n/a</li>
         ) : (
-          item.sources.map((source) => (
-            <li key={source.url}>
-              {source.name} ({source.reliabilityTier} megbízhatóság) —{" "}
+          sources.map((source) => (
+            <li key={source.name}>
+              {source.name} ({source.reliabilityTier} megbízhatóság
+              {source.count > 1 ? `, ${source.count} cikk` : ""}) —{" "}
               <a href={source.url} target="_blank" rel="noreferrer">
                 forráscikk ↗
               </a>
@@ -147,41 +215,74 @@ function ReviewCard({ item }: { item: PendingReviewDetail }): ReactNode {
 
       <p style={{ fontSize: "0.9em", color: "#555" }}>
         Ok: <strong>{REASON_LABELS_HU[item.reason] ?? item.reason}</strong>
-        {" · "}Confidence:{" "}
-        <strong>{item.confidenceScore === null ? "n/a" : item.confidenceScore}</strong>
         {" · "}Kockázat: <strong>{item.riskLevel ?? "n/a"}</strong>
-        {" · "}Bekerült: {item.createdAt.toISOString()}
+        {" · "}Bekerült: {item.createdAt.toLocaleString("hu-HU")}
       </p>
-      <div style={{ display: "flex", gap: 8 }}>
-        <form action={approveAction}>
-          <input type="hidden" name="itemId" value={item.id} />
-          <button type="submit">✅ Jóváhagyás és publikálás</button>
-        </form>
-        <form action={rejectAction}>
-          <input type="hidden" name="itemId" value={item.id} />
-          <button type="submit">❌ Elutasítás</button>
-        </form>
-      </div>
+      {decidable ? (
+        <div style={{ display: "flex", gap: 8 }}>
+          <form action={approveAction}>
+            <input type="hidden" name="itemId" value={item.id} />
+            <button type="submit">✅ Jóváhagyás és publikálás</button>
+          </form>
+          <form action={rejectAction}>
+            <input type="hidden" name="itemId" value={item.id} />
+            <button type="submit">❌ Elutasítás</button>
+          </form>
+        </div>
+      ) : (
+        <p style={{ fontSize: "0.85em", fontStyle: "italic", color: "#777" }}>
+          {item.triageCategory === "auto_repair_required"
+            ? "Ezt a tételt a triage-sweep automatikusan újrafeldolgozza — nem igényel kézi döntést, amíg javítás alatt van."
+            : "Ezt a tételt a triage-sweep automatikusan archiválja — nem igényel kézi döntést."}
+        </p>
+      )}
     </article>
   );
 }
 
+interface PageProps {
+  searchParams: Promise<{ category?: string; page?: string; q?: string }>;
+}
+
+function buildHref(category: TriageCategory, page: number, query: string): string {
+  const params = new URLSearchParams();
+  params.set("category", category);
+  if (page > 1) params.set("page", String(page));
+  if (query) params.set("q", query);
+  return `/admin/review?${params.toString()}`;
+}
+
 /**
  * Review felület (docs/architecture/08-roadmap.md Fázis 10, kibővítve
- * 2026-07-29-én "admin review — teljes bizonyíték jóváhagyás előtt"
- * sprintben): a Publish Gate által visszatartott Story-k kézi
- * jóváhagyása/elutasítása — jóváhagyás ELŐTT a teljes magyar cikk, az
- * eredeti források és linkjeik, a hitelességi pont és indoklása, az
- * esetleges ellentmondások, és a kép forrása/licence mind láthatók, hogy a
- * jóváhagyás sosem vak kattintás. Jóváhagyáskor a Story azonnal
- * publikálódik és megjelenik a publikus oldalon (`approveReviewItem`
- * szinkron frissíti a `story_read_model`-t, a `/hir/[slug]` oldal pedig
- * `force-dynamic`, tehát nincs cache-késleltetés).
+ * 2026-07-29-én "queue-tisztító és triage réteg" sprintben): a review queue
+ * minden tétele automatikusan 4 kategóriába sorolódik
+ * (packages/agents/src/publish-gate/triage.ts) — alapértelmezetten CSAK a
+ * "Emberi döntés szükséges" kategória jelenik meg, hogy a szerkesztőnek ne
+ * kelljen minden Storyt kézzel átnéznie. A másik 3 kategóriát (Kész
+ * review-ra, Automatikus javítás alatt, Elutasítva/archiválva) a fülekkel
+ * lehet megnézni, auditálás céljából — ott nincs jóváhagyás/elutasítás gomb,
+ * mert azokat vagy a triage-sweep intézi automatikusan, vagy már el vannak
+ * döntve.
  *
  * Hozzáférés: HTTP Basic auth a middleware-ben (ADMIN_SECRET).
  */
-export default async function ReviewQueuePage(): Promise<ReactNode> {
-  const items = await listPendingReviewDetails();
+export default async function ReviewQueuePage({ searchParams }: PageProps): Promise<ReactNode> {
+  const params = await searchParams;
+  const category: TriageCategory = CATEGORY_TABS.some((tab) => tab.category === params.category)
+    ? (params.category as TriageCategory)
+    : DEFAULT_CATEGORY;
+  const page = Math.max(1, Number(params.page) || 1);
+  const query = (params.q ?? "").trim().toLowerCase();
+
+  const { items, countsByCategory } = await listTriagedReviewItems();
+
+  const filtered = items
+    .filter((item) => item.triageCategory === category)
+    .filter((item) => !query || item.titleHu.toLowerCase().includes(query));
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const decidable = category === "human_decision_required" || category === "ready_for_review";
 
   return (
     <main>
@@ -189,14 +290,50 @@ export default async function ReviewQueuePage(): Promise<ReactNode> {
         <Link href="/">← Vissza a főoldalra</Link>
       </p>
       <h1>Review queue</h1>
+
+      <nav style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+        {CATEGORY_TABS.map((tab) => (
+          <Link
+            key={tab.category}
+            href={buildHref(tab.category, 1, "")}
+            style={{
+              padding: "6px 12px",
+              borderRadius: 6,
+              border: "1px solid #999",
+              textDecoration: "none",
+              background: tab.category === category ? "#333" : "white",
+              color: tab.category === category ? "white" : "#333",
+            }}
+          >
+            {tab.labelHu} ({countsByCategory[tab.category]})
+          </Link>
+        ))}
+      </nav>
+
+      <form method="get" style={{ marginBottom: 16 }}>
+        <input type="hidden" name="category" value={category} />
+        <input type="text" name="q" placeholder="Keresés cím szerint…" defaultValue={query} />
+        <button type="submit">Keresés</button>
+      </form>
+
       <p>
-        {items.length === 0
-          ? "Nincs jóváhagyásra váró Story. 🎉"
-          : `${items.length} Story vár kézi döntésre.`}
+        {filtered.length === 0
+          ? "Nincs tétel ebben a kategóriában. 🎉"
+          : `${filtered.length} tétel — ${page}. oldal / ${totalPages}`}
       </p>
-      {items.map((item) => (
-        <ReviewCard key={item.id} item={item} />
+
+      {pageItems.map((item) => (
+        <ReviewCard key={item.id} item={item} decidable={decidable} />
       ))}
+
+      {totalPages > 1 ? (
+        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+          {page > 1 ? <Link href={buildHref(category, page - 1, query)}>← Előző</Link> : null}
+          {page < totalPages ? (
+            <Link href={buildHref(category, page + 1, query)}>Következő →</Link>
+          ) : null}
+        </div>
+      ) : null}
     </main>
   );
 }

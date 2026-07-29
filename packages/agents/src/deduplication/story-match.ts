@@ -62,7 +62,8 @@ export interface StoryMatchScore {
   sportMismatch: boolean;
 }
 
-const AUTO_MERGE_THRESHOLD = 65;
+/** Exported for the admin triage classifier (2026-07-29), which reuses this same bar to flag two ALREADY-CREATED Stories as confident duplicates. */
+export const AUTO_MERGE_THRESHOLD = 65;
 
 /** Exported for `missed-merge-candidates.ts`, which needs the same day-distance test to classify a pair as "exact" (same day) vs "adjacent" (1 day apart). */
 export function daysBetweenBuckets(a: string, b: string): number {
