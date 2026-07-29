@@ -156,6 +156,42 @@ jobs:
                   )
               lines.append("")
 
+          # --- Scored, multi-factor Story-matching decisions (2026-07-29,
+          # "téves Story-összevonás megszüntetése" sprint) --- the REAL
+          # persisted decision per article, not a recomputation.
+          md = data.get("matchDecisions", {})
+          lines.append("## Story-matching döntések (a javított, pontozott motor valós audit-naplója)\n")
+          lines.append(f"- Vizsgált döntés: **{md.get('totalDecisionsScanned', 0)}**")
+          lines.append(f"- Automatikus összevonás (`auto_merge`) — valódi pozitív JELÖLT (kézi megerősítést igényel): **{md.get('autoMergeCount', 0)}**")
+          lines.append(f"- Review-ba küldött bizonytalan eset (`needs_review`) — NEM vonta össze automatikusan: **{md.get('needsReviewCount', 0)}**")
+          lines.append(f"- Új Story (`auto_new_story`, nincs specifikus egyező entitás vagy sportág-eltérés): **{md.get('autoNewStoryCount', 0)}**")
+          lines.append(f"- {md.get('precisionRecallNoteHu', '')}\n")
+
+          auto_merges = md.get("autoMergeDecisions", [])
+          lines.append(f"### `auto_merge` döntések bizonyítéka ({len(auto_merges)} db) — olvasd el mindegyiket, jelöld valódi/téves pozitívnak\n")
+          if not auto_merges:
+              lines.append("Nincs auto_merge döntés a vizsgált ablakban.\n")
+          for d in auto_merges:
+              matched = ", ".join(f"{e['nameCanonical']} ({e['type']})" for e in d.get("matchedEntities", []))
+              lines.append(f"- \"{d['rawArticleTitle']}\" ({d.get('rawArticleUrl', 'n/a')})")
+              lines.append(f"  - Összevonva ide: \"{d.get('resultingStoryTitle', 'n/a')}\" (slug: {d.get('resultingStorySlug', 'n/a')})")
+              lines.append(f"  - Match score: {d['matchScore']}/100, egyező entitások: {matched or 'nincs'}")
+              lines.append(f"  - Indoklás: {d['decisionReasonHu']}")
+          lines.append("")
+
+          needs_review = md.get("needsReviewDecisions", [])
+          lines.append(f"### `needs_review` döntések bizonyítéka ({len(needs_review)} db) — review-ba küldött bizonytalan esetek\n")
+          if not needs_review:
+              lines.append("Nincs needs_review döntés a vizsgált ablakban.\n")
+          for d in needs_review:
+              matched = ", ".join(f"{e['nameCanonical']} ({e['type']})" for e in d.get("matchedEntities", []))
+              lines.append(f"- \"{d['rawArticleTitle']}\" ({d.get('rawArticleUrl', 'n/a')})")
+              lines.append(f"  - Jelölt Story (NEM vonta össze): \"{d.get('candidateStoryTitle', 'n/a')}\" (slug: {d.get('candidateStorySlug', 'n/a')})")
+              lines.append(f"  - Ehelyett saját Story jött létre: \"{d.get('resultingStoryTitle', 'n/a')}\" (slug: {d.get('resultingStorySlug', 'n/a')})")
+              lines.append(f"  - Match score: {d['matchScore']}/100, egyező entitások: {matched or 'nincs'}, review-státusz: {d.get('reviewStatus', 'n/a')}")
+              lines.append(f"  - Indoklás: {d['decisionReasonHu']}")
+          lines.append("")
+
           report = "\n".join(lines)
           print(report)
           with open("report.md", "w") as f:

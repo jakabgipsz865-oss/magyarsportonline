@@ -107,6 +107,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       factRepository,
       rawArticleRepository,
       entityRepository,
+      storyMatchRepository,
     } = createRepositories();
 
     const [stories, entities] = await Promise.all([
@@ -304,6 +305,77 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     }
 
+    // --- Scored, multi-factor Story-matching evidence (2026-07-29, "téves
+    // Story-összevonás megszüntetése" sprint) --- reads the ACTUAL persisted
+    // decision the matcher made per article (packages/agents/src/
+    // deduplication/story-match.ts), not a read-time recomputation — see
+    // docs/open-decisions.md #12 follow-up for the real 16-article
+    // false-merge this replaces. Categorized exactly per the user's
+    // request: valódi pozitív (auto_merge — pending manual confirmation
+    // that the merge really was correct), téves pozitív (auto_merge that a
+    // manual read finds WRONG — none expected by construction, since
+    // auto_merge now requires a specific team/player entity plus
+    // corroboration, but the report still surfaces every one for manual
+    // confirmation rather than asserting zero), elmulasztott (separate
+    // Stories a manual read judges SHOULD have merged but the matcher
+    // found no shared specific entity for at all — heuristic candidates
+    // only, semantic judgment required), review-ba küldött bizonytalan
+    // eset (needs_review — a specific entity WAS shared, not enough
+    // corroboration, so it did NOT merge).
+    const recentDecisions = await storyMatchRepository.listRecent(Math.min(scanLimit * 3, 500));
+
+    async function enrichDecision(decision: (typeof recentDecisions)[number]) {
+      const [rawArticle, candidateStory, resultingStory] = await Promise.all([
+        rawArticleRepository.getById(decision.rawArticleId),
+        decision.candidateStoryId ? storyRepository.getById(decision.candidateStoryId) : null,
+        decision.resultingStoryId ? storyRepository.getById(decision.resultingStoryId) : null,
+      ]);
+      return {
+        decisionId: decision.id,
+        rawArticleTitle: rawArticle?.titleOriginal ?? "(ismeretlen cikk)",
+        rawArticleUrl: rawArticle?.sourceUrl ?? null,
+        matchScore: decision.matchScore,
+        matchedEntities: decision.matchedEntities,
+        differingEntities: decision.differingEntities,
+        sportMismatch: decision.sportMismatch,
+        decisionReasonHu: decision.decisionReasonHu,
+        candidateStoryTitle: candidateStory?.canonicalTitle ?? null,
+        candidateStorySlug: candidateStory?.slug ?? null,
+        resultingStoryTitle: resultingStory?.canonicalTitle ?? null,
+        resultingStorySlug: resultingStory?.slug ?? null,
+        reviewStatus: decision.reviewStatus,
+        createdAt: decision.createdAt.toISOString(),
+      };
+    }
+
+    const autoMergeDecisions = await Promise.all(
+      recentDecisions.filter((d) => d.decision === "auto_merge").map(enrichDecision),
+    );
+    const needsReviewDecisions = await Promise.all(
+      recentDecisions.filter((d) => d.decision === "needs_review").map(enrichDecision),
+    );
+    const autoNewStoryCount = recentDecisions.filter((d) => d.decision === "auto_new_story").length;
+
+    // Precision/recall are only meaningful once a human has actually read
+    // each auto_merge decision's evidence above and confirmed whether it's
+    // a real same-event merge — this endpoint deliberately does NOT invent
+    // that number itself (matching this codebase's "no fabricated
+    // confidence" discipline, see merge-audit.ts). `manuallyConfirmedTruePositives`/
+    // `manuallyConfirmedFalsePositives` are always null here; a human (or
+    // the workflow's accompanying analysis) fills them in after reading
+    // `autoMergeDecisions`, then precision = TP/(TP+FP) over exactly that
+    // manually-read set — never estimated over the unread remainder.
+    const matchDecisions = {
+      totalDecisionsScanned: recentDecisions.length,
+      autoMergeCount: autoMergeDecisions.length,
+      needsReviewCount: needsReviewDecisions.length,
+      autoNewStoryCount,
+      autoMergeDecisions,
+      needsReviewDecisions,
+      precisionRecallNoteHu:
+        "A pontosság (precision) és fedés (recall) csak azután számolható, hogy egy ember ténylegesen elolvasta az `autoMergeDecisions` bizonyítékait, és megerősítette, melyik valódi, melyik téves pozitív — ez a végpont nem talál ki egy számot előre. Precision = megerősített valódi pozitív / (megerősített valódi pozitív + megerősített téves pozitív), kizárólag a manuálisan átolvasott halmazon.",
+    };
+
     return NextResponse.json({
       generatedAt: new Date().toISOString(),
       storiesScanned: stories.length,
@@ -314,6 +386,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       stories: dualSourceStories,
       missedMergeExact,
       missedMergeCandidates,
+      matchDecisions,
     });
   } catch (error) {
     getLogger().error(

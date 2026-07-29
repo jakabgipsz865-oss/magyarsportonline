@@ -5,6 +5,8 @@ import {
   SOURCE_CATEGORIES,
   SOURCE_CONTENT_MODES,
   SOURCE_RELIABILITY_TIERS,
+  STORY_MATCH_DECISIONS,
+  STORY_MATCH_REVIEW_STATUSES,
   STORY_SOURCE_CONTRIBUTION_TYPES,
   STORY_STATUSES,
 } from "@magyarsportonline/shared";
@@ -28,6 +30,11 @@ export const sourceReliabilityTierEnum = pgEnum(
 );
 export const reviewQueueReasonEnum = pgEnum("review_queue_reason", REVIEW_QUEUE_REASONS);
 export const reviewQueueStatusEnum = pgEnum("review_queue_status", REVIEW_QUEUE_STATUSES);
+export const storyMatchDecisionEnum = pgEnum("story_match_decision", STORY_MATCH_DECISIONS);
+export const storyMatchReviewStatusEnum = pgEnum(
+  "story_match_review_status",
+  STORY_MATCH_REVIEW_STATUSES,
+);
 
 export const sourceCategoryEnum = pgEnum("source_category", SOURCE_CATEGORIES);
 export const sourceContentModeEnum = pgEnum("source_content_mode", SOURCE_CONTENT_MODES);
