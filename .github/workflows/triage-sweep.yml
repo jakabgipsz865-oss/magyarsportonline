@@ -35,7 +35,7 @@ jobs:
 
           BODY=$(jq -n --argjson dryRun "$DRY_RUN" '{dryRun: $dryRun}')
 
-          code=$(curl -sS -o response.json -w '%{http_code}' --max-time 260 \
+          code=$(curl -sS -o response.json -w '%{http_code}' --max-time 300 \
             -X POST "$BASE/api/internal/triage-sweep" \
             -H "Authorization: Bearer $CRON_SECRET" \
             -H "Content-Type: application/json" \

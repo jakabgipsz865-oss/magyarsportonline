@@ -10,17 +10,20 @@ type StoryTriageCategory = publishGate.StoryTriageCategory;
 const DUPLICATE_SCAN_WINDOW_DAYS = 30;
 
 /** Reprocessing a Story calls real LLM stages (Hungarian Writer, SEO) synchronously — bounded per sweep so a single request can't time out; a repeated sweep call drains more, same pattern as scheduled-pipeline.yml's job-processing loop. */
-const MAX_REPROCESS_PER_SWEEP = 8;
+const MAX_REPROCESS_PER_SWEEP = 4;
 /**
  * Recomputing credibility is pure DB read/write, no LLM call — much cheaper
- * than a reprocess, so it gets a far larger per-sweep batch, run
- * concurrently (see `credibilityOnlyResults` below). A first production run
- * at 100 with a SEQUENTIAL loop hit Vercel's FUNCTION_INVOCATION_TIMEOUT;
- * after parallelizing, this cap is kept at 60 (rather than pushed back to
- * 100) for a comfortable safety margin, since real concurrency is still
- * bounded by the DB connection pool (postgres.js default max 10).
+ * than a reprocess, so it gets a larger per-sweep batch, run concurrently
+ * (see `credibilityOnlyResults` below). Two real production runs at 100
+ * (sequential) and then 60 (parallel) both still hit Vercel's
+ * FUNCTION_INVOCATION_TIMEOUT at ~250s — the 60-item parallel run
+ * succeeded once at 245s and failed once at 251s, i.e. right at the edge
+ * rather than comfortably under it. Lowered to 25 for real headroom; a
+ * sweep is designed to be called repeatedly to drain a larger backlog, so
+ * a smaller reliable batch beats a larger one that sometimes times out
+ * (and a timed-out call still loses whatever work hadn't committed yet).
  */
-const MAX_CREDIBILITY_RECOMPUTES_PER_SWEEP = 60;
+const MAX_CREDIBILITY_RECOMPUTES_PER_SWEEP = 25;
 
 export interface TriagedReviewItem extends PendingReviewDetail {
   triageCategory: StoryTriageCategory;
