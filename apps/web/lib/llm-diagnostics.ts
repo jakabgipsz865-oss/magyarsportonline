@@ -177,6 +177,8 @@ export async function runLlmDiagnostics(): Promise<{
     cloudflareAccountIdMasked: string | null;
     cloudflareAccountIdConfigured: boolean;
     cloudflareApiTokenConfigured: boolean;
+    geminiApiKeyConfigured: boolean;
+    anthropicApiKeyConfigured: boolean;
     monthlyBudgetUsd: number;
     budgetGuardAppliesToThisProvider: boolean;
     /**
@@ -266,6 +268,8 @@ export async function runLlmDiagnostics(): Promise<{
       cloudflareAccountIdMasked: maskAccountId(env.CLOUDFLARE_ACCOUNT_ID),
       cloudflareAccountIdConfigured: Boolean(env.CLOUDFLARE_ACCOUNT_ID),
       cloudflareApiTokenConfigured: Boolean(env.CLOUDFLARE_API_TOKEN),
+      geminiApiKeyConfigured: Boolean(env.GEMINI_API_KEY),
+      anthropicApiKeyConfigured: Boolean(env.ANTHROPIC_API_KEY),
       monthlyBudgetUsd: env.LLM_MONTHLY_BUDGET_USD,
       // BudgetGuardedLlmClient is only constructed for LLM_PROVIDER=anthropic
       // (apps/web/lib/llm.ts getLlmClient) — cloudflare/gemini use

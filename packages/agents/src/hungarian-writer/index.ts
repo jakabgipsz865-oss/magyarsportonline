@@ -223,7 +223,7 @@ export async function handleStoryFactsVerified(
         bodyHu: generated.bodyHu,
         changeSummaryHu,
         generatedByModel: isAiGenerated
-          ? (deps.llm.modelLabel ?? MODEL_TIERS.writing)
+          ? (generated.servedByModel ?? deps.llm.modelLabel ?? MODEL_TIERS.writing)
           : NO_LLM_MODEL_LABEL,
         isAiGenerated,
         promptVersion: AGENT_VERSION,

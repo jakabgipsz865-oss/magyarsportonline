@@ -51,19 +51,39 @@ export function getLlmClient(): LlmClient {
         "LLM_PROVIDER=cloudflare requires CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN to be set (see docs/infrastructure-setup.md)",
       );
     }
+    const usageSink = createRepositories().llmUsageRepository;
+    const secondaryProvider = env.GEMINI_API_KEY
+      ? new ProviderFallbackLlmClient({
+          inner: new GeminiLlmClient({
+            apiKey: env.GEMINI_API_KEY,
+            model: env.GEMINI_MODEL,
+          }),
+          fallback: new NoLlmClient(),
+          providerName: "gemini",
+          usageSink,
+          estimateCostUsd: () => 0,
+          describeError: describeGeminiError,
+          logger: getLogger(),
+          failClosed: true,
+        })
+      : null;
     cachedClient = new ProviderFallbackLlmClient({
       inner: new CloudflareWorkersAiLlmClient({
         accountId: env.CLOUDFLARE_ACCOUNT_ID,
         apiToken: env.CLOUDFLARE_API_TOKEN,
         model: env.CLOUDFLARE_AI_MODEL,
       }),
-      fallback: new NoLlmClient(),
+      fallback: secondaryProvider ?? new NoLlmClient(),
       providerName: "cloudflare",
-      usageSink: createRepositories().llmUsageRepository,
+      usageSink,
       estimateCostUsd: estimateCloudflareCostUsd,
       describeError: describeCloudflareError,
       logger: getLogger(),
-      failClosed: true,
+      // Cloudflare napi neuron-kvótája esetén a már konfigurált Gemini
+      // kulccsal valódi LLM-en folytatjuk. Ha nincs másodlagos provider,
+      // továbbra is fail-closed retry történik, sosem No-LLM cikk.
+      failClosed: secondaryProvider === null,
+      fallbackMode: secondaryProvider ? "provider" : "no_llm",
     });
   } else if (env.LLM_PROVIDER === "anthropic") {
     if (!env.ANTHROPIC_API_KEY) {

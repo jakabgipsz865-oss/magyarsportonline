@@ -45,6 +45,21 @@ describe("generateStoryVersion", () => {
     expect(result.isFallback).toBe(true);
   });
 
+  it("propagates the actual model used by a real secondary provider", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: { title_hu: "T", lead_hu: "L", body_hu: "B", change_summary_hu: null },
+      inputTokens: 1,
+      outputTokens: 1,
+      servedByModel: "gemini-2.0-flash-lite",
+    });
+
+    const result = await generateStoryVersion(llm, { facts: [], previousVersion: null });
+
+    expect(result.servedByModel).toBe("gemini-2.0-flash-lite");
+    expect(result.isFallback).toBe(false);
+  });
+
   it("includes the previous version in the request when updating", async () => {
     const llm = new FakeLlmClient();
     llm.queueJson({

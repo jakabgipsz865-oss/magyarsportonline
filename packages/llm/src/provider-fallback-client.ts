@@ -40,6 +40,11 @@ export interface ProviderFallbackOptions {
    * rethrown so the durable pipeline job can retry with backoff.
    */
   failClosed?: boolean;
+  /**
+   * `provider` esetén a fallback is valódi LLM: ne jelöljük No-LLM
+   * tartalomnak, és adjuk tovább a tényleges fallback-modell címkéjét.
+   */
+  fallbackMode?: "no_llm" | "provider";
 }
 
 /**
@@ -71,6 +76,12 @@ export class ProviderFallbackLlmClient implements LlmClient {
         throw error;
       }
       const fallbackResult = await this.options.fallback.completeText(request);
+      if (this.options.fallbackMode === "provider") {
+        return {
+          ...fallbackResult,
+          servedByModel: fallbackResult.servedByModel ?? this.options.fallback.modelLabel,
+        };
+      }
       return { ...fallbackResult, isFallback: true, fallbackReason: reason };
     }
   }
@@ -86,6 +97,12 @@ export class ProviderFallbackLlmClient implements LlmClient {
         throw error;
       }
       const fallbackResult = await this.options.fallback.completeJson(request);
+      if (this.options.fallbackMode === "provider") {
+        return {
+          ...fallbackResult,
+          servedByModel: fallbackResult.servedByModel ?? this.options.fallback.modelLabel,
+        };
+      }
       return { ...fallbackResult, isFallback: true, fallbackReason: reason };
     }
   }
@@ -100,7 +117,9 @@ export class ProviderFallbackLlmClient implements LlmClient {
       },
       this.options.failClosed
         ? `${this.options.providerName}: LLM call failed — failing closed for durable retry`
-        : `${this.options.providerName}: LLM call failed — falling back to No-LLM mode`,
+        : this.options.fallbackMode === "provider"
+          ? `${this.options.providerName}: LLM call failed — failing over to the secondary LLM provider`
+          : `${this.options.providerName}: LLM call failed — falling back to No-LLM mode`,
     );
     return reason;
   }
