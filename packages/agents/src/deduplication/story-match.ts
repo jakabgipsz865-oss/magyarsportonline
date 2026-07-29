@@ -64,7 +64,8 @@ export interface StoryMatchScore {
 
 const AUTO_MERGE_THRESHOLD = 65;
 
-function daysBetweenBuckets(a: string, b: string): number {
+/** Exported for `missed-merge-candidates.ts`, which needs the same day-distance test to classify a pair as "exact" (same day) vs "adjacent" (1 day apart). */
+export function daysBetweenBuckets(a: string, b: string): number {
   const DAY_MS = 24 * 60 * 60 * 1000;
   return Math.abs(Date.parse(`${a}T00:00:00.000Z`) - Date.parse(`${b}T00:00:00.000Z`)) / DAY_MS;
 }

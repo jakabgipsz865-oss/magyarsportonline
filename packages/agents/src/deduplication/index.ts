@@ -22,6 +22,7 @@ export * from "./date-bucket";
 export * from "./entity-matcher";
 export * from "./entity-mentions";
 export * from "./merge-audit";
+export * from "./missed-merge-candidates";
 export * from "./sport";
 export * from "./story-match";
 
