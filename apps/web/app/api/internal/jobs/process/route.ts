@@ -24,12 +24,20 @@ import { buildQueueingEmitter, dispatchJobToHandler } from "../../../../../lib/p
  * the queue faster per invocation for free if Fluid Compute is enabled
  * later, no code change needed.
  *
+ * The deadline is only checked BETWEEN jobs (not during one), so worst-case
+ * wall time is BUDGET_MS plus however long the single job claimed right
+ * before the deadline tripped takes to finish. A real production run
+ * (docs/open-decisions.md #12, 2026-07-29) processed 34 jobs successfully
+ * with BUDGET_MS=50_000 but the response itself took ~52s -- close enough
+ * to the confirmed ~60.18s real ceiling that a slightly slower job could
+ * have pushed the request past it. Lowered to leave a wider real margin.
+ *
  * Auth: same `Bearer CRON_SECRET` convention as every other `/api/internal/*`
  * route.
  */
 export const maxDuration = 300;
 
-const BUDGET_MS = 50_000; // leaves headroom under the CONFIRMED real ~60s ceiling
+const BUDGET_MS = 35_000; // wide margin under the CONFIRMED real ~60.18s ceiling
 const STALE_LOCK_MS = 10 * 60_000; // an in_progress job locked longer than this is presumed abandoned
 const BASE_BACKOFF_MS = 30_000;
 const MAX_BACKOFF_MS = 30 * 60_000;
