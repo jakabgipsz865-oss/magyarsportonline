@@ -1,0 +1,84 @@
+name: Publish explicitly reviewed stories
+
+on:
+  workflow_dispatch:
+    inputs:
+      item_ids:
+        description: "Comma-separated review queue item IDs, selected after editorial inspection"
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Publish selected review items through the fail-closed gate
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          ITEM_IDS: ${{ inputs.item_ids }}
+        run: |
+          set -u
+          BASE="https://magyarsportonline-web.vercel.app"
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET repo secret hiányzik." >&2
+            exit 1
+          fi
+
+          mkdir -p evidence
+          echo "[]" > evidence/results.json
+          failed=0
+
+          while IFS= read -r item_id; do
+            if [ -z "$item_id" ]; then continue; fi
+
+            echo "Publishing reviewed item: $item_id"
+            payload=$(jq -cn --arg itemId "$item_id" '{itemId: $itemId}')
+            code=$(curl -sS -o response.json -w '%{http_code}' --max-time 60 \
+              -X POST "$BASE/api/internal/review-queue/approve" \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              -H "Content-Type: application/json" \
+              --data "$payload")
+
+            jq -n \
+              --arg itemId "$item_id" \
+              --arg httpStatus "$code" \
+              --slurpfile response response.json \
+              '{itemId: $itemId, httpStatus: ($httpStatus | tonumber), response: $response[0]}' \
+              > result.json
+            jq -s '.[0] + [.[1]]' evidence/results.json result.json \
+              > evidence/results.next.json
+            mv evidence/results.next.json evidence/results.json
+
+            if [ "$code" != "200" ]; then
+              failed=1
+              echo "Publication blocked for $item_id (HTTP $code)." >&2
+              jq . response.json >&2
+            fi
+          done < <(printf '%s' "$ITEM_IDS" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+          curl -sS --max-time 60 "$BASE/api/v1/stories?limit=20&page=1" \
+            -o evidence/public-stories.json
+
+          {
+            echo "### Publication results"
+            echo '```json'
+            jq . evidence/results.json
+            echo '```'
+            echo "### Current public story URLs"
+            jq -r --arg base "$BASE" '.data[] | "- " + $base + "/hir/" + .slug' \
+              evidence/public-stories.json
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          exit "$failed"
+
+      - name: Upload publication evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reviewed-story-publication-${{ github.run_id }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 30
