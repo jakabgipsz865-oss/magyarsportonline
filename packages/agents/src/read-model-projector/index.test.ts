@@ -45,6 +45,7 @@ function version(overrides?: Partial<Record<string, unknown>>) {
     isAiGenerated: true,
     promptVersion: "hungarian-writer@0.1.0",
     factConsistencyScore: "1.000",
+    selfCheckFallback: false,
     editorialRewriteApplied: false,
     isPublished: true,
     qualityIssues: null,

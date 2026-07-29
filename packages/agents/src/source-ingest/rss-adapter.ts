@@ -86,6 +86,7 @@ export class RssSourceAdapter implements SourceAdapter {
               ? publishedAtSource
               : null,
           imageUrl: extractImageUrl(item),
+          contentOrigin: "rss_snippet",
         };
       })
       .filter((article): article is NormalizedArticle => article !== null);

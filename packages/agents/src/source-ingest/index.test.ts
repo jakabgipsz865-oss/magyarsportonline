@@ -93,6 +93,7 @@ function buildDeps(overrides?: {
               authorOriginal: null,
               publishedAtSource: null,
               imageUrl: null,
+              contentOrigin: "full_article",
             },
           ],
         } satisfies SourceAdapter),
@@ -154,6 +155,7 @@ describe("runSourceIngest", () => {
               authorOriginal: null,
               publishedAtSource: null,
               imageUrl: null,
+              contentOrigin: "full_article",
             },
           ];
         },

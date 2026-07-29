@@ -228,6 +228,7 @@ export async function handleStoryFactsVerified(
         isAiGenerated,
         promptVersion: AGENT_VERSION,
         factConsistencyScore: check.factConsistencyScore,
+        selfCheckFallback: check.isFallback,
         qualityIssues: quality.issues,
       });
 

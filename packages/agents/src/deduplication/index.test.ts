@@ -11,6 +11,7 @@ const RAW_ARTICLE = {
   titleOriginal: "Liverpool beat Arsenal 3-1",
   subtitleOriginal: null,
   bodyOriginal: "A dramatic match at Anfield.",
+  contentOrigin: "full_article",
   authorOriginal: null,
   language: "en",
   embedding: null,
@@ -31,6 +32,15 @@ const LIVERPOOL_ENTITY = {
   externalRef: null,
 };
 
+const ARSENAL_ENTITY = {
+  id: "entity-arsenal",
+  type: "team" as const,
+  nameCanonical: "Arsenal FC",
+  nameHu: "Arsenal",
+  aliases: ["Arsenal"],
+  externalRef: null,
+};
+
 function buildDeps(overrides?: {
   entities?: Entity[];
   candidates?: Awaited<
@@ -42,7 +52,7 @@ function buildDeps(overrides?: {
   return {
     rawArticleRepository: { getById: vi.fn(async () => RAW_ARTICLE) },
     entityRepository: {
-      listAll: vi.fn(async () => overrides?.entities ?? [LIVERPOOL_ENTITY]),
+      listAll: vi.fn(async () => overrides?.entities ?? [LIVERPOOL_ENTITY, ARSENAL_ENTITY]),
     },
     storyMatchRepository: {
       findCandidateStories: vi.fn(async () => overrides?.candidates ?? []),
@@ -106,7 +116,7 @@ describe("handleSourceArticleIngested", () => {
     ]);
   });
 
-  it("emits MATCH with story_id when a candidate shares the specific team entity with enough corroboration", async () => {
+  it("emits MATCH with story_id when a candidate has strong same-match identity", async () => {
     const deps = buildDeps({
       candidates: [
         {
@@ -119,6 +129,12 @@ describe("handleSourceArticleIngested", () => {
               type: "team",
               nameCanonical: "Liverpool FC",
               role: "subject",
+            },
+            {
+              entityId: "entity-arsenal",
+              type: "team",
+              nameCanonical: "Arsenal FC",
+              role: "opponent",
             },
           ],
           rawArticleSourceUrls: ["https://www.skysports.com/football/news/1"],

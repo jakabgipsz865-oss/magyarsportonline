@@ -155,6 +155,22 @@ export function classifyMatchCategory(matchedEntities: MatchedEntity[]): MatchCa
 }
 
 /**
+ * Auto-merge needs evidence that identifies the same real-world event, not
+ * merely the same subject. A single team/player/coach can generate several
+ * unrelated stories on the same day, so date proximity cannot promote that
+ * weak overlap into a silent merge.
+ */
+export function hasStrongEventIdentity(matchedEntities: MatchedEntity[]): boolean {
+  const specific = matchedEntities.filter(isSpecific);
+  const teams = specific.filter((entity) => entity.type === "team");
+  const people = specific.filter(
+    (entity) => entity.type === "player" || entity.type === "coach",
+  );
+
+  return teams.length >= 2 || (teams.length >= 1 && people.length >= 1);
+}
+
+/**
  * Scores one candidate Story against a new article's title/lead entity
  * mentions (2026-07-29, "téves Story-összevonás megszüntetése" sprint).
  * Deterministic and explainable by design, matching the rest of this
@@ -253,13 +269,11 @@ export interface StoryMatchDecision {
 /**
  * Picks the best-scoring candidate (if any) and turns it into a decision.
  * Rules 1+2+6 are enforced HERE, explicitly, not just implied by score
- * thresholds: `auto_merge` requires `hasSpecificSharedEntity === true` on
- * the winning candidate — a candidate that only shares a generic
- * competition/league entity, no matter how many other candidates or how
- * high the date/generic-corroboration bonuses push its score, can never
- * reach `auto_merge`. An uncertain case (has a specific shared entity, but
- * not enough corroboration to clear the auto-merge bar) becomes
- * `needs_review`, never a silent merge.
+ * thresholds: `auto_merge` requires both a high score and a strong event
+ * identity (two shared teams, or a shared team plus a shared player/coach).
+ * A competition-only overlap creates a new Story; a single shared
+ * team/player/coach is uncertain and becomes `needs_review`, even on the
+ * same day.
  */
 export function decideStoryMatch(
   article: ArticleMatchInput,
@@ -289,12 +303,13 @@ export function decideStoryMatch(
   }
 
   const matchCategory = classifyMatchCategory(best.matchedEntities);
+  const strongEventIdentity = hasStrongEventIdentity(best.matchedEntities);
   const specificNames = best.matchedEntities
     .filter((e) => isSpecificEntityType(e.type))
     .map((e) => e.nameCanonical)
     .join(", ");
 
-  if (best.score >= AUTO_MERGE_THRESHOLD) {
+  if (best.score >= AUTO_MERGE_THRESHOLD && strongEventIdentity) {
     return {
       kind: "auto_merge",
       candidateStoryId: best.candidateStoryId,
@@ -304,7 +319,7 @@ export function decideStoryMatch(
       sportMismatch: false,
       allScores,
       matchCategory,
-      decisionReasonHu: `Legalább egy specifikus (csapat/játékos/edző) közös entitás (${specificNames}) és elegendő megerősítő jel (${best.score}/100 pont, kategória: ${MATCH_CATEGORY_LABELS_HU[matchCategory]}) miatt automatikusan összevonva.`,
+      decisionReasonHu: `Erős eseményazonosság (${specificNames}) és elegendő megerősítő jel (${best.score}/100 pont, kategória: ${MATCH_CATEGORY_LABELS_HU[matchCategory]}) miatt automatikusan összevonva.`,
     };
   }
 
@@ -317,6 +332,8 @@ export function decideStoryMatch(
     sportMismatch: false,
     allScores,
     matchCategory,
-    decisionReasonHu: `Van specifikus közös entitás (${specificNames}, kategória: ${MATCH_CATEGORY_LABELS_HU[matchCategory]}), de a pontszám (${best.score}/100) nem éri el az automatikus összevonáshoz szükséges ${AUTO_MERGE_THRESHOLD} pontot — kézi review-ba került, a rendszer NEM vonta össze automatikusan.`,
+    decisionReasonHu: strongEventIdentity
+      ? `Van erős eseményazonosság (${specificNames}, kategória: ${MATCH_CATEGORY_LABELS_HU[matchCategory]}), de a pontszám (${best.score}/100) nem éri el az automatikus összevonáshoz szükséges ${AUTO_MERGE_THRESHOLD} pontot — kézi review-ba került, a rendszer NEM vonta össze automatikusan.`
+      : `A közös specifikus entitás (${specificNames}, kategória: ${MATCH_CATEGORY_LABELS_HU[matchCategory]}) önmagában nem bizonyítja, hogy ugyanarról az eseményről van szó — kézi review-ba került, a rendszer NEM vonta össze automatikusan.`,
   };
 }

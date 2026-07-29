@@ -20,6 +20,7 @@ function storyVersion(overrides?: Partial<Record<string, unknown>>) {
     isAiGenerated: true,
     promptVersion: "hungarian-writer@0.1.0",
     factConsistencyScore: "1.000",
+    selfCheckFallback: false,
     editorialRewriteApplied: false,
     isPublished: false,
     qualityIssues: null,
@@ -132,6 +133,7 @@ describe("handleStoryContentDrafted (Editorial Rewrite Agent)", () => {
         leadHu: "A csapat magabiztosan győzött.",
         bodyHu: "Stilizált részletek.",
         editorialRewriteApplied: true,
+        qualityIssues: [],
       },
     ]);
     expect(deps.emitted).toEqual([

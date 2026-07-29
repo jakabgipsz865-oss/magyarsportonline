@@ -31,6 +31,7 @@ describe("RssSourceAdapter", () => {
         authorOriginal: null,
         publishedAtSource: new Date("2026-07-27T10:00:00.000Z"),
         imageUrl: null,
+        contentOrigin: "rss_snippet",
       },
     ]);
   });

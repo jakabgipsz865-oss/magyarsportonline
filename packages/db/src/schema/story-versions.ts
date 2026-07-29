@@ -47,6 +47,10 @@ export const storyVersions = pgTable(
       precision: 4,
       scale: 3,
     }),
+    // A fallback self-check is not evidence that the generated article is
+    // factually consistent. Publish Gate blocks these versions fail-closed
+    // even when the fallback adapter returned a superficially perfect score.
+    selfCheckFallback: boolean("self_check_fallback").notNull().default(false),
     // Editorial Rewrite Agent (packages/agents/src/editorial-rewrite):
     // true only when a real LLM rewrite was generated AND passed the
     // post-rewrite fact-consistency re-check. False both when no rewrite was

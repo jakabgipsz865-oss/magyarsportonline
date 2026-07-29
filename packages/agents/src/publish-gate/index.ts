@@ -2,6 +2,7 @@ import type {
   FactRepository,
   ReviewQueueRepository,
   StoryRepository,
+  StorySourceRepository,
   StoryVersionRepository,
 } from "@magyarsportonline/db";
 import { createEventEnvelope, type SportsNewsEvent } from "@magyarsportonline/events";
@@ -9,9 +10,12 @@ import type { Logger } from "@magyarsportonline/observability";
 import type { AgentRunRecorder } from "../shared/with-agent-run";
 import { withAgentRun } from "../shared/with-agent-run";
 import { decidePublish } from "./rule";
+import { assessPublicationReadiness } from "./publication-readiness";
+import { toWriterFact } from "../hungarian-writer/facts";
 
 export * from "./rule";
 export * from "./triage";
+export * from "./publication-readiness";
 
 export const AGENT_VERSION = "publish-gate@0.1.0";
 
@@ -23,6 +27,10 @@ export interface PublishGateDeps {
   storyRepository: Pick<StoryRepository, "getById" | "publish" | "updateStatus">;
   storyVersionRepository: Pick<StoryVersionRepository, "markPublished" | "getById">;
   factRepository: Pick<FactRepository, "listByStoryId">;
+  storySourceRepository: Pick<
+    StorySourceRepository,
+    "countByStoryId" | "countFullArticleByStoryId"
+  >;
   reviewQueueRepository: Pick<ReviewQueueRepository, "insert">;
   agentRunRepository: AgentRunRecorder;
   dispatcher: Emitter;
@@ -62,16 +70,32 @@ export async function handleStorySeoReady(deps: PublishGateDeps, event: Trigger)
       const riskLevel = story.riskLevel ?? "high";
 
       const version = await deps.storyVersionRepository.getById(event.payload.story_version_id);
-      const hasQualityIssues =
-        version !== null &&
-        Array.isArray(version.qualityIssues) &&
-        version.qualityIssues.length > 0;
+      if (!version) {
+        throw new Error(`StoryVersion "${event.payload.story_version_id}" not found`);
+      }
+      const [sourceCount, fullArticleSourceCount] = await Promise.all([
+        deps.storySourceRepository.countByStoryId(story.id),
+        deps.storySourceRepository.countFullArticleByStoryId(story.id),
+      ]);
+      const readiness = assessPublicationReadiness({
+        titleHu: version.titleHu,
+        leadHu: version.leadHu,
+        bodyHu: version.bodyHu,
+        facts: facts.map(toWriterFact),
+        isAiGenerated: version.isAiGenerated,
+        factConsistencyScore:
+          version.factConsistencyScore === null ? null : Number(version.factConsistencyScore),
+        selfCheckFallback: version.selfCheckFallback,
+        credibilityScore: story.credibilityScore,
+        sourceCount,
+        fullArticleSourceCount,
+      });
 
       const decision = decidePublish({
         riskLevel,
         confidenceScore,
         hasContradiction,
-        hasQualityIssues,
+        hasQualityIssues: !readiness.passed,
         forceReviewMode: deps.forceReviewMode,
       });
 

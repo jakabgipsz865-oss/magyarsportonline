@@ -3,9 +3,13 @@ import type { WriterFact } from "./facts";
 export type QualityIssueField = "title" | "lead" | "body";
 export type QualityIssueKind =
   | "empty"
+  | "too_short"
   | "looks_english"
+  | "fallback_notice"
   | "matches_source_verbatim"
   | "repeated_paragraph"
+  | "repeated_sentence"
+  | "forbidden_terminology"
   | "duplicates_body";
 
 export interface QualityIssue {
@@ -25,9 +29,6 @@ export interface QualityAssessment {
   issues: QualityIssue[];
 }
 
-/** Below this length a language heuristic is unreliable either way (short proper-noun-heavy titles, test fixtures) — skip rather than false-positive. */
-const MIN_LENGTH_FOR_LANGUAGE_CHECK = 20;
-
 const HUNGARIAN_DIACRITICS = /[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/;
 
 /**
@@ -38,20 +39,60 @@ const HUNGARIAN_DIACRITICS = /[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/;
  * article and defeat the whole check.
  */
 const HUNGARIAN_FUNCTION_WORDS =
-  /\b(az|és|hogy|egy|volt|lesz|meg|nem|mint|mert|amely|aki|ezt|azt|vagy|szerint|miatt|után|ellen|között|szeretné|valamint)\b/i;
+  /\b(az|és|hogy|egy|volt|lesz|meg|nem|mint|mert|amely|aki|ezt|azt|vagy|szerint|miatt|után|ellen|között|szeretné|valamint|szerezte|győzött|igazolt|bejelentette|csapat|játékos|mérkőzés|bajnokság)\b/giu;
+
+const ENGLISH_SIGNAL_WORDS =
+  /\b(the|and|or|but|with|without|for|from|of|to|in|on|at|after|before|against|amid|into|over|under|who|what|why|how|says|said|sign|signs|signed|signing|transfer|deal|manager|player|team|football|win|wins|won|beat|goal|goalkeeper|coach|club|season|match|final|cup|world|league|ready|play|midfielder|defender|striker|instead|spreading|hate|pray|watch)\b/giu;
+
+const FALLBACK_NOTICE_PATTERNS = [
+  /nem (?:lett|volt|még) ai[- ](?:által )?(?:lefordított|feldolgozott|ellenőrzött)/iu,
+  /eredeti,?\s+angol nyelvű forrás(?:anyag|szöveg)/iu,
+  /not (?:ai[- ]generated|translated|processed|checked)/iu,
+];
+
+/**
+ * Productionben már megfigyelt, magyar sportnyelvben hibás vagy a forrás
+ * jelentését torzító szó szerinti fordítások. Ez nem helyettesíti a
+ * lexikont: fail-closed védőháló arra az esetre, ha egy ismert rossz
+ * kifejezés mégis kijutna a modellből.
+ */
+const FORBIDDEN_TERMINOLOGY_PATTERNS = [
+  /(?<!\p{L})időtlen-e(?!\p{L})/iu,
+  /(?<!\p{L})átvételi díj(?!\p{L})/iu,
+  /(?<!\p{L})szabad átvételben(?!\p{L})/iu,
+  /(?<!\p{L})büntetőkirekeszt\p{L}*/iu,
+  /(?<!\p{L})stopperidő\p{L}*/iu,
+  /(?<!\p{L})megegyező gól\p{L}*/iu,
+  /(?<!\p{L})pótdobás\p{L}*/iu,
+  /(?<!\p{L})menykőbe lépés\p{L}*/iu,
+  /(?<!\p{L})átvásárlás\p{L}*/iu,
+  /(?<!\p{L})rekordjelentkező\p{L}*/iu,
+  /(?<!\p{L})stratégiás szünet\p{L}*/iu,
+];
+
+function countMatches(text: string, pattern: RegExp): number {
+  return [...text.matchAll(pattern)].length;
+}
 
 function looksEnglish(text: string): boolean {
   const trimmed = text.trim();
-  if (trimmed.length < MIN_LENGTH_FOR_LANGUAGE_CHECK) {
+  const letterTokens = trimmed.match(/\p{L}+(?:['’-]\p{L}+)*/gu) ?? [];
+  if (letterTokens.length === 0) {
     return false;
   }
-  if (HUNGARIAN_DIACRITICS.test(trimmed)) {
-    return false;
+  const englishSignals = countMatches(trimmed, ENGLISH_SIGNAL_WORDS);
+  const hungarianSignals =
+    countMatches(trimmed, HUNGARIAN_FUNCTION_WORDS) +
+    letterTokens.filter((token) => HUNGARIAN_DIACRITICS.test(token)).length;
+
+  // One unmistakable English football/content word is enough in a very
+  // short title ("Mbappe goal"), but ordinary proper-name-only titles
+  // ("Manchester United") contain no signal word and remain valid.
+  if (letterTokens.length <= 4) {
+    return englishSignals >= 1 && hungarianSignals === 0;
   }
-  if (HUNGARIAN_FUNCTION_WORDS.test(trimmed)) {
-    return false;
-  }
-  return true;
+
+  return englishSignals >= 2 && englishSignals > hungarianSignals * 1.5;
 }
 
 /** Catches the case where the "translation" is just a fact's own detail_hu copied verbatim — including the fact-extraction No-LLM fallback's English passthrough (packages/llm no-llm-client.ts `extractionFallback`). */
@@ -67,12 +108,19 @@ function matchesFactVerbatim(text: string, facts: WriterFact[]): boolean {
 }
 
 function assessField(field: QualityIssueField, text: string, facts: WriterFact[]): QualityIssue[] {
-  if (text.trim().length === 0) {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) {
     return [{ field, kind: "empty" }];
   }
   const issues: QualityIssue[] = [];
   if (looksEnglish(text)) {
     issues.push({ field, kind: "looks_english" });
+  }
+  if (FALLBACK_NOTICE_PATTERNS.some((pattern) => pattern.test(text))) {
+    issues.push({ field, kind: "fallback_notice" });
+  }
+  if (FORBIDDEN_TERMINOLOGY_PATTERNS.some((pattern) => pattern.test(text))) {
+    issues.push({ field, kind: "forbidden_terminology" });
   }
   if (matchesFactVerbatim(text, facts)) {
     issues.push({ field, kind: "matches_source_verbatim" });
@@ -91,6 +139,13 @@ function splitParagraphs(text: string): string[] {
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
     .filter((paragraph) => paragraph.length > 0);
+}
+
+function splitSentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 0);
 }
 
 /**
@@ -131,6 +186,17 @@ function hasRepeatedParagraph(bodyHu: string): boolean {
   return false;
 }
 
+/** Repetition inside a single paragraph — the previous paragraph-only check missed this production failure mode. */
+function hasRepeatedSentence(bodyHu: string): boolean {
+  const sentences = splitSentences(bodyHu);
+  for (let i = 0; i < sentences.length; i += 1) {
+    for (let j = i + 1; j < sentences.length; j += 1) {
+      if (areNearDuplicates(sentences[i]!, sentences[j]!)) return true;
+    }
+  }
+  return false;
+}
+
 /** The lead restated as its own body paragraph instead of the body elaborating on it — a distinct failure mode from a `matches_source_verbatim` Fact copy. */
 function leadDuplicatesBodyParagraph(leadHu: string, bodyHu: string): boolean {
   return splitParagraphs(bodyHu).some((paragraph) => areNearDuplicates(leadHu, paragraph));
@@ -154,6 +220,9 @@ export function assessContentQuality(input: QualityAssessmentInput): QualityAsse
   ];
   if (hasRepeatedParagraph(input.bodyHu)) {
     issues.push({ field: "body", kind: "repeated_paragraph" });
+  }
+  if (hasRepeatedSentence(input.bodyHu)) {
+    issues.push({ field: "body", kind: "repeated_sentence" });
   }
   if (leadDuplicatesBodyParagraph(input.leadHu, input.bodyHu)) {
     issues.push({ field: "lead", kind: "duplicates_body" });

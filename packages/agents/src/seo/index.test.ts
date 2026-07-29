@@ -67,6 +67,7 @@ function buildDeps(overrides?: {
         isAiGenerated: true,
         promptVersion: "hungarian-writer@0.1.0",
         factConsistencyScore: "1.000",
+        selfCheckFallback: false,
         editorialRewriteApplied: false,
         isPublished: false,
         qualityIssues: null,

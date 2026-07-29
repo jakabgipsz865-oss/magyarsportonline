@@ -1,11 +1,16 @@
-import { readModelProjector } from "@magyarsportonline/agents";
+import { hungarianWriter, publishGate, readModelProjector } from "@magyarsportonline/agents";
 import { createEventEnvelope } from "@magyarsportonline/events";
 import { createRepositories, type Repositories } from "./db";
 import { getLogger } from "./logger";
 
 export type ReviewDecisionResult =
   | { ok: true }
-  | { ok: false; error: "not_found" | "already_resolved" };
+  | { ok: false; error: "not_found" | "already_resolved" }
+  | {
+      ok: false;
+      error: "publication_blocked";
+      blockers: publishGate.PublicationBlocker[];
+    };
 
 /**
  * Kézi jóváhagyás a review queue-ból (docs/architecture/02-agents.md §2.7):
@@ -24,6 +29,38 @@ export async function approveReviewItem(
   }
   if (item.status !== "pending") {
     return { ok: false, error: "already_resolved" };
+  }
+
+  const [story, version, facts, sourceCount, fullArticleSourceCount] = await Promise.all([
+    repos.storyRepository.getById(item.storyId),
+    repos.storyVersionRepository.getById(item.storyVersionId),
+    repos.factRepository.listByStoryId(item.storyId),
+    repos.storySourceRepository.countByStoryId(item.storyId),
+    repos.storySourceRepository.countFullArticleByStoryId(item.storyId),
+  ]);
+  if (!story || !version) {
+    return { ok: false, error: "not_found" };
+  }
+
+  const readiness = publishGate.assessPublicationReadiness({
+    titleHu: version.titleHu,
+    leadHu: version.leadHu,
+    bodyHu: version.bodyHu,
+    facts: facts.map(hungarianWriter.toWriterFact),
+    isAiGenerated: version.isAiGenerated,
+    factConsistencyScore:
+      version.factConsistencyScore === null ? null : Number(version.factConsistencyScore),
+    selfCheckFallback: version.selfCheckFallback,
+    credibilityScore: story.credibilityScore,
+    sourceCount,
+    fullArticleSourceCount,
+  });
+  if (!readiness.passed) {
+    getLogger().warn(
+      { itemId, storyId: item.storyId, blockers: readiness.blockers },
+      "review queue approval blocked by fresh publication readiness assessment",
+    );
+    return { ok: false, error: "publication_blocked", blockers: readiness.blockers };
   }
 
   const publishedAt = new Date();
@@ -125,11 +162,19 @@ export async function editReviewItemContent(
   }
 
   const version = await repos.storyVersionRepository.getById(item.storyVersionId);
+  const facts = await repos.factRepository.listByStoryId(item.storyId);
+  const quality = hungarianWriter.assessContentQuality({
+    titleHu: content.titleHu,
+    leadHu: content.leadHu,
+    bodyHu: content.bodyHu,
+    facts: facts.map(hungarianWriter.toWriterFact),
+  });
   const wasUpdated = await repos.storyVersionRepository.updateDraftContent(item.storyVersionId, {
     titleHu: content.titleHu,
     leadHu: content.leadHu,
     bodyHu: content.bodyHu,
     editorialRewriteApplied: version?.editorialRewriteApplied ?? false,
+    qualityIssues: quality.issues,
   });
   if (!wasUpdated) {
     return { ok: false, error: "already_published" };

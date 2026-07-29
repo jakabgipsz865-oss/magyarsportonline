@@ -39,6 +39,7 @@ function rawArticle(overrides: Partial<Record<string, unknown>>) {
     titleOriginal: "Liverpool win 3-1",
     subtitleOriginal: null,
     bodyOriginal: "A dominant display.",
+    contentOrigin: "full_article",
     authorOriginal: null,
     language: "en",
     embedding: null,

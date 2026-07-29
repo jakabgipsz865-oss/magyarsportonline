@@ -1,0 +1,1 @@
+ALTER TABLE "raw_articles" ADD COLUMN "content_origin" text DEFAULT 'rss_snippet' NOT NULL;

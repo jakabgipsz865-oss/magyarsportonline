@@ -9,6 +9,8 @@ export interface NormalizedArticle {
   publishedAtSource: Date | null;
   /** RSS media:thumbnail/enclosure image URL, if the feed item provided one. */
   imageUrl: string | null;
+  /** Explicit provenance: publication is allowed only after at least one source page was fetched successfully. */
+  contentOrigin: "rss_snippet" | "full_article";
 }
 
 /**

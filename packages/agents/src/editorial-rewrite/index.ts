@@ -9,6 +9,7 @@ import { createEventEnvelope, type SportsNewsEvent } from "@magyarsportonline/ev
 import { NoLlmClient, type LlmClient } from "@magyarsportonline/llm";
 import type { Logger } from "@magyarsportonline/observability";
 import { toWriterFact } from "../hungarian-writer/facts";
+import { assessContentQuality } from "../hungarian-writer/quality-gate";
 import { selfCheckContent } from "../hungarian-writer/self-check";
 import { evaluateCorrectionApplication } from "../shared/correction-effectiveness";
 import type { EditorialCorrection } from "../shared/editorial-corrections";
@@ -129,11 +130,18 @@ export async function handleStoryContentDrafted(
         } else {
           const check = await selfCheckContent(deps.llm, { facts, ...rewritten });
           if (check.consistent) {
+            const quality = assessContentQuality({
+              titleHu: rewritten.titleHu,
+              leadHu: rewritten.leadHu,
+              bodyHu: rewritten.bodyHu,
+              facts,
+            });
             const updated = await deps.storyVersionRepository.updateDraftContent(version.id, {
               titleHu: rewritten.titleHu,
               leadHu: rewritten.leadHu,
               bodyHu: rewritten.bodyHu,
               editorialRewriteApplied: true,
+              qualityIssues: quality.issues,
             });
             editorialRewriteApplied = updated;
             if (!updated) {
