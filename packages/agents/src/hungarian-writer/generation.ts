@@ -16,7 +16,7 @@ import {
   formatLexiconBlock,
 } from "../shared/football-lexicon";
 import type { WriterFact } from "./facts";
-import type { QualityIssue } from "./quality-gate";
+import { removeGeneratedRepetition, type QualityIssue } from "./quality-gate";
 
 const GENERATION_JSON_SCHEMA = {
   type: "object",
@@ -149,10 +149,14 @@ async function runGenerationCall(
   });
 
   const parsed = generationResponseSchema.parse(result.data);
-  return {
-    titleHu: parsed.title_hu,
+  const cleaned = removeGeneratedRepetition({
     leadHu: parsed.lead_hu,
     bodyHu: parsed.body_hu,
+  });
+  return {
+    titleHu: parsed.title_hu,
+    leadHu: cleaned.leadHu,
+    bodyHu: cleaned.bodyHu,
     changeSummaryHu: parsed.change_summary_hu,
     isFallback: result.isFallback ?? false,
   };

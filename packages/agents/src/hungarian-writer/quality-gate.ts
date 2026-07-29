@@ -223,6 +223,52 @@ function leadDuplicatesBodyParagraph(leadHu: string, bodyHu: string): boolean {
 }
 
 /**
+ * Determinisztikus utófeldolgozás a modell gyakori repetíciós hibájára.
+ * Nem ír és nem talál ki tartalmat: kizárólag olyan mondatot/bekezdést vesz
+ * ki, amelyet a modell már egyszer közölt a leadben vagy a törzsben. Ha a
+ * tisztítás után kevés anyag marad, a változatlanul fail-closed Quality Gate
+ * `too_short` hibával visszatartja a cikket.
+ */
+export function removeGeneratedRepetition(input: { leadHu: string; bodyHu: string }): {
+  leadHu: string;
+  bodyHu: string;
+} {
+  const leadHu = input.leadHu.trim();
+  const leadSentences = splitSentences(leadHu);
+  const seenBodySentences: string[] = [];
+  const keptParagraphs: string[] = [];
+
+  for (const paragraph of splitParagraphs(input.bodyHu)) {
+    const keptSentences = splitSentences(paragraph).filter((sentence) => {
+      const repeatsLead = leadSentences.some((leadSentence) =>
+        areNearDuplicates(sentence, leadSentence),
+      );
+      const repeatsBody = seenBodySentences.some((seenSentence) =>
+        areNearDuplicates(sentence, seenSentence),
+      );
+      if (repeatsLead || repeatsBody) {
+        return false;
+      }
+      seenBodySentences.push(sentence);
+      return true;
+    });
+
+    const cleanedParagraph = keptSentences.join(" ").trim();
+    if (
+      cleanedParagraph.length > 0 &&
+      !keptParagraphs.some((keptParagraph) => areNearDuplicates(cleanedParagraph, keptParagraph))
+    ) {
+      keptParagraphs.push(cleanedParagraph);
+    }
+  }
+
+  return {
+    leadHu,
+    bodyHu: keptParagraphs.join("\n\n"),
+  };
+}
+
+/**
  * Content Quality Gate (Content Quality & Reliability Hardening sprint):
  * catches the failure modes a schema-valid, non-fallback LLM response can
  * still have — empty field, a title/lead/body that never actually got

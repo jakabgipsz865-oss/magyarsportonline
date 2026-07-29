@@ -33,14 +33,24 @@ describe("CloudflareWorkersAiLlmClient", () => {
     expect(client.modelLabel).toBe(DEFAULT_CLOUDFLARE_MODEL);
   });
 
-  it("calls the OpenAI-compatible endpoint with Bearer auth and the configured model", async () => {
+  it("calls the OpenAI-compatible endpoint with Bearer auth and a supported configured model", async () => {
     const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       expect(String(url)).toBe(
         "https://api.cloudflare.com/client/v4/accounts/acc-123/ai/v1/chat/completions",
       );
       expect(init?.headers).toMatchObject({ authorization: "Bearer secret-token" });
-      const body = JSON.parse(String(init?.body)) as { model: string };
-      expect(body.model).toBe("@cf/qwen/custom-model");
+      const body = JSON.parse(String(init?.body)) as {
+        model: string;
+        temperature: number;
+        repetition_penalty: number;
+        frequency_penalty: number;
+      };
+      expect(body).toMatchObject({
+        model: "@cf/meta/llama-3.1-70b-instruct",
+        temperature: 0.2,
+        repetition_penalty: 1.1,
+        frequency_penalty: 0.2,
+      });
       return jsonResponse({
         choices: [{ message: { content: "válasz" } }],
         usage: { prompt_tokens: 10, completion_tokens: 5 },
@@ -49,11 +59,20 @@ describe("CloudflareWorkersAiLlmClient", () => {
     const client = new CloudflareWorkersAiLlmClient({
       accountId: "acc-123",
       apiToken: "secret-token",
-      model: "@cf/qwen/custom-model",
+      model: "@cf/meta/llama-3.1-70b-instruct",
       fetchImpl,
     });
     const result = await client.completeText(textRequest);
     expect(result).toEqual({ text: "válasz", inputTokens: 10, outputTokens: 5 });
+  });
+
+  it("replaces a configured model without JSON Mode support with the production-safe default", () => {
+    const client = new CloudflareWorkersAiLlmClient({
+      accountId: "acc",
+      apiToken: "tok",
+      model: "@cf/qwen/qwen3-30b-a3b-fp8",
+    });
+    expect(client.modelLabel).toBe(DEFAULT_CLOUDFLARE_MODEL);
   });
 
   it("parses JSON completions, including markdown-fenced output", async () => {

@@ -169,7 +169,10 @@ async function tryRawCloudflareCall(): Promise<RawCallOutcome> {
 export async function runLlmDiagnostics(): Promise<{
   config: {
     llmProvider: string;
+    /** Env-ben kért modell; egy nem JSON Mode-képes értéket az adapter fail-safe módon felülbírálhat. */
     cloudflareModel: string;
+    /** A production kliens által ténylegesen használt modell. */
+    effectiveCloudflareModel: string | null;
     /** First 8 chars, rest masked — see maskAccountId. Null when CLOUDFLARE_ACCOUNT_ID isn't set at all. */
     cloudflareAccountIdMasked: string | null;
     cloudflareAccountIdConfigured: boolean;
@@ -241,9 +244,11 @@ export async function runLlmDiagnostics(): Promise<{
   const rawCloudflareCall = await tryRawCloudflareCall();
   const cloudflareTokenVerify = await verifyCloudflareToken();
 
+  let effectiveCloudflareModel: string | null = null;
   let wrappedProductionClientCall: { isFallback: boolean; data?: unknown; errorMessage?: string };
   try {
     const llm = getLlmClient();
+    effectiveCloudflareModel = llm.modelLabel ?? null;
     const result = await llm.completeJson(DIAGNOSTIC_REQUEST);
     wrappedProductionClientCall = { isFallback: result.isFallback ?? false, data: result.data };
   } catch (error) {
@@ -257,6 +262,7 @@ export async function runLlmDiagnostics(): Promise<{
     config: {
       llmProvider: env.LLM_PROVIDER,
       cloudflareModel: env.CLOUDFLARE_AI_MODEL,
+      effectiveCloudflareModel,
       cloudflareAccountIdMasked: maskAccountId(env.CLOUDFLARE_ACCOUNT_ID),
       cloudflareAccountIdConfigured: Boolean(env.CLOUDFLARE_ACCOUNT_ID),
       cloudflareApiTokenConfigured: Boolean(env.CLOUDFLARE_API_TOKEN),

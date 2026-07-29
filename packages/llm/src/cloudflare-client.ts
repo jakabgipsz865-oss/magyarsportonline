@@ -9,11 +9,25 @@ import type {
 const API_BASE = "https://api.cloudflare.com/client/v4";
 
 /**
- * Ingyenes napi Neuron-kerettel elérhető, magyar nyelvet is (a 119
- * hivatalosan támogatott nyelv között) hivatalosan ígérő Qwen3 MoE modell —
- * felülírható a `CLOUDFLARE_AI_MODEL` env-változóval kód nélkül.
+ * Cloudflare JSON Mode-ot hivatalosan támogató, erős szerkesztési modell.
+ * A korábbi Qwen3 alapmodell érvényes chat-válaszokat adott, de nincs a
+ * JSON Mode támogatott modelljei között; productionben emiatt csonka és
+ * hibás JSON, majd ismétlődő cikkek készültek.
  */
-export const DEFAULT_CLOUDFLARE_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8";
+export const DEFAULT_CLOUDFLARE_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+
+/** Cloudflare által dokumentált JSON Mode modellazonosítók. */
+const JSON_MODE_SUPPORTED_MODELS = new Set([
+  "@cf/meta/llama-3.1-8b-instruct-fast",
+  "@cf/meta/llama-3.1-70b-instruct",
+  "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+  "@cf/meta/llama-3-8b-instruct",
+  "@cf/meta/llama-3.1-8b-instruct",
+  "@cf/meta/llama-3.2-11b-vision-instruct",
+  "@hf/nousresearch/hermes-2-pro-mistral-7b",
+  "@hf/thebloke/deepseek-coder-6.7b-instruct-awq",
+  "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
+]);
 
 export interface CloudflareWorkersAiClientOptions {
   accountId: string;
@@ -153,7 +167,14 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
   constructor(options: CloudflareWorkersAiClientOptions) {
     this.accountId = options.accountId;
     this.apiToken = options.apiToken;
-    this.model = options.model?.trim() || DEFAULT_CLOUDFLARE_MODEL;
+    const configuredModel = options.model?.trim() || DEFAULT_CLOUDFLARE_MODEL;
+    // A pipeline minden érdemi agent-hívása strukturált JSON-t kér. Ha az
+    // env-ben maradt modell ezt hivatalosan nem támogatja, ne próbáljuk meg
+    // reménykedve parse-olni a szabad szöveges választ: használjuk a
+    // dokumentált production alapmodellt.
+    this.model = JSON_MODE_SUPPORTED_MODELS.has(configuredModel)
+      ? configuredModel
+      : DEFAULT_CLOUDFLARE_MODEL;
     this.baseUrl = options.baseUrl ?? API_BASE;
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
@@ -206,6 +227,13 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
         ...request.messages.map((message) => ({ role: message.role, content: message.content })),
       ],
       max_tokens: request.maxTokens,
+      // Szerkesztési feladatnál az alacsonyabb véletlenszerűség és a
+      // repetíciós büntetés csökkenti a productionben megfigyelt, többször
+      // visszamásolt bekezdéseket. Mindhárom paraméter része a Cloudflare
+      // text-generation API dokumentált szerződésének.
+      temperature: 0.2,
+      repetition_penalty: 1.1,
+      frequency_penalty: 0.2,
       ...(jsonSchema ? { response_format: { type: "json_schema", json_schema: jsonSchema } } : {}),
     };
 
