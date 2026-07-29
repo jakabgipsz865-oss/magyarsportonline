@@ -81,7 +81,37 @@ export class StoryMatchRepository {
         ),
       );
 
-    const storyIds = candidateStoryIdRows.map((row) => row.storyId);
+    return this.buildCandidateRows(candidateStoryIdRows.map((row) => row.storyId));
+  }
+
+  /**
+   * Every Story with at least one SPECIFIC (team/player/coach) entity
+   * mention, updated since `sinceDate` — the input population for
+   * `computeMissedMergeCandidatePairs` (packages/agents/src/deduplication/
+   * missed-merge-candidates.ts), which looks for pairs of ALREADY-CREATED
+   * Stories the live matcher never had a chance to compare against each
+   * other (it only ever compares a fresh article against existing
+   * Stories, never Story-vs-Story). Returns the same shape as
+   * `findCandidateStories` for a single scoring code path.
+   */
+  async listAllForMatchComparison(sinceDate: Date): Promise<CandidateStoryRow[]> {
+    const specificStoryIdRows = await this.db
+      .selectDistinct({ storyId: storyEntities.storyId })
+      .from(storyEntities)
+      .innerJoin(stories, eq(storyEntities.storyId, stories.id))
+      .innerJoin(entitiesTable, eq(storyEntities.entityId, entitiesTable.id))
+      .where(
+        and(
+          inArray(entitiesTable.type, ["team", "player", "coach"]),
+          gte(stories.lastUpdatedAt, sinceDate),
+          ne(stories.status, "invalid_merge"),
+        ),
+      );
+
+    return this.buildCandidateRows(specificStoryIdRows.map((row) => row.storyId));
+  }
+
+  private async buildCandidateRows(storyIds: string[]): Promise<CandidateStoryRow[]> {
     if (storyIds.length === 0) {
       return [];
     }

@@ -101,3 +101,25 @@ export const STORY_MATCH_REVIEW_STATUSES = [
   "approved_new_story",
 ] as const;
 export type StoryMatchReviewStatus = (typeof STORY_MATCH_REVIEW_STATUSES)[number];
+
+/**
+ * Missed-merge candidate review (2026-07-29, "admin merge-review felület"
+ * sprint, docs/open-decisions.md #14 follow-up): two EXISTING Stories that
+ * share at least one specific (team/player/coach) entity and fall on the
+ * same or an adjacent UTC day, surfaced for a human to decide on — the
+ * scored matcher never auto-merges two already-created Stories together,
+ * only a fresh incoming article into an existing Story, so this is
+ * necessarily a manual-only decision path, never automatic.
+ */
+export const MISSED_MERGE_CANDIDATE_TYPES = ["exact", "adjacent"] as const;
+export type MissedMergeCandidateType = (typeof MISSED_MERGE_CANDIDATE_TYPES)[number];
+
+/**
+ * The three manual outcomes an admin can record for a missed-merge
+ * candidate pair. Recording a decision here is a LABEL for the regression
+ * test suite and future precision/recall measurement — it does NOT itself
+ * perform any merge of the two Stories' data (that remains a separate,
+ * deliberate operation, same caution as `repairInvalidMerge`).
+ */
+export const MISSED_MERGE_REVIEW_DECISIONS = ["merge", "keep_separate", "uncertain"] as const;
+export type MissedMergeReviewDecision = (typeof MISSED_MERGE_REVIEW_DECISIONS)[number];

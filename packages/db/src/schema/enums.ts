@@ -1,4 +1,6 @@
 import {
+  MISSED_MERGE_CANDIDATE_TYPES,
+  MISSED_MERGE_REVIEW_DECISIONS,
   REVIEW_QUEUE_REASONS,
   REVIEW_QUEUE_STATUSES,
   RISK_LEVELS,
@@ -34,6 +36,14 @@ export const storyMatchDecisionEnum = pgEnum("story_match_decision", STORY_MATCH
 export const storyMatchReviewStatusEnum = pgEnum(
   "story_match_review_status",
   STORY_MATCH_REVIEW_STATUSES,
+);
+export const missedMergeCandidateTypeEnum = pgEnum(
+  "missed_merge_candidate_type",
+  MISSED_MERGE_CANDIDATE_TYPES,
+);
+export const missedMergeReviewDecisionEnum = pgEnum(
+  "missed_merge_review_decision",
+  MISSED_MERGE_REVIEW_DECISIONS,
 );
 
 export const sourceCategoryEnum = pgEnum("source_category", SOURCE_CATEGORIES);
