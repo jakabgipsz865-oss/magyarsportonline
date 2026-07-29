@@ -165,6 +165,18 @@ jobs:
           lines.append(f"- Automatikus összevonás (`auto_merge`) — valódi pozitív JELÖLT (kézi megerősítést igényel): **{md.get('autoMergeCount', 0)}**")
           lines.append(f"- Review-ba küldött bizonytalan eset (`needs_review`) — NEM vonta össze automatikusan: **{md.get('needsReviewCount', 0)}**")
           lines.append(f"- Új Story (`auto_new_story`, nincs specifikus egyező entitás vagy sportág-eltérés): **{md.get('autoNewStoryCount', 0)}**")
+
+          entity_breakdown = md.get("entityTypeBreakdown", {})
+          if entity_breakdown:
+              breakdown_str = ", ".join(f"{t}: {n}" for t, n in sorted(entity_breakdown.items(), key=lambda x: -x[1]))
+              lines.append(f"- Entitástípusonkénti egyezés (auto_merge + needs_review döntésekben): {breakdown_str}")
+          else:
+              lines.append("- Entitástípusonkénti egyezés: nincs auto_merge/needs_review döntés a vizsgált ablakban.")
+
+          category_breakdown = md.get("matchCategoryBreakdown", {})
+          if category_breakdown:
+              category_str = ", ".join(f"{c}: {n}" for c, n in sorted(category_breakdown.items(), key=lambda x: -x[1]))
+              lines.append(f"- Egyezés-kategóriák (ugyanaz a csapat / mérkőzés / játékos-edző / átigazolási pár): {category_str}")
           lines.append(f"- {md.get('precisionRecallNoteHu', '')}\n")
 
           auto_merges = md.get("autoMergeDecisions", [])
@@ -175,7 +187,7 @@ jobs:
               matched = ", ".join(f"{e['nameCanonical']} ({e['type']})" for e in d.get("matchedEntities", []))
               lines.append(f"- \"{d['rawArticleTitle']}\" ({d.get('rawArticleUrl', 'n/a')})")
               lines.append(f"  - Összevonva ide: \"{d.get('resultingStoryTitle', 'n/a')}\" (slug: {d.get('resultingStorySlug', 'n/a')})")
-              lines.append(f"  - Match score: {d['matchScore']}/100, egyező entitások: {matched or 'nincs'}")
+              lines.append(f"  - Match score: {d['matchScore']}/100, kategória: {d.get('matchCategoryLabelHu', 'n/a')}, egyező entitások: {matched or 'nincs'}")
               lines.append(f"  - Indoklás: {d['decisionReasonHu']}")
           lines.append("")
 
@@ -188,7 +200,7 @@ jobs:
               lines.append(f"- \"{d['rawArticleTitle']}\" ({d.get('rawArticleUrl', 'n/a')})")
               lines.append(f"  - Jelölt Story (NEM vonta össze): \"{d.get('candidateStoryTitle', 'n/a')}\" (slug: {d.get('candidateStorySlug', 'n/a')})")
               lines.append(f"  - Ehelyett saját Story jött létre: \"{d.get('resultingStoryTitle', 'n/a')}\" (slug: {d.get('resultingStorySlug', 'n/a')})")
-              lines.append(f"  - Match score: {d['matchScore']}/100, egyező entitások: {matched or 'nincs'}, review-státusz: {d.get('reviewStatus', 'n/a')}")
+              lines.append(f"  - Match score: {d['matchScore']}/100, kategória: {d.get('matchCategoryLabelHu', 'n/a')}, egyező entitások: {matched or 'nincs'}, review-státusz: {d.get('reviewStatus', 'n/a')}")
               lines.append(f"  - Indoklás: {d['decisionReasonHu']}")
           lines.append("")
 

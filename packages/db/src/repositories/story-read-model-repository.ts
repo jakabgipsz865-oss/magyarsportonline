@@ -38,4 +38,17 @@ export class StoryReadModelRepository {
       .limit(params.limit)
       .offset(params.offset);
   }
+
+  /**
+   * Every row here is, by construction, published (only ever upserted by
+   * the read-model-projector on `story/published`) and every public surface
+   * (`/hir/[slug]`, sitemap, RSS, `api/v1/stories`) reads exclusively from
+   * this table. Called defensively by the invalid-merge repair operation
+   * (2026-07-29) so a Story archived as `invalid_merge` cannot remain
+   * publicly visible even in the edge case where it had already been
+   * manually approved through the review queue before being caught.
+   */
+  async deleteByStoryId(storyId: string): Promise<void> {
+    await this.db.delete(storyReadModel).where(eq(storyReadModel.storyId, storyId));
+  }
 }

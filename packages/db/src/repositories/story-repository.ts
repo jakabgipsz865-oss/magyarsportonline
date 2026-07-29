@@ -1,5 +1,5 @@
 import type { RiskLevel, StoryStatus } from "@magyarsportonline/shared";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, ne } from "drizzle-orm";
 import type { Database } from "../client";
 import { isUniqueViolation } from "../errors";
 import { withFingerprintLock } from "../locking";
@@ -33,9 +33,35 @@ export class StoryRepository {
     return row ?? null;
   }
 
-  /** Admin credibility-review felülethez (2026-07-28) — legutóbb frissített Story-k, publikálási státusztól függetlenül. */
+  /**
+   * Admin credibility-review felülethez és a bizonyító riporthoz (2026-07-28,
+   * kibővítve 2026-07-29) — legutóbb frissített Story-k, publikálási
+   * státusztól függetlenül. Kizárja az `invalid_merge` Story-kat (rule:
+   * "ne jelenhessen meg... hitelességi mintaként", docs/open-decisions.md
+   * #14) — egy archivált, bizonyítottan téves összevonás sosem szerepelhet
+   * itt, sem admin listázásban, sem a bizonyító riportban.
+   */
   async listRecent(limit: number): Promise<Story[]> {
-    return this.db.select().from(stories).orderBy(desc(stories.lastUpdatedAt)).limit(limit);
+    return this.db
+      .select()
+      .from(stories)
+      .where(ne(stories.status, "invalid_merge"))
+      .orderBy(desc(stories.lastUpdatedAt))
+      .limit(limit);
+  }
+
+  /**
+   * Archives a Story as a proven false-positive merge (2026-07-29,
+   * docs/open-decisions.md #14) — never deleted (keeps the audit trail),
+   * but excluded from `listRecent` and from future candidate-matching
+   * (`StoryMatchRepository.findCandidateStories`), so it can never again
+   * surface as a credibility sample or be re-merged into.
+   */
+  async markInvalidMerge(storyId: string, reasonHu: string): Promise<void> {
+    await this.db
+      .update(stories)
+      .set({ status: "invalid_merge", invalidMergeReasonHu: reasonHu, invalidatedAt: new Date() })
+      .where(eq(stories.id, storyId));
   }
 
   /**

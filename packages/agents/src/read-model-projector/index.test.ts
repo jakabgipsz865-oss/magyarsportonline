@@ -25,6 +25,8 @@ const STORY = {
   credibilityOfficialConfirmed: false,
   credibilityCorroboratingCount: 1,
   credibilityUpdatedAt: new Date("2026-07-27T20:10:00.000Z"),
+  invalidMergeReasonHu: null,
+  invalidatedAt: null,
 };
 
 function version(overrides?: Partial<Record<string, unknown>>) {

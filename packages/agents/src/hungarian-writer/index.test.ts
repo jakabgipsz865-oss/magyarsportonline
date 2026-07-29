@@ -32,6 +32,8 @@ const STORY = {
   credibilityOfficialConfirmed: false,
   credibilityCorroboratingCount: null,
   credibilityUpdatedAt: null,
+  invalidMergeReasonHu: null,
+  invalidatedAt: null,
 };
 
 const FACT: Fact = {

@@ -10,6 +10,7 @@ import type { Logger } from "@magyarsportonline/observability";
 import type { AgentRunRecorder } from "../shared/with-agent-run";
 import { withAgentRun } from "../shared/with-agent-run";
 import { extractEntityMentions } from "../deduplication/entity-mentions";
+import { isSpecificEntityType } from "../deduplication/story-match";
 
 export const AGENT_VERSION = "story-merge@0.2.0";
 
@@ -90,10 +91,9 @@ export async function handleStoryCandidateIdentified(
 
       async function linkStoryEntities(storyId: string): Promise<void> {
         for (const mention of mentions) {
-          const role =
-            mention.entity.type === "team" || mention.entity.type === "player"
-              ? ("subject" as const)
-              : ("mentioned" as const);
+          const role = isSpecificEntityType(mention.entity.type)
+            ? ("subject" as const)
+            : ("mentioned" as const);
           await deps.entityRepository.linkToStory(storyId, mention.entity.entityId, role);
         }
       }

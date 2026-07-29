@@ -4,7 +4,11 @@ import type { Entity } from "@magyarsportonline/db";
 import { inferSportFromUrl } from "./sport";
 import { toDateBucket } from "./date-bucket";
 import {
+  classifyMatchCategory,
   decideStoryMatch,
+  extractRoundLabel,
+  isGenericEntityType,
+  isSpecificEntityType,
   scoreStoryMatch,
   type ArticleMatchInput,
   type CandidateStoryMatchInput,
@@ -313,6 +317,210 @@ describe("scoreStoryMatch — specific entity requirement drives auto_merge", ()
         { entityId: "arsenal", type: "team", nameCanonical: "Arsenal FC" },
       ]),
     );
+  });
+});
+
+describe("isSpecificEntityType / isGenericEntityType", () => {
+  it("treats team, player, and coach as specific", () => {
+    expect(isSpecificEntityType("team")).toBe(true);
+    expect(isSpecificEntityType("player")).toBe(true);
+    expect(isSpecificEntityType("coach")).toBe(true);
+  });
+
+  it("treats competition, league, and venue as generic", () => {
+    expect(isGenericEntityType("competition")).toBe(true);
+    expect(isGenericEntityType("league")).toBe(true);
+    expect(isGenericEntityType("venue")).toBe(true);
+  });
+
+  it("never double-counts a type as both specific and generic", () => {
+    for (const type of ["team", "player", "coach", "competition", "league", "venue"]) {
+      expect(isSpecificEntityType(type) && isGenericEntityType(type)).toBe(false);
+    }
+  });
+});
+
+describe("scoreStoryMatch — coach entities count as specific (rule 2: same player or coach)", () => {
+  it("auto_merges on a shared coach entity plus a same-day match, exactly like a team or player", () => {
+    const art = article(
+      [
+        {
+          entity: { entityId: "alonso", type: "coach", nameCanonical: "Xabi Alonso" },
+          location: "title",
+        },
+      ],
+      "football",
+      "2026-07-29",
+    );
+    const cand = candidate(
+      "story-1",
+      [
+        {
+          entity: { entityId: "alonso", type: "coach", nameCanonical: "Xabi Alonso" },
+          role: "subject",
+        },
+      ],
+      "football",
+      "2026-07-29",
+    );
+
+    const decision = decideStoryMatch(art, [cand]);
+
+    expect(decision.kind).toBe("auto_merge");
+  });
+});
+
+describe("classifyMatchCategory", () => {
+  it("classifies a single shared team as same_team", () => {
+    expect(
+      classifyMatchCategory([
+        { entityId: "liverpool", type: "team", nameCanonical: "Liverpool FC" },
+      ]),
+    ).toBe("same_team");
+  });
+
+  it("classifies two shared teams as same_match", () => {
+    expect(
+      classifyMatchCategory([
+        { entityId: "liverpool", type: "team", nameCanonical: "Liverpool FC" },
+        { entityId: "arsenal", type: "team", nameCanonical: "Arsenal FC" },
+      ]),
+    ).toBe("same_match");
+  });
+
+  it("classifies a single shared player or coach as same_player_or_coach", () => {
+    expect(
+      classifyMatchCategory([
+        { entityId: "salah", type: "player", nameCanonical: "Mohamed Salah" },
+      ]),
+    ).toBe("same_player_or_coach");
+    expect(
+      classifyMatchCategory([{ entityId: "arteta", type: "coach", nameCanonical: "Mikel Arteta" }]),
+    ).toBe("same_player_or_coach");
+  });
+
+  it("classifies a shared team + player/coach together as transfer_pair", () => {
+    expect(
+      classifyMatchCategory([
+        { entityId: "chelsea", type: "team", nameCanonical: "Chelsea FC" },
+        { entityId: "welbeck", type: "player", nameCanonical: "Danny Welbeck" },
+      ]),
+    ).toBe("transfer_pair");
+  });
+
+  it("classifies no shared specific entity as none", () => {
+    expect(
+      classifyMatchCategory([
+        { entityId: "pl", type: "competition", nameCanonical: "Premier League" },
+      ]),
+    ).toBe("none");
+    expect(classifyMatchCategory([])).toBe("none");
+  });
+
+  it("classifies two shared players (no team) as multiple_specific", () => {
+    expect(
+      classifyMatchCategory([
+        { entityId: "salah", type: "player", nameCanonical: "Mohamed Salah" },
+        { entityId: "haaland", type: "player", nameCanonical: "Erling Haaland" },
+      ]),
+    ).toBe("multiple_specific");
+  });
+});
+
+describe("extractRoundLabel", () => {
+  it("extracts an English matchday/gameweek/round number", () => {
+    expect(extractRoundLabel("Premier League Matchday 3 preview")).toBe("matchday 3");
+    expect(extractRoundLabel("Gameweek 12 highlights")).toBe("gameweek 12");
+    expect(extractRoundLabel("Champions League Round 5 review")).toBe("round 5");
+  });
+
+  it("extracts a Hungarian round number", () => {
+    expect(extractRoundLabel("NB I: 6. forduló összefoglaló")).toBe("6. forduló");
+  });
+
+  it("extracts knockout-stage labels", () => {
+    expect(extractRoundLabel("Champions League quarter-final draw")).toMatch(/quarter-?final/);
+    expect(extractRoundLabel("Semi-final preview")).toMatch(/semi-?final/);
+  });
+
+  it("returns null when no round descriptor is present", () => {
+    expect(extractRoundLabel("Liverpool beat Arsenal 3-1")).toBeNull();
+  });
+});
+
+describe("scoreStoryMatch — round/matchday is supplementary corroboration only, never a gate", () => {
+  it("a matching round label alone (no specific entity) still cannot reach the auto-merge threshold", () => {
+    const art: ArticleMatchInput = {
+      mentions: [
+        {
+          entity: { entityId: "pl", type: "competition", nameCanonical: "Premier League" },
+          location: "title",
+        },
+      ],
+      sport: "football",
+      dateBucket: "2026-07-29",
+      roundLabel: "matchday 3",
+    };
+    const cand: CandidateStoryMatchInput = {
+      storyId: "story-1",
+      entities: [
+        {
+          entity: { entityId: "pl", type: "competition", nameCanonical: "Premier League" },
+          role: "mentioned",
+        },
+      ],
+      sport: "football",
+      dateBucket: "2026-07-29",
+      roundLabel: "matchday 3",
+    };
+
+    const result = scoreStoryMatch(art, cand);
+
+    expect(result.hasSpecificSharedEntity).toBe(false);
+    expect(result.score).toBeLessThan(65);
+  });
+
+  it("boosts the score slightly when a shared specific entity ALSO has a matching round label, without being required", () => {
+    const baseArticle = (roundLabel: string | null): ArticleMatchInput => ({
+      mentions: [
+        {
+          entity: { entityId: "liverpool", type: "team", nameCanonical: "Liverpool FC" },
+          location: "title",
+        },
+        {
+          entity: { entityId: "pl", type: "competition", nameCanonical: "Premier League" },
+          location: "title",
+        },
+      ],
+      sport: "football",
+      dateBucket: "2026-07-10",
+      roundLabel,
+    });
+    const baseCandidate = (roundLabel: string | null): CandidateStoryMatchInput => ({
+      storyId: "story-1",
+      entities: [
+        {
+          entity: { entityId: "liverpool", type: "team", nameCanonical: "Liverpool FC" },
+          role: "subject",
+        },
+        {
+          entity: { entityId: "pl", type: "competition", nameCanonical: "Premier League" },
+          role: "mentioned",
+        },
+      ],
+      sport: "football",
+      dateBucket: "2026-07-20", // far apart, no date bonus
+      roundLabel,
+    });
+
+    const withoutRoundMatch = scoreStoryMatch(
+      baseArticle("matchday 3"),
+      baseCandidate("matchday 4"),
+    );
+    const withRoundMatch = scoreStoryMatch(baseArticle("matchday 3"), baseCandidate("matchday 3"));
+
+    expect(withRoundMatch.score).toBeGreaterThan(withoutRoundMatch.score);
+    expect(withRoundMatch.hasSpecificSharedEntity).toBe(true);
   });
 });
 

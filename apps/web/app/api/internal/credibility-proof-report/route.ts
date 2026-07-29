@@ -13,8 +13,10 @@ const {
   rawDetailOf,
 } = factVerification;
 
-const { auditStoryMerge, entityMatchesText } = deduplication;
+const { auditStoryMerge, entityMatchesText, classifyMatchCategory, MATCH_CATEGORY_LABELS_HU } =
+  deduplication;
 type MergeAuditResult = deduplication.MergeAuditResult;
+type MatchedEntity = deduplication.MatchedEntity;
 
 /**
  * "Bizonyító riport" (2026-07-28, kibővítve 2026-07-29) — a felhasználó
@@ -330,13 +332,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         decision.candidateStoryId ? storyRepository.getById(decision.candidateStoryId) : null,
         decision.resultingStoryId ? storyRepository.getById(decision.resultingStoryId) : null,
       ]);
+      const matchedEntities = (decision.matchedEntities as MatchedEntity[] | null) ?? [];
+      const matchCategory = classifyMatchCategory(matchedEntities);
       return {
         decisionId: decision.id,
         rawArticleTitle: rawArticle?.titleOriginal ?? "(ismeretlen cikk)",
         rawArticleUrl: rawArticle?.sourceUrl ?? null,
         matchScore: decision.matchScore,
-        matchedEntities: decision.matchedEntities,
+        matchedEntities,
         differingEntities: decision.differingEntities,
+        matchCategory,
+        matchCategoryLabelHu: MATCH_CATEGORY_LABELS_HU[matchCategory],
         sportMismatch: decision.sportMismatch,
         decisionReasonHu: decision.decisionReasonHu,
         candidateStoryTitle: candidateStory?.canonicalTitle ?? null,
@@ -356,6 +362,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
     const autoNewStoryCount = recentDecisions.filter((d) => d.decision === "auto_new_story").length;
 
+    // Entity-type and match-category breakdown (2026-07-29, "specifikus
+    // entitásfelismerés bővítése" sprint, rule: "entitástípusonkénti
+    // egyezés") — across every auto_merge/needs_review decision's matched
+    // entities, so the report shows WHICH kind of specific evidence (team,
+    // player, coach) actually drove real matches, not just a total count.
+    const entityTypeBreakdown = new Map<string, number>();
+    const matchCategoryBreakdown = new Map<string, number>();
+    for (const d of [...autoMergeDecisions, ...needsReviewDecisions]) {
+      matchCategoryBreakdown.set(
+        d.matchCategory,
+        (matchCategoryBreakdown.get(d.matchCategory) ?? 0) + 1,
+      );
+      for (const entity of d.matchedEntities) {
+        entityTypeBreakdown.set(entity.type, (entityTypeBreakdown.get(entity.type) ?? 0) + 1);
+      }
+    }
+
     // Precision/recall are only meaningful once a human has actually read
     // each auto_merge decision's evidence above and confirmed whether it's
     // a real same-event merge — this endpoint deliberately does NOT invent
@@ -372,6 +395,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       autoNewStoryCount,
       autoMergeDecisions,
       needsReviewDecisions,
+      entityTypeBreakdown: Object.fromEntries(entityTypeBreakdown),
+      matchCategoryBreakdown: Object.fromEntries(
+        [...matchCategoryBreakdown.entries()].map(([category, n]) => [
+          `${category} (${MATCH_CATEGORY_LABELS_HU[category as keyof typeof MATCH_CATEGORY_LABELS_HU]})`,
+          n,
+        ]),
+      ),
       precisionRecallNoteHu:
         "A pontosság (precision) és fedés (recall) csak azután számolható, hogy egy ember ténylegesen elolvasta az `autoMergeDecisions` bizonyítékait, és megerősítette, melyik valódi, melyik téves pozitív — ez a végpont nem talál ki egy számot előre. Precision = megerősített valódi pozitív / (megerősített valódi pozitív + megerősített téves pozitív), kizárólag a manuálisan átolvasott halmazon.",
     };
