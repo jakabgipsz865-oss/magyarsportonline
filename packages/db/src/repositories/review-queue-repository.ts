@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { ReviewQueueReason, ReviewQueueStatus, RiskLevel } from "@magyarsportonline/shared";
 import type { Database } from "../client";
 import { reviewQueueItems, stories, storyVersions } from "../schema/index";
@@ -85,5 +85,20 @@ export class ReviewQueueRepository {
       .where(eq(reviewQueueItems.id, id))
       .returning();
     return row;
+  }
+
+  /**
+   * `listPending()` has no Story-status filter, so a Story archived as
+   * `invalid_merge` would otherwise still surface here through a stale
+   * pending review item. Called by the invalid-merge repair operation
+   * (2026-07-29) to reject every pending item for the archived Story
+   * before/alongside marking it, so it structurally cannot appear in the
+   * admin review/publish queue either.
+   */
+  async rejectAllPendingForStory(storyId: string, reviewNote: string): Promise<void> {
+    await this.db
+      .update(reviewQueueItems)
+      .set({ status: "rejected", reviewNote, resolvedAt: new Date() })
+      .where(and(eq(reviewQueueItems.storyId, storyId), eq(reviewQueueItems.status, "pending")));
   }
 }

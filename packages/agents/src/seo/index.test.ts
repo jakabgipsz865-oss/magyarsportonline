@@ -26,6 +26,8 @@ function story(overrides?: Partial<Record<string, unknown>>) {
     credibilityOfficialConfirmed: false,
     credibilityCorroboratingCount: null,
     credibilityUpdatedAt: null,
+    invalidMergeReasonHu: null,
+    invalidatedAt: null,
     ...overrides,
   };
 }

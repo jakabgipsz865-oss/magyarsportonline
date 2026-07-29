@@ -1,5 +1,5 @@
 import type { StoryMatchDecisionKind, StoryMatchReviewStatus } from "@magyarsportonline/shared";
-import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, ne } from "drizzle-orm";
 import type { Database } from "../client";
 import {
   entities as entitiesTable,
@@ -74,6 +74,10 @@ export class StoryMatchRepository {
         and(
           inArray(storyEntities.entityId, specificEntityIds),
           gte(stories.lastUpdatedAt, sinceDate),
+          // A Story archived as a proven false-positive merge
+          // (docs/open-decisions.md #14) must never become a candidate for
+          // a NEW article to merge into.
+          ne(stories.status, "invalid_merge"),
         ),
       );
 

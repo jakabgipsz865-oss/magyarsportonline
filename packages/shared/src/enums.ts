@@ -13,6 +13,12 @@ export const STORY_STATUSES = [
   "published",
   "updated",
   "retracted",
+  // Story-matching data repair (2026-07-29, "specifikus entitásfelismerés
+  // bővítése" sprint): a Story a régi, egyetlen-entitás fingerprinttel jött
+  // létre és bizonyítottan téves összevonás eredménye (docs/open-decisions.md
+  // #13/#14) — archivált, sosem publikálható, sosem szerepelhet hitelességi
+  // mintaként vagy jelölt Storyként egy jövőbeli összevonáshoz.
+  "invalid_merge",
 ] as const;
 export type StoryStatus = (typeof STORY_STATUSES)[number];
 

@@ -47,4 +47,9 @@ export const stories = pgTable("stories", {
   credibilityOfficialConfirmed: boolean("credibility_official_confirmed").notNull().default(false),
   credibilityCorroboratingCount: integer("credibility_corroborating_count"),
   credibilityUpdatedAt: timestamp("credibility_updated_at", { withTimezone: true }),
+  // --- Story-matching data repair (additív, 2026-07-29) ---
+  // Csak `status = 'invalid_merge'` esetén releváns — lásd
+  // docs/open-decisions.md #14 és StoryRepository.markInvalidMerge.
+  invalidMergeReasonHu: text("invalid_merge_reason_hu"),
+  invalidatedAt: timestamp("invalidated_at", { withTimezone: true }),
 });

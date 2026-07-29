@@ -4,15 +4,39 @@ import type { EntityMention } from "./entity-mentions";
 
 export type { StoryMatchDecisionKind };
 
-/** Types a scored match can treat as identifying a SPECIFIC subject (team/player/coach). Coach mentions are seeded as "player"-type entities — the taxonomy has no separate coach type. */
-const SPECIFIC_ENTITY_TYPES = new Set(["team", "player"]);
+/**
+ * Types a scored match can treat as identifying a SPECIFIC subject (team,
+ * player, or coach) — 2026-07-29 "specifikus entitásfelismerés bővítése"
+ * sprint added `coach` as its own entity type (previously coach mentions
+ * had nowhere to go in the taxonomy). These are the ONLY types that can
+ * ever gate an auto_merge (rules 1+2).
+ */
+const SPECIFIC_ENTITY_TYPES = new Set(["team", "player", "coach"]);
 /** Types that alone are never a sufficient reason to merge two Stories (rule 1: competition-only match must never auto-merge). */
 const GENERIC_ENTITY_TYPES = new Set(["competition", "league", "venue"]);
+
+export function isSpecificEntityType(type: string): boolean {
+  return SPECIFIC_ENTITY_TYPES.has(type);
+}
+
+export function isGenericEntityType(type: string): boolean {
+  return GENERIC_ENTITY_TYPES.has(type);
+}
+
+function isSpecific(entity: MatchedEntity): boolean {
+  return isSpecificEntityType(entity.type);
+}
+
+function isGeneric(entity: MatchedEntity): boolean {
+  return isGenericEntityType(entity.type);
+}
 
 export interface ArticleMatchInput {
   mentions: EntityMention[];
   sport: string | null;
   dateBucket: string;
+  /** Competition round/matchday label, if one could be extracted from the title/lead (e.g. "6. forduló", "Quarter-final") — see `extractRoundLabel`. Supplementary corroboration only, never a gate. */
+  roundLabel?: string | null;
 }
 
 /** A candidate existing Story's aggregate entity set — `role` mirrors `story_entities.role` ("subject" for entities found in some contributing article's title/lead, "mentioned" otherwise). */
@@ -26,6 +50,7 @@ export interface CandidateStoryMatchInput {
   entities: CandidateStoryEntity[];
   sport: string | null;
   dateBucket: string;
+  roundLabel?: string | null;
 }
 
 export interface StoryMatchScore {
@@ -39,17 +64,92 @@ export interface StoryMatchScore {
 
 const AUTO_MERGE_THRESHOLD = 65;
 
-function isSpecific(entity: MatchedEntity): boolean {
-  return SPECIFIC_ENTITY_TYPES.has(entity.type);
-}
-
-function isGeneric(entity: MatchedEntity): boolean {
-  return GENERIC_ENTITY_TYPES.has(entity.type);
-}
-
 function daysBetweenBuckets(a: string, b: string): number {
   const DAY_MS = 24 * 60 * 60 * 1000;
   return Math.abs(Date.parse(`${a}T00:00:00.000Z`) - Date.parse(`${b}T00:00:00.000Z`)) / DAY_MS;
+}
+
+/**
+ * A competition round/matchday descriptor, extracted from an article's
+ * title/lead (2026-07-29, "specifikus entitásfelismerés bővítése" sprint,
+ * rule: "versenysorozat és forduló"). Deliberately narrow — English/Hungarian
+ * literal patterns only, no fuzzy inference. Used ONLY as supplementary
+ * corroboration (never a gate): two articles sharing both a competition
+ * entity AND the same round label is a stronger "same real event" signal
+ * than sharing the competition alone, but still nowhere near sufficient by
+ * itself (rule 1 still applies — competition+round is still just generic
+ * context, capped well under the auto-merge threshold by construction in
+ * `scoreStoryMatch`).
+ */
+const ROUND_PATTERNS: RegExp[] = [
+  /\b(\d+)(?:st|nd|rd|th)?\s*(?:matchday|gameweek|round)\b/i,
+  /\b(?:matchday|gameweek|round)\s*(\d+)\b/i,
+  // No trailing \b: JS regex `\b` treats accented letters like "ó" as
+  // non-word characters without the unicode-property-escape form, so
+  // `forduló\b` fails to match when followed by whitespace (both sides of
+  // the boundary end up "non-word"). Dropping it is safe here — a false
+  // match on a longer word containing "forduló" as a prefix is a
+  // non-issue for this supplementary, never-gating signal.
+  /\b(\d+)\.\s*forduló/i,
+  /\bquarter-?final\b/i,
+  /\bsemi-?final\b/i,
+  /\b(?<!quarter-|semi-)\bfinal\b/i,
+];
+
+export function extractRoundLabel(text: string): string | null {
+  for (const pattern of ROUND_PATTERNS) {
+    const match = pattern.exec(text);
+    if (match) {
+      return match[0].toLowerCase().trim();
+    }
+  }
+  return null;
+}
+
+/**
+ * Human-readable classification of WHICH kind of specific evidence a match
+ * is built on (2026-07-29 sprint, rule: "entitástípusonkénti egyezés" in the
+ * proof report) — reporting/explainability only, does not affect the
+ * scoring or gating decision above.
+ */
+export type MatchCategory =
+  | "same_team"
+  | "same_match"
+  | "same_player_or_coach"
+  | "transfer_pair"
+  | "multiple_specific"
+  | "none";
+
+export const MATCH_CATEGORY_LABELS_HU: Record<MatchCategory, string> = {
+  same_team: "ugyanaz a csapat",
+  same_match: "ugyanaz a mérkőzés (2+ közös csapat)",
+  same_player_or_coach: "ugyanaz a játékos/edző",
+  transfer_pair: "átigazolási szereplőpár (játékos/edző + csapat)",
+  multiple_specific: "több specifikus közös entitás",
+  none: "nincs specifikus közös entitás",
+};
+
+export function classifyMatchCategory(matchedEntities: MatchedEntity[]): MatchCategory {
+  const specific = matchedEntities.filter(isSpecific);
+  const teams = specific.filter((e) => e.type === "team");
+  const personEntities = specific.filter((e) => e.type === "player" || e.type === "coach");
+
+  if (specific.length === 0) {
+    return "none";
+  }
+  if (teams.length >= 2) {
+    return "same_match";
+  }
+  if (teams.length === 1 && personEntities.length >= 1) {
+    return "transfer_pair";
+  }
+  if (teams.length === 1 && personEntities.length === 0) {
+    return "same_team";
+  }
+  if (teams.length === 0 && personEntities.length === 1) {
+    return "same_player_or_coach";
+  }
+  return "multiple_specific";
 }
 
 /**
@@ -116,6 +216,12 @@ export function scoreStoryMatch(
 
   if (sharedGeneric.length > 0) {
     score += 10;
+    // Same competition AND same round/matchday is meaningfully stronger
+    // corroboration than the competition alone — still just generic
+    // context (never gates auto_merge on its own), so a small bonus only.
+    if (article.roundLabel && candidate.roundLabel && article.roundLabel === candidate.roundLabel) {
+      score += 5;
+    }
   }
 
   return {
@@ -139,6 +245,7 @@ export interface StoryMatchDecision {
   /** Every candidate considered, sorted best-first — for the "needs_review" candidates list and the audit trail (rule 7). */
   allScores: StoryMatchScore[];
   decisionReasonHu: string;
+  matchCategory: MatchCategory;
 }
 
 /**
@@ -171,12 +278,19 @@ export function decideStoryMatch(
       differingEntities: best?.differingEntities ?? [],
       sportMismatch: best?.sportMismatch ?? false,
       allScores,
+      matchCategory: "none",
       decisionReasonHu:
         candidates.length === 0
-          ? "Nincs jelölt Story a friss cikk cím/lead-jében talált specifikus (csapat/játékos) entitásokhoz — új Story jön létre."
-          : "A legjobban egyező jelölt Story is csak általános (verseny/liga/helyszín) entitást osztott meg a friss cikkel, specifikus (csapat/játékos) egyezés nélkül — ez önmagában soha nem elég az automatikus összevonáshoz, így új Story jön létre.",
+          ? "Nincs jelölt Story a friss cikk cím/lead-jében talált specifikus (csapat/játékos/edző) entitásokhoz — új Story jön létre."
+          : "A legjobban egyező jelölt Story is csak általános (verseny/liga/helyszín) entitást osztott meg a friss cikkel, specifikus (csapat/játékos/edző) egyezés nélkül — ez önmagában soha nem elég az automatikus összevonáshoz, így új Story jön létre.",
     };
   }
+
+  const matchCategory = classifyMatchCategory(best.matchedEntities);
+  const specificNames = best.matchedEntities
+    .filter((e) => isSpecificEntityType(e.type))
+    .map((e) => e.nameCanonical)
+    .join(", ");
 
   if (best.score >= AUTO_MERGE_THRESHOLD) {
     return {
@@ -187,12 +301,8 @@ export function decideStoryMatch(
       differingEntities: best.differingEntities,
       sportMismatch: false,
       allScores,
-      decisionReasonHu: `Legalább egy specifikus (csapat/játékos) közös entitás (${best.matchedEntities
-        .filter((e) => SPECIFIC_ENTITY_TYPES.has(e.type))
-        .map((e) => e.nameCanonical)
-        .join(
-          ", ",
-        )}) és elegendő megerősítő jel (${best.score}/100 pont) miatt automatikusan összevonva.`,
+      matchCategory,
+      decisionReasonHu: `Legalább egy specifikus (csapat/játékos/edző) közös entitás (${specificNames}) és elegendő megerősítő jel (${best.score}/100 pont, kategória: ${MATCH_CATEGORY_LABELS_HU[matchCategory]}) miatt automatikusan összevonva.`,
     };
   }
 
@@ -204,11 +314,7 @@ export function decideStoryMatch(
     differingEntities: best.differingEntities,
     sportMismatch: false,
     allScores,
-    decisionReasonHu: `Van specifikus közös entitás (${best.matchedEntities
-      .filter((e) => SPECIFIC_ENTITY_TYPES.has(e.type))
-      .map((e) => e.nameCanonical)
-      .join(
-        ", ",
-      )}), de a pontszám (${best.score}/100) nem éri el az automatikus összevonáshoz szükséges ${AUTO_MERGE_THRESHOLD} pontot — kézi review-ba került, a rendszer NEM vonta össze automatikusan.`,
+    matchCategory,
+    decisionReasonHu: `Van specifikus közös entitás (${specificNames}, kategória: ${MATCH_CATEGORY_LABELS_HU[matchCategory]}), de a pontszám (${best.score}/100) nem éri el az automatikus összevonáshoz szükséges ${AUTO_MERGE_THRESHOLD} pontot — kézi review-ba került, a rendszer NEM vonta össze automatikusan.`,
   };
 }

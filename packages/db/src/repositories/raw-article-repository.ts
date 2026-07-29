@@ -45,4 +45,17 @@ export class RawArticleRepository {
       .set({ storyId, ingestStatus: "merged" })
       .where(eq(rawArticles.id, rawArticleId));
   }
+
+  /**
+   * Reverses `linkToStory` for a data-repair operation (2026-07-29,
+   * docs/open-decisions.md #14) — detaches a RawArticle from a Story being
+   * archived as an invalid merge, resetting it back to `ingested` so it can
+   * be re-enqueued through the (now-fixed) matching pipeline from scratch.
+   */
+  async detachFromStory(rawArticleId: string): Promise<void> {
+    await this.db
+      .update(rawArticles)
+      .set({ storyId: null, ingestStatus: "ingested" })
+      .where(eq(rawArticles.id, rawArticleId));
+  }
 }

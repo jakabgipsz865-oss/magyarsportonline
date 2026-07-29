@@ -32,7 +32,7 @@ async function upsertCategory(db: Database, input: { slug: string; nameHu: strin
 async function upsertEntity(
   db: Database,
   input: {
-    type: "player" | "team" | "competition" | "league" | "venue";
+    type: "player" | "coach" | "team" | "competition" | "league" | "venue";
     nameCanonical: string;
     nameHu: string;
     aliases: string[];
@@ -118,9 +118,73 @@ export async function seed(db: Database): Promise<void> {
       nameHu: "Bayern München",
       aliases: ["Bayern Munich", "Bayern"],
     },
+    // --- Bővítve 2026-07-29 ("specifikus entitásfelismerés bővítése"
+    // sprint) — a felhasználó explicit alias-példái (PSG, Inter), plusz
+    // további, a valós production adatokban ténylegesen előforduló csapatok
+    // (docs/open-decisions.md #14 javítási munka során látott cikkcímek:
+    // Rangers, Aston Villa, Leicester, Bournemouth).
+    {
+      nameCanonical: "Paris Saint-Germain FC",
+      nameHu: "Paris Saint-Germain",
+      aliases: ["Paris Saint-Germain", "PSG", "Paris SG"],
+    },
+    {
+      nameCanonical: "FC Internazionale Milano",
+      nameHu: "Internazionale",
+      aliases: ["Internazionale", "Inter Milan", "Inter"],
+    },
+    { nameCanonical: "Juventus FC", nameHu: "Juventus", aliases: ["Juventus", "Juve"] },
+    { nameCanonical: "AC Milan", nameHu: "AC Milan", aliases: ["AC Milan", "Milan"] },
+    { nameCanonical: "Aston Villa FC", nameHu: "Aston Villa", aliases: ["Aston Villa", "Villa"] },
+    { nameCanonical: "Leicester City FC", nameHu: "Leicester City", aliases: ["Leicester"] },
+    { nameCanonical: "AFC Bournemouth", nameHu: "Bournemouth", aliases: ["Bournemouth"] },
+    { nameCanonical: "Rangers FC", nameHu: "Rangers", aliases: ["Rangers"] },
   ];
   for (const team of teamEntities) {
     await upsertEntity(db, { type: "team", ...team });
+  }
+
+  // Player entities (2026-07-29 sprint) — the taxonomy previously had ZERO
+  // player-type entities seeded, which meant the "same player/coach"
+  // specific-entity rule could never actually engage against real
+  // production data. Prominent, currently-newsworthy players (several of
+  // which already appeared in real BBC/Sky headlines seen during this
+  // sprint's proof-report work), not an exhaustive squad-by-squad list.
+  const playerEntities: Array<{ nameCanonical: string; nameHu: string; aliases: string[] }> = [
+    { nameCanonical: "Mohamed Salah", nameHu: "Mohamed Szalah", aliases: ["Salah"] },
+    { nameCanonical: "Erling Haaland", nameHu: "Erling Haaland", aliases: ["Haaland"] },
+    { nameCanonical: "Bukayo Saka", nameHu: "Bukayo Saka", aliases: ["Saka"] },
+    { nameCanonical: "Kylian Mbappé", nameHu: "Kylian Mbappé", aliases: ["Mbappe", "Mbappé"] },
+    { nameCanonical: "Jude Bellingham", nameHu: "Jude Bellingham", aliases: ["Bellingham"] },
+    {
+      nameCanonical: "Vinicius Junior",
+      nameHu: "Vinicius Junior",
+      aliases: ["Vinicius Jr", "Vinicius Junior", "Vini Jr"],
+    },
+    { nameCanonical: "Jack Grealish", nameHu: "Jack Grealish", aliases: ["Grealish"] },
+    { nameCanonical: "Danny Welbeck", nameHu: "Danny Welbeck", aliases: ["Welbeck"] },
+    { nameCanonical: "Jordan Henderson", nameHu: "Jordan Henderson", aliases: ["Henderson"] },
+    { nameCanonical: "Mason Mount", nameHu: "Mason Mount", aliases: ["Mount"] },
+    { nameCanonical: "Federico Chiesa", nameHu: "Federico Chiesa", aliases: ["Chiesa"] },
+    { nameCanonical: "João Pedro", nameHu: "João Pedro", aliases: ["Joao Pedro"] },
+    { nameCanonical: "Rodri", nameHu: "Rodri", aliases: ["Rodri"] },
+    { nameCanonical: "Savinho", nameHu: "Savinho", aliases: ["Savinho"] },
+  ];
+  for (const player of playerEntities) {
+    await upsertEntity(db, { type: "player", ...player });
+  }
+
+  // Coach entities (2026-07-29 sprint) — new `entity_type` value; previously
+  // coach mentions had no home in the taxonomy at all.
+  const coachEntities: Array<{ nameCanonical: string; nameHu: string; aliases: string[] }> = [
+    { nameCanonical: "Pep Guardiola", nameHu: "Pep Guardiola", aliases: ["Guardiola"] },
+    { nameCanonical: "Mikel Arteta", nameHu: "Mikel Arteta", aliases: ["Arteta"] },
+    { nameCanonical: "Xabi Alonso", nameHu: "Xabi Alonso", aliases: ["Alonso"] },
+    { nameCanonical: "Andoni Iraola", nameHu: "Andoni Iraola", aliases: ["Iraola"] },
+    { nameCanonical: "Derek McInnes", nameHu: "Derek McInnes", aliases: ["McInnes"] },
+  ];
+  for (const coach of coachEntities) {
+    await upsertEntity(db, { type: "coach", ...coach });
   }
 
   const competitionEntities: Array<{ nameCanonical: string; nameHu: string; aliases: string[] }> = [
@@ -138,6 +202,23 @@ export async function seed(db: Database): Promise<void> {
   ];
   for (const competition of competitionEntities) {
     await upsertEntity(db, { type: "competition", ...competition });
+  }
+
+  // Venue entities (2026-07-29 sprint) — generic corroboration only (rule 1:
+  // never sufficient alone), but real, seen-in-production stadium names.
+  const venueEntities: Array<{ nameCanonical: string; nameHu: string; aliases: string[] }> = [
+    { nameCanonical: "Anfield", nameHu: "Anfield", aliases: ["Anfield"] },
+    { nameCanonical: "Old Trafford", nameHu: "Old Trafford", aliases: ["Old Trafford"] },
+    { nameCanonical: "Emirates Stadium", nameHu: "Emirates Stadium", aliases: ["Emirates"] },
+    {
+      nameCanonical: "Santiago Bernabéu",
+      nameHu: "Santiago Bernabéu",
+      aliases: ["Santiago Bernabeu", "Bernabéu"],
+    },
+    { nameCanonical: "Etihad Stadium", nameHu: "Etihad Stadium", aliases: ["Etihad"] },
+  ];
+  for (const venue of venueEntities) {
+    await upsertEntity(db, { type: "venue", ...venue });
   }
 
   // Dev/demo source only — the actual, licensed source onboarding with legal

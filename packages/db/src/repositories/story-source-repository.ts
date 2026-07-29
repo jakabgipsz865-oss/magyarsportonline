@@ -65,6 +65,13 @@ export class StorySourceRepository {
       });
   }
 
+  /** Reverses `link` for a data-repair operation (2026-07-29, docs/open-decisions.md #14) — detaching a RawArticle from a Story being archived as an invalid merge. */
+  async unlink(storyId: string, rawArticleId: string): Promise<void> {
+    await this.db
+      .delete(storySources)
+      .where(and(eq(storySources.storyId, storyId), eq(storySources.rawArticleId, rawArticleId)));
+  }
+
   async countByStoryId(storyId: string): Promise<number> {
     const rows = await this.db
       .select({ id: storySources.id })

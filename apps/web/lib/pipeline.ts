@@ -701,3 +701,52 @@ export async function runEditorialAbReviewBatch(options: {
 
   return batch;
 }
+
+/**
+ * Entry point for `/api/internal/story-repair/invalid-merge`: data-repair
+ * operation for a Story proven to be a false-positive merge from the OLD
+ * single-entity fingerprint matcher (2026-07-29, docs/open-decisions.md
+ * #14 — the real 16-article "Henry Coates"/"Premier League" false merge
+ * from before the scored, multi-factor matcher landed). Never deletes
+ * anything — archives the Story (`status = 'invalid_merge'`, excluded from
+ * `StoryRepository.listRecent` and from `StoryMatchRepository.
+ * findCandidateStories`, so it can never again surface as a credibility
+ * sample or be re-merged into), rejects any pending `review_queue_items`
+ * row for it (`ReviewQueueRepository.listPending()` has no Story-status
+ * filter, so without this an already-queued item would still show up in
+ * the admin review/publish queue after archival), defensively deletes any
+ * `story_read_model` row (the only table every public surface reads from —
+ * `/hir/[slug]`, sitemap, RSS, `api/v1/stories`), detaches every
+ * contributing RawArticle back to `ingested`, and re-enqueues each one
+ * through the NOW-FIXED matching pipeline so they get a chance to be
+ * correctly split into their own (or genuinely shared) Stories from
+ * scratch.
+ */
+export async function repairInvalidMerge(
+  storyId: string,
+  reasonHu: string,
+): Promise<{ detachedArticleIds: string[] }> {
+  const repos = createRepositories();
+  const emitter = buildQueueingEmitter(repos.pipelineJobRepository);
+
+  const articles = await repos.rawArticleRepository.listByStoryId(storyId);
+
+  for (const article of articles) {
+    await repos.storySourceRepository.unlink(storyId, article.id);
+    await repos.rawArticleRepository.detachFromStory(article.id);
+  }
+
+  await repos.storyRepository.markInvalidMerge(storyId, reasonHu);
+  await repos.reviewQueueRepository.rejectAllPendingForStory(storyId, reasonHu);
+  await repos.storyReadModelRepository.deleteByStoryId(storyId);
+
+  for (const article of articles) {
+    await emitter.emit({
+      ...createEventEnvelope({ correlationId: crypto.randomUUID() }),
+      type: "source/article.ingested",
+      payload: { raw_article_id: article.id, source_id: article.sourceId },
+    });
+  }
+
+  return { detachedArticleIds: articles.map((article) => article.id) };
+}

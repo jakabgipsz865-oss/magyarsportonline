@@ -9,8 +9,13 @@ import type { Logger } from "@magyarsportonline/observability";
 import type { AgentRunRecorder } from "../shared/with-agent-run";
 import { withAgentRun } from "../shared/with-agent-run";
 import { toDateBucket } from "./date-bucket";
-import { decideStoryMatch, type CandidateStoryMatchInput } from "./story-match";
-import { extractEntityMentions } from "./entity-mentions";
+import {
+  decideStoryMatch,
+  extractRoundLabel,
+  isSpecificEntityType,
+  type CandidateStoryMatchInput,
+} from "./story-match";
+import { extractEntityMentions, extractLead } from "./entity-mentions";
 import { inferSportFromUrl } from "./sport";
 
 export * from "./date-bucket";
@@ -106,12 +111,13 @@ export async function handleSourceArticleIngested(
       const mentions = extractEntityMentions(rawArticle, entities);
       const sport = inferSportFromUrl(rawArticle.sourceUrl);
       const dateBucket = toDateBucket(rawArticle.publishedAtSource ?? rawArticle.ingestedAt);
+      const roundLabel = extractRoundLabel(
+        `${rawArticle.titleOriginal} ${extractLead(rawArticle)}`,
+      );
 
       const specificEntityIds = [
         ...new Set(
-          mentions
-            .filter((m) => m.entity.type === "team" || m.entity.type === "player")
-            .map((m) => m.entity.entityId),
+          mentions.filter((m) => isSpecificEntityType(m.entity.type)).map((m) => m.entity.entityId),
         ),
       ];
       const sinceDate = new Date(Date.now() - CANDIDATE_LOOKBACK_MS);
@@ -128,13 +134,14 @@ export async function handleSourceArticleIngested(
         })),
         sport: row.rawArticleSourceUrls.map(inferSportFromUrl).find((s) => s !== null) ?? null,
         dateBucket: toDateBucket(row.lastUpdatedAt),
+        roundLabel: extractRoundLabel(row.canonicalTitle),
       }));
 
-      const decision = decideStoryMatch({ mentions, sport, dateBucket }, candidates);
+      const decision = decideStoryMatch({ mentions, sport, dateBucket, roundLabel }, candidates);
 
       const bestSpecificEntityId =
-        mentions.find((m) => m.entity.type === "team" || m.entity.type === "player")?.entity
-          .entityId ?? `no-entity:${rawArticle.titleOriginal.toLowerCase()}`;
+        mentions.find((m) => isSpecificEntityType(m.entity.type))?.entity.entityId ??
+        `no-entity:${rawArticle.titleOriginal.toLowerCase()}`;
       const fingerprintHash = computeFingerprint({
         category: sport ?? deps.defaultCategorySlug,
         primaryEntityId: bestSpecificEntityId,
@@ -149,9 +156,7 @@ export async function handleSourceArticleIngested(
         candidateStoryId: decision.candidateStoryId,
         resultingStoryId: decision.kind === "auto_merge" ? decision.candidateStoryId : null,
         matchScore: decision.score,
-        hasSpecificSharedEntity: decision.matchedEntities.some(
-          (e) => e.type === "team" || e.type === "player",
-        ),
+        hasSpecificSharedEntity: decision.matchedEntities.some((e) => isSpecificEntityType(e.type)),
         matchedEntities: decision.matchedEntities,
         differingEntities: decision.differingEntities,
         sportMismatch: decision.sportMismatch,

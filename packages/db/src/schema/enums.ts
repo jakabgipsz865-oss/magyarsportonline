@@ -69,6 +69,7 @@ export const sourceLicenseTypeEnum = pgEnum("source_license_type", [
 export const ingestStatusEnum = pgEnum("ingest_status", ["ingested", "deduped", "merged", "error"]);
 export const entityTypeEnum = pgEnum("entity_type", [
   "player",
+  "coach",
   "team",
   "competition",
   "league",
