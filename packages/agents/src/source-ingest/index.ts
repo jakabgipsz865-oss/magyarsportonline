@@ -18,7 +18,10 @@ export interface Emitter {
 
 export interface SourceIngestDeps {
   sourceRepository: Pick<SourceRepository, "listActive" | "recordFetchResult">;
-  rawArticleRepository: Pick<RawArticleRepository, "findBySourceUrl" | "insert">;
+  rawArticleRepository: Pick<
+    RawArticleRepository,
+    "findBySourceUrl" | "insert" | "upgradeFromFullArticle"
+  >;
   agentRunRepository: AgentRunRecorder;
   dispatcher: Emitter;
   /** One adapter per `Source.type` — a source whose type has no registered adapter is skipped with an error, not silently ignored. */
@@ -133,6 +136,22 @@ async function ingestOneSource(
 
     const existing = await deps.rawArticleRepository.findBySourceUrl(article.sourceUrl);
     if (existing) {
+      if (existing.contentOrigin === "rss_snippet" && article.contentOrigin === "full_article") {
+        const upgraded = await deps.rawArticleRepository.upgradeFromFullArticle(existing.id, {
+          titleOriginal: article.titleOriginal,
+          subtitleOriginal: article.subtitleOriginal,
+          bodyOriginal: article.bodyOriginal,
+          authorOriginal: article.authorOriginal,
+          publishedAtSource: article.publishedAtSource,
+          imageUrl: article.imageUrl,
+        });
+        if (upgraded) {
+          log.info(
+            { rawArticleId: existing.id, sourceUrl: article.sourceUrl },
+            "upgraded existing RSS snippet to full-article provenance",
+          );
+        }
+      }
       continue;
     }
 

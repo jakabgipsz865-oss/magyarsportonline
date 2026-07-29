@@ -57,7 +57,7 @@ jobs:
               echo "Publication blocked for $item_id (HTTP $code)." >&2
               jq . response.json >&2
             fi
-          done < <(printf '%s' "$ITEM_IDS" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          done < <(printf '%s\n' "$ITEM_IDS" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
           curl -sS --max-time 60 "$BASE/api/v1/stories?limit=20&page=1" \
             -o evidence/public-stories.json
