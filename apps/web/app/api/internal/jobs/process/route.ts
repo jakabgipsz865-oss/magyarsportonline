@@ -62,6 +62,12 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
   let succeeded = 0;
   let failed = 0;
   let deadLettered = 0;
+  const errors: Array<{
+    jobId: string;
+    eventType: string;
+    attempts: number;
+    message: string;
+  }> = [];
 
   while (Date.now() < deadline) {
     const [job] = await repos.pipelineJobRepository.claimBatch(1, STALE_LOCK_MS);
@@ -84,6 +90,14 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
       } else {
         failed += 1;
       }
+      const eventType =
+        typeof job.event === "object" &&
+        job.event !== null &&
+        "type" in job.event &&
+        typeof job.event.type === "string"
+          ? job.event.type
+          : "unknown";
+      errors.push({ jobId: job.id, eventType, attempts: job.attempts, message });
       logger.error(
         { jobId: job.id, attempts: job.attempts, maxAttempts: job.maxAttempts, error: message },
         "pipeline job failed",
@@ -91,7 +105,7 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  return NextResponse.json({ processed, succeeded, failed, deadLettered });
+  return NextResponse.json({ processed, succeeded, failed, deadLettered, errors });
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {

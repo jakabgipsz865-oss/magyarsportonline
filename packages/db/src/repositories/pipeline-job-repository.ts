@@ -28,7 +28,9 @@ export class PipelineJobRepository {
    * called `complete`/`fail`, most likely because the request itself was
    * killed mid-handler). A single `WITH ... FOR UPDATE SKIP LOCKED` CTE
    * statement makes the select-then-update atomic without a separate
-   * transaction wrapper.
+   * transaction wrapper. Fresh events are claimed first so a historical
+   * retry backlog cannot block newly ingested production news indefinitely;
+   * older work remains durable and is drained whenever no fresher job is due.
    */
   async claimBatch(limit: number, staleLockMs: number): Promise<PipelineJobRow[]> {
     const rows = await this.db.execute<PipelineJobRow>(sql`
@@ -36,7 +38,7 @@ export class PipelineJobRepository {
         SELECT id FROM ${pipelineJobs}
         WHERE (status = 'pending' AND available_at <= now())
            OR (status = 'in_progress' AND locked_at < now() - (${staleLockMs}::text || ' milliseconds')::interval)
-        ORDER BY available_at
+        ORDER BY created_at DESC, available_at
         LIMIT ${limit}
         FOR UPDATE SKIP LOCKED
       )
