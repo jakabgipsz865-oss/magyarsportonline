@@ -13,7 +13,9 @@ import {
 import {
   createEventEnvelope,
   createInProcessDispatcher,
+  parseEvent,
   type InProcessDispatcher,
+  type SportsNewsEvent,
 } from "@magyarsportonline/events";
 import {
   MODEL_TIERS,
@@ -179,41 +181,213 @@ export function buildDispatcher(repos: Repositories = createRepositories()): InP
 }
 
 /**
+ * Minimal `Emitter`-shaped object (every agent's `Deps.dispatcher` only ever
+ * needs `emit(event): Promise<void>` — see e.g.
+ * packages/agents/src/deduplication/index.ts's own local `Emitter`
+ * interface) that ENQUEUES instead of synchronously invoking a handler
+ * (2026-07-29, async pipeline sprint, docs/open-decisions.md #12). This is
+ * the entire swap-in replacement for `InProcessDispatcher` on the real
+ * ingest path: every agent's business logic is untouched, only how an
+ * emitted event reaches the next stage changes — from "call the handler
+ * right now, in this HTTP request" to "durably persist it, a later worker
+ * invocation picks it up." `parseEvent` re-validates before persisting so a
+ * malformed event fails loudly at enqueue time, not silently at dequeue
+ * time.
+ */
+export function buildQueueingEmitter(
+  pipelineJobRepository: Pick<Repositories["pipelineJobRepository"], "enqueue">,
+): { emit(event: unknown): Promise<void> } {
+  return {
+    async emit(event: unknown) {
+      const validated = parseEvent(event);
+      await pipelineJobRepository.enqueue(validated);
+    },
+  };
+}
+
+/**
+ * The worker-side counterpart of `buildDispatcher` — processes exactly ONE
+ * claimed job's event by routing it to the same agent handler (with the
+ * same deps) `buildDispatcher` would have called synchronously, except the
+ * `dispatcher` dep passed to that handler is the QUEUEING emitter, so
+ * anything IT emits also becomes a new job rather than a nested synchronous
+ * call. This is what turns the pipeline into a chain of independently
+ * retryable jobs instead of one long call stack.
+ *
+ * Event types with no registered handler here (`story/updated.published`,
+ * `story/review.requested`, `story/review.resolved`, `story/retracted`,
+ * `social/posted`) are a deliberate silent no-op — identical to
+ * `InProcessDispatcher.emit`'s behavior today when no `.on()` handler
+ * matches (e.g. `story/review.requested` is emitted by Publish Gate, which
+ * itself directly writes the `review_queue` row; nothing downstream
+ * currently subscribes to the event itself).
+ */
+export async function dispatchJobToHandler(
+  event: SportsNewsEvent,
+  repos: Repositories,
+  emitter: { emit(event: unknown): Promise<void> },
+): Promise<void> {
+  const logger = getLogger();
+  const llm = getLlmClient();
+
+  switch (event.type) {
+    case "source/article.ingested":
+      return deduplication.handleSourceArticleIngested(
+        {
+          rawArticleRepository: repos.rawArticleRepository,
+          entityRepository: repos.entityRepository,
+          agentRunRepository: repos.agentRunRepository,
+          dispatcher: emitter,
+          logger,
+          defaultCategorySlug: DEFAULT_CATEGORY_SLUG,
+        },
+        event,
+      );
+
+    case "story/candidate.identified":
+      return storyMerge.handleStoryCandidateIdentified(
+        {
+          storyRepository: repos.storyRepository,
+          rawArticleRepository: repos.rawArticleRepository,
+          storySourceRepository: repos.storySourceRepository,
+          agentRunRepository: repos.agentRunRepository,
+          dispatcher: emitter,
+          logger,
+        },
+        event,
+      );
+
+    case "story/created":
+    case "story/merge.completed": {
+      if (event.type === "story/merge.completed" && event.payload.update_type !== "new_info") {
+        return;
+      }
+      return factVerification.handleFactVerificationTrigger(
+        {
+          storyRepository: repos.storyRepository,
+          rawArticleRepository: repos.rawArticleRepository,
+          sourceRepository: repos.sourceRepository,
+          factRepository: repos.factRepository,
+          storySourceRepository: repos.storySourceRepository,
+          storyCredibilityHistoryRepository: repos.storyCredibilityHistoryRepository,
+          llm,
+          agentRunRepository: repos.agentRunRepository,
+          dispatcher: emitter,
+          logger,
+        },
+        event,
+      );
+    }
+
+    case "story/facts.verified":
+      return hungarianWriter.handleStoryFactsVerified(
+        {
+          storyRepository: repos.storyRepository,
+          storyVersionRepository: repos.storyVersionRepository,
+          factRepository: repos.factRepository,
+          editorialCorrectionRepository: repos.editorialCorrectionRepository,
+          editorialCorrectionApplicationRepository: repos.editorialCorrectionApplicationRepository,
+          llm,
+          agentRunRepository: repos.agentRunRepository,
+          dispatcher: emitter,
+          logger,
+        },
+        event,
+      );
+
+    case "story/content.drafted":
+      return editorialRewrite.handleStoryContentDrafted(
+        {
+          storyRepository: repos.storyRepository,
+          storyVersionRepository: repos.storyVersionRepository,
+          factRepository: repos.factRepository,
+          editorialCorrectionRepository: repos.editorialCorrectionRepository,
+          editorialCorrectionApplicationRepository: repos.editorialCorrectionApplicationRepository,
+          llm,
+          agentRunRepository: repos.agentRunRepository,
+          dispatcher: emitter,
+          logger,
+        },
+        event,
+      );
+
+    case "story/editorial.rewritten":
+      return seo.handleStoryEditorialRewritten(
+        {
+          storyRepository: repos.storyRepository,
+          storyVersionRepository: repos.storyVersionRepository,
+          agentRunRepository: repos.agentRunRepository,
+          dispatcher: emitter,
+          logger,
+        },
+        event,
+      );
+
+    case "story/seo.ready":
+      return publishGate.handleStorySeoReady(
+        {
+          storyRepository: repos.storyRepository,
+          storyVersionRepository: repos.storyVersionRepository,
+          factRepository: repos.factRepository,
+          reviewQueueRepository: repos.reviewQueueRepository,
+          agentRunRepository: repos.agentRunRepository,
+          dispatcher: emitter,
+          logger,
+          forceReviewMode: env.FORCE_REVIEW_MODE,
+        },
+        event,
+      );
+
+    case "story/published":
+      return readModelProjector.handleStoryPublished(
+        {
+          storyRepository: repos.storyRepository,
+          storyVersionRepository: repos.storyVersionRepository,
+          storySourceRepository: repos.storySourceRepository,
+          storyCredibilityHistoryRepository: repos.storyCredibilityHistoryRepository,
+          storyReadModelRepository: repos.storyReadModelRepository,
+          logger,
+        },
+        event,
+      );
+
+    default:
+      return;
+  }
+}
+
+/**
  * A real LLM provider call chain (fact verification + writing + self-check,
  * up to 3 sequential network round-trips per article) can take long enough
  * per article that processing an entire RSS backlog in one synchronous HTTP
  * request risks exceeding the serverless function's execution time limit —
  * a risk that didn't exist while every call fell back instantly to the
- * deterministic No-LLM client. Capping new articles per run keeps each
- * ingest request bounded; anything left over is picked up by the next
- * scheduled run (URLs already ingested are never reprocessed either way).
+ * deterministic No-LLM client.
  *
- * This cap is applied GLOBALLY across the whole run (2026-07-29 fix —
- * packages/agents/src/source-ingest/index.ts `runSourceIngest`), not reset
- * per source. It used to reset per source, which meant N active sources
- * could still process up to N × this value new articles in one request —
- * confirmed via TWO separate real production 504s on 2026-07-28/29: first
- * with the per-source cap at 2 (2 sources × 2 articles), then again with
- * the per-source cap already lowered to 1 (2 sources × 1 article still hit
- * Vercel's 60s `FUNCTION_INVOCATION_TIMEOUT` at 60.7s). The cap is now
- * shared across every source in the run, so this value is the actual
- * worst-case total regardless of how many sources are active.
+ * 2026-07-29 (async pipeline sprint, docs/open-decisions.md #12): this cap
+ * no longer bounds LLM work — `runIngestPipeline` now only ENQUEUES a job
+ * per new article (`buildQueueingEmitter`) instead of running the full
+ * downstream chain synchronously, so this request is fast and non-LLM
+ * regardless of how many new articles it finds. The cap still exists as a
+ * plain sanity bound against enqueueing an unbounded backlog in one run
+ * (e.g. a feed's very first activation), raised well above the old
+ * per-request-safety value now that it isn't gating timeout risk anymore.
  */
-const DEFAULT_MAX_NEW_ARTICLES_PER_RUN = 1;
+const DEFAULT_MAX_NEW_ARTICLES_PER_RUN = 20;
 
 /**
  * Entry point for `/api/internal/cron/dispatch-ingest` (docs/architecture/06-deployment.md
- * §6.5): fetches every active Source and runs it all the way through the
- * pipeline — ingest → dedup → merge → fact verification → writing → SEO →
- * publish gate → read-model projection — synchronously, in-process, because
- * `source/article.ingested`'s handler chain-reacts through every
- * `dispatcher.on` registration above before `runSourceIngest` returns.
+ * §6.5): fetches every active Source and, for each new RawArticle, ENQUEUES
+ * `source/article.ingested` (2026-07-29 — previously this chain-reacted
+ * synchronously through the entire pipeline in the same request; see
+ * `buildQueueingEmitter`'s doc comment). A separate worker
+ * (`/api/internal/jobs/process`) drains the queue on its own schedule.
  */
 export async function runIngestPipeline(): Promise<
   Awaited<ReturnType<typeof sourceIngest.runSourceIngest>>
 > {
   const repos = createRepositories();
-  const dispatcher = buildDispatcher(repos);
+  const dispatcher = buildQueueingEmitter(repos.pipelineJobRepository);
 
   const logger = getLogger();
   return sourceIngest.runSourceIngest({

@@ -1,0 +1,94 @@
+# Gyakori (5 percenkénti) automatikus ingest + pipeline-job feldolgozás a
+# production ellen (2026-07-29, aszinkron pipeline sprint,
+# docs/open-decisions.md #12) — ez a workflow VÁLTJA FEL a korábbi
+# `scheduled-ingest.yml` szerepét: az ingest lépés (`dispatch-ingest`) most
+# már csak RSS-pollozást + job enqueue-t végez (gyors, nem LLM-igényes),
+# utána pedig ugyanebben a futásban meghívja a worker végpontot
+# (`/api/internal/jobs/process`), ami a felgyülemlett job-queue-t üríti,
+# szakaszonként (dedup, story-merge, fact-verification, Hungarian Writer,
+# Editorial Rewrite, SEO, publish-gate, read-model-projector), egyenként
+# külön, retry/resume-képes lépésként — így egyetlen HTTP-timeout sem tud
+# egy teljes Story-feldolgozást megszakítani.
+#
+# Miért 5 perc, nem 30, mint a régi `scheduled-ingest.yml`-nél: a GitHub
+# Actions ütemezett cron gyakorlati minimuma kb. 5 perc; gyakoribb
+# feldolgozás = a Story-k gyorsabban végigfutnak a láncon.
+#
+# Vercel-oldali cron (apps/web/vercel.json) változatlanul csak napi egy
+# futásra van állítva (Hobby csomag korlátja) — ez a workflow adja a valódi
+# gyakoriságot, Vercel-csomagtól függetlenül, ugyanúgy, ahogy a korábbi
+# `scheduled-ingest.yml` is tette.
+#
+# Előfeltétel (repo Settings → Secrets and variables → Actions):
+#   PRODUCTION_URL  — pl. https://magyarsportonline-web.vercel.app (opcionális)
+#   CRON_SECRET     — ugyanaz az érték, mint a Vercel env-ben (kötelező)
+# Amíg a CRON_SECRET nincs beállítva, a workflow csendben (sikeresen) kilép.
+name: Scheduled pipeline (ingest + job processing)
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Dispatch ingest (RSS poll + enqueue)
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -u
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET repo secret not configured — skipping."
+            exit 0
+          fi
+          BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
+          echo "Target: $BASE"
+          http_code=$(curl -sS -o /tmp/ingest-body.json -w '%{http_code}' \
+            --max-time 60 --retry 2 --retry-delay 5 \
+            -X POST "$BASE/api/internal/cron/dispatch-ingest" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          echo "ingest: HTTP $http_code"
+          cat /tmp/ingest-body.json
+          echo
+          test "$http_code" = "200"
+
+      - name: Process pipeline jobs (drain the queue)
+        if: ${{ !cancelled() }}
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -u
+          if [ -z "${CRON_SECRET:-}" ]; then
+            exit 0
+          fi
+          BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
+          # Call the worker repeatedly until it reports no jobs left to
+          # process (processed=0) or a sane iteration cap is hit — one call
+          # only drains what fits in its own ~50s budget (see
+          # apps/web/app/api/internal/jobs/process/route.ts), so a real
+          # backlog needs several calls in the same workflow run to fully
+          # catch up rather than waiting for the next 5-minute tick.
+          for i in $(seq 1 10); do
+            http_code=$(curl -sS -o /tmp/jobs-body.json -w '%{http_code}' \
+              --max-time 60 \
+              -X POST "$BASE/api/internal/jobs/process" \
+              -H "Authorization: Bearer $CRON_SECRET")
+            echo "jobs/process attempt $i: HTTP $http_code"
+            cat /tmp/jobs-body.json
+            echo
+            if [ "$http_code" != "200" ]; then
+              exit 1
+            fi
+            processed=$(python3 -c "import json;print(json.load(open('/tmp/jobs-body.json'))['processed'])" 2>/dev/null || echo 0)
+            if [ "$processed" = "0" ]; then
+              echo "Queue drained."
+              break
+            fi
+          done

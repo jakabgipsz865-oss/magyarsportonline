@@ -12,18 +12,18 @@ import { runIngestPipeline } from "../../../../../lib/pipeline";
  * GET és POST ugyanazt csinálja: a Vercel Cron GET-tel hív, a kézi/CI
  * indítás (GitHub Actions ütemezett workflow, curl) POST-tal.
  *
- * maxDuration = 300 (2026-07-29, ideiglenes rövid távú stabilizálás — lásd
- * docs/open-decisions.md): két valódi 504-es incidens (2026-07-28/29,
- * `FUNCTION_INVOCATION_TIMEOUT`) bizonyította, hogy egyetlen cikk teljes,
- * szinkron pipeline-lánca (fact-verification + writer + editorial-rewrite,
- * mind valódi LLM-hívásokkal) is túllépheti a korábbi 60mp-es korlátot. Ez a
- * projekt 2026-07-27-én jött létre — a Vercel "Fluid Compute" 2025 áprilisa
- * óta minden ÚJ projekten alapértelmezetten aktív, ami Hobby csomagon 300mp-ig
- * engedélyezi a maxDuration-t (a korábbi 60mp helyett). Ez CSAK ideiglenes
- * intézkedés: a végleges megoldás a pipeline job-alapú, aszinkron
- * átalakítása (docs/open-decisions.md), hogy egyetlen HTTP-timeout se tudjon
- * egy teljes Story-feldolgozást megszakítani — az architekturális munka ettől
- * függetlenül folytatódik.
+ * maxDuration = 300 (2026-07-29): a `dispatch-ingest` már NEM futtatja
+ * szinkron a teljes LLM-láncot (lásd `runIngestPipeline`/`buildQueueingEmitter`
+ * az `apps/web/lib/pipeline.ts`-ben, aszinkron pipeline sprint,
+ * docs/open-decisions.md #12) — csak az RSS-poll + új cikk beszúrás + job
+ * enqueue történik itt, ami gyors és nem LLM-igényes, tehát a gyakorlatban
+ * sosem közelíti meg ezt a korlátot. A 300 érték ŐSZINTÉN NEM bizonyítottan
+ * érvényesül: egy valós production teszt (2026-07-29 05:29 UTC) pontosan
+ * ~60,18mp-nél kapott HTTP 504-et a KORÁBBI, még teljes-szinkron pipeline-lánc
+ * ellen, ami azt jelzi, hogy a Vercel Fluid Compute NINCS ténylegesen
+ * aktiválva ezen a projekten (a platform csendben 60mp-re vágja vissza a
+ * kódban beállított értéket) — ez most már lényegtelen, mert ez a route
+ * többé nem végez semmilyen munkát, ami 60mp közelébe kerülne.
  */
 export const maxDuration = 300;
 
