@@ -8,6 +8,8 @@ export interface LlmMessage {
 export interface LlmUsage {
   inputTokens: number;
   outputTokens: number;
+  /** A konkrét választ kiszolgáló modell provider-failover esetén. */
+  servedByModel?: string | undefined;
   /**
    * true, ha ez a konkrét hívás egy fallback kliens (jellemzően
    * NoLlmClient) válasza, mert a valódi provider hívása hibázott — a

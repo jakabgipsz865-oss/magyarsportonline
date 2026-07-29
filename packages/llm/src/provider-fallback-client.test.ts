@@ -113,6 +113,27 @@ describe("ProviderFallbackLlmClient", () => {
     expect(result.data).toEqual({ from: "fallback" });
   });
 
+  it("keeps a secondary provider response AI-generated and reports its actual model", async () => {
+    const client = new ProviderFallbackLlmClient({
+      inner: makeClient("cloudflare", { fails: true, modelLabel: "llama" }),
+      fallback: makeClient("gemini", { modelLabel: "gemini-2.0-flash-lite" }),
+      providerName: "cloudflare",
+      logger: silentLogger,
+      fallbackMode: "provider",
+    });
+
+    const result = await client.completeJson({
+      ...textRequest,
+      jsonSchema: { type: "object", additionalProperties: false },
+    });
+
+    expect(result).toMatchObject({
+      data: { from: "gemini" },
+      servedByModel: "gemini-2.0-flash-lite",
+    });
+    expect(result.isFallback).toBeUndefined();
+  });
+
   it("rethrows provider failures in fail-closed mode so a durable job can retry", async () => {
     const client = new ProviderFallbackLlmClient({
       inner: makeClient("inner", { fails: true }),
