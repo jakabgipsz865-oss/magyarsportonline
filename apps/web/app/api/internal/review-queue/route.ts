@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { createRepositories } from "../../../../lib/db";
 import { env } from "../../../../lib/env";
 import { listTriagedReviewItems } from "../../../../lib/review-triage";
 
@@ -22,10 +23,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const { items } = await listTriagedReviewItems();
-  return NextResponse.json({
-    total: items.length,
-    items: items.map((item) => ({
+  const repos = createRepositories();
+  const { items } = await listTriagedReviewItems(repos);
+  const requestedItemId = request.nextUrl.searchParams.get("itemId");
+  const selectedItems = requestedItemId
+    ? items.filter((item) => item.id === requestedItemId)
+    : items;
+
+  const responseItems = await Promise.all(
+    selectedItems.map(async (item) => ({
       id: item.id,
       storyId: item.storyId,
       storyVersionId: item.storyVersionId,
@@ -45,8 +51,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       triageReasonsHu: item.triageReasonsHu,
       sources: item.sources,
       contradictions: item.contradictions,
+      originalSources: requestedItemId
+        ? await repos.storySourceRepository.originalContentByStoryId(item.storyId)
+        : undefined,
       slug: item.slug,
       createdAt: item.createdAt,
     })),
+  );
+
+  return NextResponse.json({
+    total: selectedItems.length,
+    items: responseItems,
   });
 }
