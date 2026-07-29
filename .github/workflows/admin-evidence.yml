@@ -1,0 +1,53 @@
+name: Gather admin-dashboard production evidence
+
+on:
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Approvable review-queue items (ready_for_review / human_decision_required)
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -u
+          BASE="https://magyarsportonline-web.vercel.app"
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET repo secret hiányzik." >&2
+            exit 1
+          fi
+          curl -sS --max-time 60 "$BASE/api/internal/review-queue" \
+            -H "Authorization: Bearer $CRON_SECRET" -o review-queue.json
+          echo '### Jóváhagyható tételek (ready_for_review / human_decision_required)' >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          jq '[.items[] | select(.triageCategory == "ready_for_review" or .triageCategory == "human_decision_required")] | .[0:8] | map({id, storyId, titleHu, slug, triageCategory})' review-queue.json | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Real published public Story slugs
+        run: |
+          set -u
+          BASE="https://magyarsportonline-web.vercel.app"
+          curl -sS --max-time 60 "$BASE/api/v1/stories?limit=5" -o public-stories.json
+          echo '### Publikus Storyk (legfrissebb 5)' >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          jq '[.data[] | {slug, titleHu, publishedAt}]' public-stories.json | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check whether an ADMIN_SECRET GitHub secret is configured and correct
+        env:
+          ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
+        run: |
+          set -u
+          BASE="https://magyarsportonline-web.vercel.app"
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -u "admin:${ADMIN_SECRET:-}" "$BASE/admin")
+          echo "admin auth check: HTTP $code"
+          echo "### ADMIN_SECRET GitHub secret ellenőrzés: HTTP $code" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$code" = "200" ]; then
+            echo "ADMIN_SECRET be van állítva GitHub secretként és helyes — automata screenshot lehetséges egy következő workflow-val." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "ADMIN_SECRET nincs beállítva GitHub secretként (vagy nem egyezik) — automata screenshot NEM lehetséges enélkül." >> "$GITHUB_STEP_SUMMARY"
+          fi
