@@ -19,7 +19,7 @@ import { listTriagedReviewItems, runTriageSweep } from "../../../../lib/review-t
  *
  * Auth: same `Bearer CRON_SECRET` convention as the other `/api/internal/*` routes.
  */
-export const maxDuration = 120;
+export const maxDuration = 250;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const authHeader = request.headers.get("authorization");

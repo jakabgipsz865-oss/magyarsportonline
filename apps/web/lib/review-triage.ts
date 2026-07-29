@@ -10,7 +10,9 @@ type StoryTriageCategory = publishGate.StoryTriageCategory;
 const DUPLICATE_SCAN_WINDOW_DAYS = 30;
 
 /** Reprocessing a Story calls real LLM stages (Hungarian Writer, SEO) synchronously — bounded per sweep so a single request can't time out; a repeated sweep call drains more, same pattern as scheduled-pipeline.yml's job-processing loop. */
-const MAX_AUTO_REPAIRS_PER_SWEEP = 5;
+const MAX_REPROCESS_PER_SWEEP = 8;
+/** Recomputing credibility is pure DB read/write, no LLM call — much cheaper than a reprocess, so it gets a far larger (but still bounded, to keep one request comfortably inside its time budget) per-sweep batch. */
+const MAX_CREDIBILITY_RECOMPUTES_PER_SWEEP = 100;
 
 export interface TriagedReviewItem extends PendingReviewDetail {
   triageCategory: StoryTriageCategory;
@@ -147,12 +149,33 @@ export async function runTriageSweep(
   let autoRepaired = 0;
   let archived = 0;
 
-  const toRepair = items
-    .filter((item) => item.triageCategory === "auto_repair_required")
-    .slice(0, MAX_AUTO_REPAIRS_PER_SWEEP);
-  for (const item of toRepair) {
+  const repairable = items.filter((item) => item.triageCategory === "auto_repair_required");
+
+  // Two independent batch caps: recomputing credibility is cheap (DB
+  // read/write only), so it gets a much larger per-sweep allowance than
+  // reprocessing (which calls real LLM stages) — an item needing both gets
+  // both, as long as it falls within ITS OWN cap.
+  const needsCredibility = new Set(
+    repairable
+      .filter((item) => item.credibilityScore === null)
+      .slice(0, MAX_CREDIBILITY_RECOMPUTES_PER_SWEEP)
+      .map((item) => item.storyId),
+  );
+  const needsReprocess = new Set(
+    repairable
+      .filter((item) => !item.isAiGenerated || qualityIssueKindsOf(item.qualityIssues).length > 0)
+      .slice(0, MAX_REPROCESS_PER_SWEEP)
+      .map((item) => item.storyId),
+  );
+
+  for (const item of repairable) {
+    const doCredibility = needsCredibility.has(item.storyId);
+    const doReprocess = needsReprocess.has(item.storyId);
+    if (!doCredibility && !doReprocess) {
+      continue; // over this call's cap — picked up by a later sweep call
+    }
     try {
-      if (item.credibilityScore === null) {
+      if (doCredibility) {
         await factVerification.recomputeCredibilityForStory(
           {
             factRepository: repos.factRepository,
@@ -163,7 +186,7 @@ export async function runTriageSweep(
           item.storyId,
         );
       }
-      if (!item.isAiGenerated || qualityIssueKindsOf(item.qualityIssues).length > 0) {
+      if (doReprocess) {
         await reprocessStoryById(item.storyId);
       }
       autoRepaired += 1;
