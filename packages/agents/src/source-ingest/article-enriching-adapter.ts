@@ -40,6 +40,7 @@ export class ArticleEnrichingSourceAdapter implements SourceAdapter {
       bodyOriginal: fetched.bodyOriginal,
       authorOriginal: fetched.authorOriginal,
       publishedAtSource: fetched.publishedAtSource ?? article.publishedAtSource,
+      contentOrigin: "full_article",
     };
   }
 }

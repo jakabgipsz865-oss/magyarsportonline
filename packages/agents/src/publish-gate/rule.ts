@@ -34,11 +34,11 @@ export type PublishDecision =
  * toggle for going live, not applicable to local dev/demo runs.
  */
 export function decidePublish(input: PublishDecisionInput): PublishDecision {
-  if (input.forceReviewMode) {
-    return { autoPublish: false, reason: "force_review_mode" };
-  }
   if (input.hasQualityIssues) {
     return { autoPublish: false, reason: "content_quality_failed" };
+  }
+  if (input.forceReviewMode) {
+    return { autoPublish: false, reason: "force_review_mode" };
   }
   if (input.riskLevel !== "low") {
     return { autoPublish: false, reason: "high_risk" };

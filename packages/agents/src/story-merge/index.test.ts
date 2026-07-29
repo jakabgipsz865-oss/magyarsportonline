@@ -10,6 +10,7 @@ const RAW_ARTICLE = {
   titleOriginal: "Liverpool beat Arsenal 3-1",
   subtitleOriginal: null,
   bodyOriginal: "body",
+  contentOrigin: "full_article",
   authorOriginal: null,
   language: "en",
   embedding: null,

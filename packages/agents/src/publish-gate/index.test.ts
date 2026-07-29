@@ -19,10 +19,10 @@ function story(overrides?: Partial<Record<string, unknown>>) {
     publishedAt: null,
     isDeveloping: true,
     imageUrl: null,
-    credibilityScore: null,
-    credibilityBand: null,
-    credibilityLabelHu: null,
-    credibilityJustificationHu: null,
+    credibilityScore: 70,
+    credibilityBand: "megerositett",
+    credibilityLabelHu: "Megerősített",
+    credibilityJustificationHu: "Megbízható forrásból származó értesülés.",
     credibilityOfficialConfirmed: false,
     credibilityCorroboratingCount: null,
     credibilityUpdatedAt: null,
@@ -38,7 +38,11 @@ function fact(isContradicted: boolean) {
     storyId: "story-1",
     rawArticleId: "raw-1",
     factType: "score" as const,
-    payload: {},
+    payload: {
+      detail_hu: "A Liverpool 2-0-ra legyőzte az Arsenalt a bajnoki mérkőzésen.",
+      quote_original: null,
+      quote_speaker: null,
+    },
     corroborationCount: 1,
     isContradicted,
     excluded: false,
@@ -52,9 +56,10 @@ function version(qualityIssues: unknown[] | null = null) {
     id: "v1",
     storyId: "story-1",
     versionNumber: 1,
-    titleHu: "Cím",
-    leadHu: "Lead",
-    bodyHu: "Törzs",
+    titleHu: "A Liverpool legyőzte az Arsenalt",
+    leadHu: "A Liverpool kétgólos győzelmet aratott az Arsenal ellen a bajnokságban.",
+    bodyHu:
+      "A Liverpool végig irányította az Arsenal elleni bajnoki mérkőzést, és két góllal megérdemelt győzelmet aratott.",
     metaDescription: null,
     seoTags: null,
     structuredData: null,
@@ -63,6 +68,7 @@ function version(qualityIssues: unknown[] | null = null) {
     isAiGenerated: true,
     promptVersion: "hungarian-writer@0.1.0",
     factConsistencyScore: "1.000",
+    selfCheckFallback: false,
     editorialRewriteApplied: false,
     isPublished: false,
     qualityIssues,
@@ -98,6 +104,10 @@ function buildDeps(overrides?: {
     },
     forceReviewMode: overrides?.forceReviewMode ?? false,
     factRepository: { listByStoryId: vi.fn(async () => overrides?.facts ?? [fact(false)]) },
+    storySourceRepository: {
+      countByStoryId: vi.fn(async () => 1),
+      countFullArticleByStoryId: vi.fn(async () => 1),
+    },
     reviewQueueRepository: {
       insert: vi.fn(async (input: unknown) => {
         reviewQueueInserts.push(input);
@@ -185,7 +195,10 @@ describe("handleStorySeoReady", () => {
 
   it("routes to review with reason content_quality_failed when the version has unresolved Content Quality Gate issues", async () => {
     const deps = buildDeps({
-      version: version([{ field: "title", kind: "looks_english" }]),
+      version: {
+        ...version([{ field: "title", kind: "looks_english" }]),
+        titleHu: "Liverpool beat Arsenal in the Premier League final",
+      },
     });
 
     await handleStorySeoReady(deps, triggerEvent());

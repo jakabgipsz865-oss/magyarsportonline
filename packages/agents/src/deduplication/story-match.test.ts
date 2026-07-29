@@ -7,6 +7,7 @@ import {
   classifyMatchCategory,
   decideStoryMatch,
   extractRoundLabel,
+  hasStrongEventIdentity,
   isGenericEntityType,
   isSpecificEntityType,
   scoreStoryMatch,
@@ -172,8 +173,8 @@ describe("scoreStoryMatch — rule 5: different sports never merge", () => {
   });
 });
 
-describe("scoreStoryMatch — specific entity requirement drives auto_merge", () => {
-  it("auto_merges on one shared specific entity plus a same-day match", () => {
+describe("scoreStoryMatch — strong event identity drives auto_merge", () => {
+  it("never auto_merges unrelated same-day stories on one shared team", () => {
     const art = article(
       [
         {
@@ -198,8 +199,9 @@ describe("scoreStoryMatch — specific entity requirement drives auto_merge", ()
 
     const decision = decideStoryMatch(art, [cand]);
 
-    expect(decision.kind).toBe("auto_merge");
+    expect(decision.kind).toBe("needs_review");
     expect(decision.candidateStoryId).toBe("story-1");
+    expect(decision.decisionReasonHu).toContain("önmagában nem bizonyítja");
   });
 
   it("needs_review for one shared specific entity with no other corroboration (different day, no generic overlap)", () => {
@@ -231,7 +233,7 @@ describe("scoreStoryMatch — specific entity requirement drives auto_merge", ()
     expect(decision.candidateStoryId).toBe("story-1");
   });
 
-  it("auto_merges readily on two shared specific entities (e.g. same match: both teams)", () => {
+  it("auto_merges readily on two shared teams (the same match)", () => {
     const art = article(
       [
         {
@@ -265,6 +267,18 @@ describe("scoreStoryMatch — specific entity requirement drives auto_merge", ()
     const decision = decideStoryMatch(art, [cand]);
 
     expect(decision.kind).toBe("auto_merge");
+  });
+
+  it("treats a shared team plus a shared player as strong event identity", () => {
+    expect(
+      hasStrongEventIdentity([
+        { entityId: "chelsea", type: "team", nameCanonical: "Chelsea FC" },
+        { entityId: "palmer", type: "player", nameCanonical: "Cole Palmer" },
+      ]),
+    ).toBe(true);
+    expect(
+      hasStrongEventIdentity([{ entityId: "chelsea", type: "team", nameCanonical: "Chelsea FC" }]),
+    ).toBe(false);
   });
 
   it("auto_new_story when there are no candidates at all", () => {
@@ -341,7 +355,7 @@ describe("isSpecificEntityType / isGenericEntityType", () => {
 });
 
 describe("scoreStoryMatch — coach entities count as specific (rule 2: same player or coach)", () => {
-  it("auto_merges on a shared coach entity plus a same-day match, exactly like a team or player", () => {
+  it("requires manual review for a shared coach alone, even on the same day", () => {
     const art = article(
       [
         {
@@ -366,7 +380,7 @@ describe("scoreStoryMatch — coach entities count as specific (rule 2: same pla
 
     const decision = decideStoryMatch(art, [cand]);
 
-    expect(decision.kind).toBe("auto_merge");
+    expect(decision.kind).toBe("needs_review");
   });
 });
 

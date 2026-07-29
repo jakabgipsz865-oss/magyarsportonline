@@ -24,6 +24,9 @@ export const rawArticles = pgTable("raw_articles", {
   // extractor tölti ki, ha talál ilyet — RSS-only cikkeknél mindig null.
   subtitleOriginal: text("subtitle_original"),
   bodyOriginal: text("body_original").notNull(),
+  // Provenance is explicit so an RSS description cannot be mistaken for a
+  // successfully fetched full source article at publication time.
+  contentOrigin: text("content_origin").notNull().default("rss_snippet"),
   authorOriginal: text("author_original"),
   // RSS media:thumbnail/enclosure image, if the source provided one — frontend
   // hero/thumbnail display (Real Sports Portal UX sprint). Never re-hosted,

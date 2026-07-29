@@ -13,6 +13,8 @@ export interface NewStoryVersionInput {
   isAiGenerated: boolean;
   promptVersion: string;
   factConsistencyScore: number;
+  /** True when the consistency check came from an error fallback instead of a real verifier response. */
+  selfCheckFallback: boolean;
   /** Content Quality Gate findings (packages/agents/hungarian-writer/quality-gate.ts) — null/empty means no issues found. */
   qualityIssues?: unknown[] | null;
 }
@@ -66,6 +68,7 @@ export class StoryVersionRepository {
           isAiGenerated: input.isAiGenerated,
           promptVersion: input.promptVersion,
           factConsistencyScore: input.factConsistencyScore.toFixed(3),
+          selfCheckFallback: input.selfCheckFallback,
           qualityIssues:
             input.qualityIssues && input.qualityIssues.length > 0 ? input.qualityIssues : null,
         })
@@ -121,7 +124,14 @@ export class StoryVersionRepository {
    */
   async updateDraftContent(
     versionId: string,
-    content: { titleHu: string; leadHu: string; bodyHu: string; editorialRewriteApplied: boolean },
+    content: {
+      titleHu: string;
+      leadHu: string;
+      bodyHu: string;
+      editorialRewriteApplied: boolean;
+      /** Fresh assessment for this exact edited content; null means it passed. */
+      qualityIssues?: unknown[] | null;
+    },
   ): Promise<boolean> {
     const rows = await this.db
       .update(storyVersions)
@@ -130,6 +140,14 @@ export class StoryVersionRepository {
         leadHu: content.leadHu,
         bodyHu: content.bodyHu,
         editorialRewriteApplied: content.editorialRewriteApplied,
+        ...(content.qualityIssues !== undefined
+          ? {
+              qualityIssues:
+                content.qualityIssues && content.qualityIssues.length > 0
+                  ? content.qualityIssues
+                  : null,
+            }
+          : {}),
       })
       .where(and(eq(storyVersions.id, versionId), eq(storyVersions.isPublished, false)))
       .returning({ id: storyVersions.id });

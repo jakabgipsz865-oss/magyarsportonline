@@ -12,6 +12,7 @@ const RSS_ARTICLE: NormalizedArticle = {
   authorOriginal: null,
   publishedAtSource: null,
   imageUrl: null,
+  contentOrigin: "rss_snippet",
 };
 
 function fakeInnerAdapter(articles: NormalizedArticle[] = [RSS_ARTICLE]): SourceAdapter {
@@ -46,6 +47,7 @@ describe("ArticleEnrichingSourceAdapter", () => {
       authorOriginal: "Jane Reporter",
       publishedAtSource: new Date("2026-07-28T12:00:00.000Z"),
       imageUrl: null,
+      contentOrigin: "full_article",
     });
   });
 

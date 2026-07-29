@@ -1,0 +1,1 @@
+ALTER TABLE "story_versions" ADD COLUMN "self_check_fallback" boolean DEFAULT false NOT NULL;

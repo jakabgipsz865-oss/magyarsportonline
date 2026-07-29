@@ -37,7 +37,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const result = await approveReviewItem(itemId);
     if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: 404 });
+      if (result.error === "publication_blocked") {
+        return NextResponse.json(
+          { error: result.error, blockers: result.blockers },
+          { status: 422 },
+        );
+      }
+      return NextResponse.json(
+        { error: result.error },
+        { status: result.error === "already_resolved" ? 409 : 404 },
+      );
     }
     return NextResponse.json({ approved: true, itemId });
   } catch (error) {

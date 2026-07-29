@@ -128,4 +128,72 @@ describe("assessContentQuality", () => {
     expect(result.passed).toBe(false);
     expect(result.issues).toContainEqual({ field: "body", kind: "matches_source_verbatim" });
   });
+
+  it("flags mostly-English content even when it contains one Hungarian word and an accent", () => {
+    const result = assessContentQuality({
+      titleHu: "Meditate, pray és watch football instead of spreading hate",
+      leadHu: "Az angol szövetség közleményt adott ki a mérkőzés előtt.",
+      bodyHu:
+        "Az angol szövetség a mérkőzés előtt közzétett közleményében a sportszerű viselkedés fontosságát hangsúlyozta.",
+      facts: FACTS,
+    });
+
+    expect(result.issues).toContainEqual({ field: "title", kind: "looks_english" });
+  });
+
+  it("flags an unmistakably English short title", () => {
+    const result = assessContentQuality({
+      titleHu: "Mbappe goal",
+      leadHu: "A francia támadó gólt szerzett a bajnoki mérkőzésen.",
+      bodyHu:
+        "Kylian Mbappé a második félidőben talált a kapuba, csapata pedig megnyerte a bajnoki találkozót.",
+      facts: FACTS,
+    });
+
+    expect(result.issues).toContainEqual({ field: "title", kind: "looks_english" });
+  });
+
+  it("flags a No-LLM fallback notice even when the rest is Hungarian", () => {
+    const result = assessContentQuality({
+      titleHu: "A világbajnokság díjazása",
+      leadHu:
+        "Ez a tartalom még nem AI által lefordított vagy ellenőrzött szöveg — az eredeti, angol nyelvű forrásanyag jelenik meg.",
+      bodyHu:
+        "A torna szervezői részletesen ismertették a világbajnokság pénzdíjait és a résztvevő csapatoknak járó összegeket.",
+      facts: FACTS,
+    });
+
+    expect(result.issues).toContainEqual({ field: "lead", kind: "fallback_notice" });
+  });
+
+  it("flags a repeated sentence inside one body paragraph", () => {
+    const repeated =
+      "Bukayo Saka mesterhármast szerzett, Anglia pedig 6-4-re legyőzte Franciaországot.";
+    const result = assessContentQuality({
+      titleHu: "Anglia bronzérmes lett a világbajnokságon",
+      leadHu: "Anglia tízgólos mérkőzésen győzte le Franciaországot.",
+      bodyHu: `${repeated} Az angol válogatott ezzel megszerezte a bronzérmet. ${repeated}`,
+      facts: FACTS,
+    });
+
+    expect(result.issues).toContainEqual({ field: "body", kind: "repeated_sentence" });
+  });
+
+  it.each([
+    "időtlen-e Rodri eladása",
+    "meghatározatlan átvételi díj",
+    "szabad átvételben csatlakozott",
+    "a büntetőkirekesztés előtt",
+    "stopperidőben szerzett gólt",
+  ])("flags known bad football terminology: %s", (badPhrase) => {
+    const result = assessContentQuality({
+      titleHu: "A klub fontos döntés előtt áll",
+      leadHu: `A sportigazgató azt vizsgálja, hogy ${badPhrase} a megfelelő megoldás.`,
+      bodyHu:
+        "A klub vezetői a következő napokban hozzák meg a végső döntést, miután minden szakmai és pénzügyi szempontot megvizsgáltak.",
+      facts: FACTS,
+    });
+
+    expect(result.issues).toContainEqual({ field: "lead", kind: "forbidden_terminology" });
+  });
 });

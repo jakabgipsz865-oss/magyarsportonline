@@ -80,6 +80,21 @@ export class StorySourceRepository {
     return rows.length;
   }
 
+  async countFullArticleByStoryId(storyId: string): Promise<number> {
+    const rows = await this.db
+      .select({ id: storySources.id })
+      .from(storySources)
+      .innerJoin(rawArticles, eq(storySources.rawArticleId, rawArticles.id))
+      .where(
+        and(
+          eq(storySources.storyId, storyId),
+          eq(storySources.excluded, false),
+          eq(rawArticles.contentOrigin, "full_article"),
+        ),
+      );
+    return rows.length;
+  }
+
   /**
    * Pre-joined source list for the `story_read_model.sources_summary`
    * projection — admin-excluded sources (2026-07-28) are left out, since

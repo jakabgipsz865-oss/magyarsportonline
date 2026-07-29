@@ -141,6 +141,20 @@
       "when": 1785334983031,
       "tag": "0019_curvy_barracuda",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1785341352149,
+      "tag": "0020_demonic_valkyrie",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1785341562121,
+      "tag": "0021_short_reavers",
+      "breakpoints": true
     }
   ]
 }

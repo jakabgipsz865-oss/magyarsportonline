@@ -1,5 +1,6 @@
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AdminHeader } from "../_components/admin-header";
 import {
@@ -48,7 +49,10 @@ async function approveAction(formData: FormData): Promise<void> {
   "use server";
   const itemId = formData.get("itemId");
   if (typeof itemId === "string" && itemId.length > 0) {
-    await approveReviewItem(itemId);
+    const result = await approveReviewItem(itemId);
+    if (!result.ok && result.error === "publication_blocked") {
+      redirect("/admin/review?approval=blocked");
+    }
   }
   revalidatePath("/admin/review");
 }
@@ -320,7 +324,7 @@ function ReviewCard({
 }
 
 interface PageProps {
-  searchParams: Promise<{ category?: string; page?: string; q?: string }>;
+  searchParams: Promise<{ category?: string; page?: string; q?: string; approval?: string }>;
 }
 
 function buildHref(category: TriageCategory, page: number, query: string): string {
@@ -367,6 +371,23 @@ export default async function ReviewQueuePage({ searchParams }: PageProps): Prom
     <main style={{ maxWidth: 900, margin: "0 auto", padding: "0 12px" }}>
       <AdminHeader activePath="/admin/review" />
       <h1>Review queue</h1>
+
+      {params.approval === "blocked" ? (
+        <div
+          role="alert"
+          style={{
+            border: "1px solid #b42318",
+            background: "#fff1f0",
+            color: "#7a271a",
+            borderRadius: 6,
+            padding: 12,
+            marginBottom: 16,
+          }}
+        >
+          <strong>A publikálás blokkolva.</strong> A rendszer a jelenlegi szövegen újra lefuttatta a
+          nyelvi, tény-, hitelességi és forrásellenőrzést. Javítsd a tételt, majd próbáld újra.
+        </div>
+      ) : null}
 
       <nav style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {CATEGORY_TABS.map((tab) => (
