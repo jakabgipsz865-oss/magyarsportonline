@@ -74,3 +74,24 @@ export type ReviewQueueReason = (typeof REVIEW_QUEUE_REASONS)[number];
 
 export const REVIEW_QUEUE_STATUSES = ["pending", "approved", "rejected", "edited"] as const;
 export type ReviewQueueStatus = (typeof REVIEW_QUEUE_STATUSES)[number];
+
+/**
+ * Story matching decision outcomes (2026-07-29, "téves Story-összevonás
+ * megszüntetése" sprint, packages/agents/src/deduplication/story-match.ts):
+ * `auto_merge` requires at least one specific (team/player) shared entity
+ * plus enough corroboration; `needs_review` has a specific shared entity
+ * but not enough corroboration to auto-merge, so it does NOT merge and
+ * becomes its own Story pending manual review; `auto_new_story` covers
+ * everything else, including a competition/league-only match (never
+ * sufficient on its own — see docs/open-decisions.md #12 follow-up on the
+ * real 16-article false-merge this replaces).
+ */
+export const STORY_MATCH_DECISIONS = ["auto_merge", "needs_review", "auto_new_story"] as const;
+export type StoryMatchDecisionKind = (typeof STORY_MATCH_DECISIONS)[number];
+
+export const STORY_MATCH_REVIEW_STATUSES = [
+  "pending",
+  "approved_merge",
+  "approved_new_story",
+] as const;
+export type StoryMatchReviewStatus = (typeof STORY_MATCH_REVIEW_STATUSES)[number];

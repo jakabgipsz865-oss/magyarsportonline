@@ -93,6 +93,62 @@ export class StoryRepository {
     });
   }
 
+  /**
+   * Unconditional Story creation, no fingerprint dedup lookup (2026-07-29,
+   * "téves Story-összevonás megszüntetése" sprint) — for the `needs_review`
+   * match decision: the scorer already found a specific-entity-sharing
+   * candidate and explicitly decided NOT to merge into it (not enough
+   * corroboration yet), so this article must become its OWN Story
+   * regardless of what any coarse fingerprint would say — reusing
+   * `createOrMatchByFingerprint`'s lookup here would risk silently
+   * re-merging into the very candidate the scorer just rejected. Two
+   * genuinely-simultaneous `needs_review` articles about the very same new
+   * event can, in a rare race, each create their own Story this way — an
+   * accepted, documented tradeoff (rule 6 already requires uncertain cases
+   * to never auto-merge, so under-merging here is the safe failure mode,
+   * not the dangerous one).
+   */
+  async insertNew(draft: StoryDraft): Promise<Story> {
+    const [story] = await this.db
+      .insert(stories)
+      .values({
+        canonicalTitle: draft.canonicalTitle,
+        categoryId: draft.categoryId,
+        confidenceScore: draft.confidenceScore.toFixed(3),
+        riskLevel: draft.riskLevel,
+        isDeveloping: draft.isDeveloping,
+        imageUrl: draft.imageUrl,
+      })
+      .returning();
+    if (!story) {
+      throw new Error("Story insert returned no row");
+    }
+    return story;
+  }
+
+  /**
+   * Locks a KNOWN Story by its own id before appending a new corroborating
+   * source to it (2026-07-29, "téves Story-összevonás megszüntetése"
+   * sprint) — the scored matcher (packages/agents/src/deduplication/
+   * story-match.ts) has already resolved WHICH Story to merge into, so
+   * there's no fingerprint ambiguity left to serialize on; locking directly
+   * on the resolved story id is simpler and safer than the old coarse
+   * fingerprint lock (a second concurrent corroboration for the same Story
+   * blocks until the first transaction commits, same
+   * `pg_advisory_xact_lock` semantics as `createOrMatchByFingerprint`).
+   */
+  async lockAndGetById(storyId: string): Promise<Story> {
+    return this.db.transaction(async (tx) => {
+      return withFingerprintLock(tx, storyId, async () => {
+        const [story] = await tx.select().from(stories).where(eq(stories.id, storyId)).limit(1);
+        if (!story) {
+          throw new Error(`Story "${storyId}" not found`);
+        }
+        return story;
+      });
+    });
+  }
+
   async updateFactVerificationResult(
     storyId: string,
     result: { confidenceScore: number; riskLevel: RiskLevel; isDeveloping: boolean },

@@ -21,3 +21,4 @@ export * from "./editorial-ab-snapshots";
 export * from "./editorial-corrections";
 export * from "./editorial-correction-applications";
 export * from "./pipeline-jobs";
+export * from "./story-match-decisions";

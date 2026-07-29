@@ -52,6 +52,7 @@ export function buildDispatcher(repos: Repositories = createRepositories()): InP
       {
         rawArticleRepository: repos.rawArticleRepository,
         entityRepository: repos.entityRepository,
+        storyMatchRepository: repos.storyMatchRepository,
         agentRunRepository: repos.agentRunRepository,
         dispatcher,
         logger,
@@ -67,6 +68,8 @@ export function buildDispatcher(repos: Repositories = createRepositories()): InP
         storyRepository: repos.storyRepository,
         rawArticleRepository: repos.rawArticleRepository,
         storySourceRepository: repos.storySourceRepository,
+        storyMatchRepository: repos.storyMatchRepository,
+        entityRepository: repos.entityRepository,
         agentRunRepository: repos.agentRunRepository,
         dispatcher,
         logger,
@@ -236,6 +239,7 @@ export async function dispatchJobToHandler(
         {
           rawArticleRepository: repos.rawArticleRepository,
           entityRepository: repos.entityRepository,
+          storyMatchRepository: repos.storyMatchRepository,
           agentRunRepository: repos.agentRunRepository,
           dispatcher: emitter,
           logger,
@@ -250,6 +254,8 @@ export async function dispatchJobToHandler(
           storyRepository: repos.storyRepository,
           rawArticleRepository: repos.rawArticleRepository,
           storySourceRepository: repos.storySourceRepository,
+          storyMatchRepository: repos.storyMatchRepository,
+          entityRepository: repos.entityRepository,
           agentRunRepository: repos.agentRunRepository,
           dispatcher: emitter,
           logger,

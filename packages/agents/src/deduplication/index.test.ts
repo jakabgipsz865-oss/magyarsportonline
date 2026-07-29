@@ -1,3 +1,4 @@
+import type { Entity } from "@magyarsportonline/db";
 import { createEventEnvelope } from "@magyarsportonline/events";
 import { createLogger } from "@magyarsportonline/observability";
 import { describe, expect, it, vi } from "vitest";
@@ -6,7 +7,7 @@ import { handleSourceArticleIngested, type DeduplicationDeps } from "./index";
 const RAW_ARTICLE = {
   id: "22222222-2222-4222-8222-222222222222",
   sourceId: "source-1",
-  sourceUrl: "https://example.com/1",
+  sourceUrl: "https://www.bbc.co.uk/sport/football/articles/liverpool-arsenal",
   titleOriginal: "Liverpool beat Arsenal 3-1",
   subtitleOriginal: null,
   bodyOriginal: "A dramatic match at Anfield.",
@@ -31,13 +32,24 @@ const LIVERPOOL_ENTITY = {
 };
 
 function buildDeps(overrides?: {
-  entities?: (typeof LIVERPOOL_ENTITY)[];
-}): DeduplicationDeps & { emitted: unknown[] } {
+  entities?: Entity[];
+  candidates?: Awaited<
+    ReturnType<DeduplicationDeps["storyMatchRepository"]["findCandidateStories"]>
+  >;
+}): DeduplicationDeps & { emitted: unknown[]; recordedDecisions: unknown[] } {
   const emitted: unknown[] = [];
+  const recordedDecisions: unknown[] = [];
   return {
     rawArticleRepository: { getById: vi.fn(async () => RAW_ARTICLE) },
     entityRepository: {
       listAll: vi.fn(async () => overrides?.entities ?? [LIVERPOOL_ENTITY]),
+    },
+    storyMatchRepository: {
+      findCandidateStories: vi.fn(async () => overrides?.candidates ?? []),
+      recordDecision: vi.fn(async (decision: unknown) => {
+        recordedDecisions.push(decision);
+        return "decision-id";
+      }),
     },
     agentRunRepository: { record: vi.fn(async () => undefined) },
     dispatcher: {
@@ -50,6 +62,7 @@ function buildDeps(overrides?: {
     }),
     defaultCategorySlug: "labdarugas",
     emitted,
+    recordedDecisions,
   };
 }
 
@@ -62,7 +75,7 @@ function ingestedEvent() {
 }
 
 describe("handleSourceArticleIngested", () => {
-  it("emits story/candidate.identified with match_type NEW_STORY and a fingerprint", async () => {
+  it("emits story/candidate.identified with match_type NEW_STORY when no candidate shares a specific entity", async () => {
     const deps = buildDeps();
 
     await handleSourceArticleIngested(deps, ingestedEvent());
@@ -78,25 +91,113 @@ describe("handleSourceArticleIngested", () => {
     expect(event?.payload.fingerprint_hash).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("produces the same fingerprint for the same category/entity/date-bucket", async () => {
-    const depsA = buildDeps();
-    const depsB = buildDeps();
-
-    await handleSourceArticleIngested(depsA, ingestedEvent());
-    await handleSourceArticleIngested(depsB, ingestedEvent());
-
-    const [eventA] = depsA.emitted as Array<{ payload: { fingerprint_hash: string } }>;
-    const [eventB] = depsB.emitted as Array<{ payload: { fingerprint_hash: string } }>;
-    expect(eventA?.payload.fingerprint_hash).toBe(eventB?.payload.fingerprint_hash);
-  });
-
-  it("still emits a fingerprint when no entity matches (fallback key)", async () => {
-    const deps = buildDeps({ entities: [] });
+  it("records a story_match_decisions row for every decision, including auto_new_story", async () => {
+    const deps = buildDeps();
 
     await handleSourceArticleIngested(deps, ingestedEvent());
 
-    const [event] = deps.emitted as Array<{ payload: { fingerprint_hash: string } }>;
-    expect(event?.payload.fingerprint_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(deps.recordedDecisions).toEqual([
+      expect.objectContaining({
+        rawArticleId: RAW_ARTICLE.id,
+        decision: "auto_new_story",
+        candidateStoryId: null,
+        resultingStoryId: null,
+      }),
+    ]);
+  });
+
+  it("emits MATCH with story_id when a candidate shares the specific team entity with enough corroboration", async () => {
+    const deps = buildDeps({
+      candidates: [
+        {
+          storyId: "story-existing",
+          canonicalTitle: "Liverpool beat Arsenal 3-1",
+          lastUpdatedAt: new Date("2026-07-27T18:00:00.000Z"),
+          entities: [
+            {
+              entityId: "entity-liverpool",
+              type: "team",
+              nameCanonical: "Liverpool FC",
+              role: "subject",
+            },
+          ],
+          rawArticleSourceUrls: ["https://www.skysports.com/football/news/1"],
+        },
+      ],
+    });
+
+    await handleSourceArticleIngested(deps, ingestedEvent());
+
+    const [event] = deps.emitted as Array<{
+      type: string;
+      payload: { match_type: string; story_id?: string };
+    }>;
+    expect(event?.payload.match_type).toBe("MATCH");
+    expect(event?.payload.story_id).toBe("story-existing");
+    expect(deps.recordedDecisions).toEqual([
+      expect.objectContaining({
+        decision: "auto_merge",
+        candidateStoryId: "story-existing",
+        resultingStoryId: "story-existing",
+      }),
+    ]);
+  });
+
+  it("never auto-merges on a generic (competition-only) shared entity — emits NEW_STORY, not MATCH", async () => {
+    const competitionEntity = {
+      id: "entity-premier-league",
+      type: "competition" as const,
+      nameCanonical: "Premier League",
+      nameHu: "Premier League",
+      aliases: [],
+      externalRef: null,
+    };
+    const deps = buildDeps({ entities: [competitionEntity] });
+
+    await handleSourceArticleIngested(deps, ingestedEvent());
+
+    const [event] = deps.emitted as Array<{ payload: { match_type: string } }>;
+    // No specific (team/player) entity in the title/lead -> no candidate
+    // lookup even happens, so this can only ever be NEW_STORY.
+    expect(event?.payload.match_type).toBe("NEW_STORY");
+  });
+
+  it("emits AMBIGUOUS with a candidates list when a specific entity is shared but corroboration is too weak to auto-merge", async () => {
+    const deps = buildDeps({
+      candidates: [
+        {
+          storyId: "story-weak-candidate",
+          canonicalTitle: "Liverpool linked with a move",
+          // A different day bucket AND no generic corroboration -> score 50, below the 65 auto-merge threshold.
+          lastUpdatedAt: new Date("2026-07-20T18:00:00.000Z"),
+          entities: [
+            {
+              entityId: "entity-liverpool",
+              type: "team",
+              nameCanonical: "Liverpool FC",
+              role: "subject",
+            },
+          ],
+          rawArticleSourceUrls: ["https://www.skysports.com/football/news/2"],
+        },
+      ],
+    });
+
+    await handleSourceArticleIngested(deps, ingestedEvent());
+
+    const [event] = deps.emitted as Array<{
+      payload: { match_type: string; candidates?: Array<{ story_id: string; score: number }> };
+    }>;
+    expect(event?.payload.match_type).toBe("AMBIGUOUS");
+    expect(event?.payload.candidates).toEqual([{ story_id: "story-weak-candidate", score: 0.5 }]);
+    expect(deps.recordedDecisions).toEqual([
+      expect.objectContaining({
+        decision: "needs_review",
+        candidateStoryId: "story-weak-candidate",
+        resultingStoryId: null,
+        reviewStatus: "pending",
+      }),
+    ]);
   });
 
   it("throws when the RawArticle cannot be found", async () => {
