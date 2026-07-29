@@ -37,13 +37,24 @@ jobs:
           jq '[.data[] | {slug, titleHu, publishedAt}]' public-stories.json | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Upload editorial evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-editorial-evidence-${{ github.run_id }}
+          path: |
+            review-queue.json
+            public-stories.json
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Check whether an ADMIN_SECRET GitHub secret is configured and correct
         env:
           ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
         run: |
           set -u
           BASE="https://magyarsportonline-web.vercel.app"
-          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -u "admin:${ADMIN_SECRET:-}" "$BASE/admin")
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
+            -u "admin:${ADMIN_SECRET:-}" "$BASE/admin" || true)
           echo "admin auth check: HTTP $code"
           echo "### ADMIN_SECRET GitHub secret ellenőrzés: HTTP $code" >> "$GITHUB_STEP_SUMMARY"
           if [ "$code" = "200" ]; then

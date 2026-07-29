@@ -11,7 +11,10 @@ import { listTriagedReviewItems } from "../../../../lib/review-triage";
  * approve via `/api/internal/review-queue/approve`, without ever needing the
  * admin password. Includes each item's triage category (2026-07-29) so a
  * caller can tell which items are actually awaiting a human decision versus
- * mid-auto-repair or slated for archival.
+ * mid-auto-repair or slated for archival. The endpoint deliberately returns
+ * the complete editorial evidence already assembled for `/admin/review`
+ * (Hungarian body, source links, credibility and quality findings), because
+ * approving from only a title and lead would be a blind publication action.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const authHeader = request.headers.get("authorization");
@@ -30,8 +33,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       triageCategory: item.triageCategory,
       titleHu: item.titleHu,
       leadHu: item.leadHu,
+      bodyHu: item.bodyHu,
       confidenceScore: item.confidenceScore,
       riskLevel: item.riskLevel,
+      credibilityScore: item.credibilityScore,
+      credibilityBand: item.credibilityBand,
+      credibilityLabelHu: item.credibilityLabelHu,
+      credibilityJustificationHu: item.credibilityJustificationHu,
+      isAiGenerated: item.isAiGenerated,
+      qualityIssues: item.qualityIssues,
+      triageReasonsHu: item.triageReasonsHu,
+      sources: item.sources,
+      contradictions: item.contradictions,
       slug: item.slug,
       createdAt: item.createdAt,
     })),
