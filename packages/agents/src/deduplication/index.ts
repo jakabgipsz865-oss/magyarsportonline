@@ -12,6 +12,7 @@ import { matchPrimaryEntity } from "./entity-matcher";
 
 export * from "./date-bucket";
 export * from "./entity-matcher";
+export * from "./merge-audit";
 
 export const AGENT_VERSION = "deduplication@0.1.0";
 
