@@ -24,11 +24,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const repos = createRepositories();
-  const { items } = await listTriagedReviewItems(repos);
   const requestedItemId = request.nextUrl.searchParams.get("itemId");
-  const selectedItems = requestedItemId
-    ? items.filter((item) => item.id === requestedItemId)
-    : items;
+  const { items: selectedItems } = await listTriagedReviewItems(
+    repos,
+    requestedItemId ?? undefined,
+  );
 
   const responseItems = await Promise.all(
     selectedItems.map(async (item) => ({

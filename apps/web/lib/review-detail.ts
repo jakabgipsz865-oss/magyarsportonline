@@ -76,7 +76,8 @@ async function enrich(item: PendingReviewItem, repos: Repositories): Promise<Pen
  */
 export async function listPendingReviewDetails(
   repos: Repositories = createRepositories(),
+  itemId?: string,
 ): Promise<PendingReviewDetail[]> {
-  const items = await repos.reviewQueueRepository.listPending();
+  const items = await repos.reviewQueueRepository.listPending(itemId);
   return Promise.all(items.map((item) => enrich(item, repos)));
 }
