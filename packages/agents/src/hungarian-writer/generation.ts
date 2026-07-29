@@ -139,7 +139,12 @@ async function runGenerationCall(
       buildLexiconBlock(facts, learnedCorrections) +
       buildLearnedGuidanceBlock(learnedCorrections),
     messages: [{ role: "user", content: JSON.stringify(userContent) }],
-    maxTokens: 2048,
+    // Qwen3 counts hidden reasoning against this ceiling. Production
+    // responses containing the requested multi-paragraph article were
+    // observed truncated mid-JSON at 2048, so leave enough room for both
+    // reasoning and the complete structured payload. Unused capacity is not
+    // billed as generated output.
+    maxTokens: 4096,
     jsonSchema: GENERATION_JSON_SCHEMA,
   });
 

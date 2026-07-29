@@ -85,7 +85,9 @@ export async function extractFacts(
         content: `<source_article>\nCím: ${article.titleOriginal}\n\n${article.bodyOriginal}\n</source_article>`,
       },
     ],
-    maxTokens: 2048,
+    // Ten to eighteen atomic facts plus Qwen3's hidden reasoning can exceed
+    // a 2048-token ceiling even when the visible JSON itself is modest.
+    maxTokens: 4096,
     jsonSchema: EXTRACTION_JSON_SCHEMA,
   });
 
