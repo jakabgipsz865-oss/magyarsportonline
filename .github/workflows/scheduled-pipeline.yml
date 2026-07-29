@@ -71,15 +71,31 @@ jobs:
           BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
           # Call the worker repeatedly until it reports no jobs left to
           # process (processed=0) or a sane iteration cap is hit — one call
-          # only drains what fits in its own ~50s budget (see
+          # only drains what fits in its own ~40s budget (see
           # apps/web/app/api/internal/jobs/process/route.ts), so a real
           # backlog needs several calls in the same workflow run to fully
           # catch up rather than waiting for the next 5-minute tick.
+          #
+          # A client-side curl timeout on this endpoint is an EXPECTED
+          # steady-state event under a real backlog, not a failure: the
+          # worker's own DB state (pipeline_jobs) is durable regardless of
+          # whether this script ever sees the HTTP response, and any job
+          # left `in_progress` by a request that got cut off is reclaimed
+          # via the stale-lock path (STALE_LOCK_MS) by the very next call
+          # -- in this run or the next scheduled tick. So: stop the loop
+          # and exit 0 rather than failing the whole workflow run.
           for i in $(seq 1 10); do
+            set +e
             http_code=$(curl -sS -o /tmp/jobs-body.json -w '%{http_code}' \
-              --max-time 60 \
+              --max-time 90 \
               -X POST "$BASE/api/internal/jobs/process" \
               -H "Authorization: Bearer $CRON_SECRET")
+            curl_exit=$?
+            set -e
+            if [ "$curl_exit" -ne 0 ]; then
+              echo "jobs/process attempt $i: curl exit $curl_exit (timeout or connection issue) -- more work likely remains, will be picked up on the next call/tick. Not treating as a failure."
+              break
+            fi
             echo "jobs/process attempt $i: HTTP $http_code"
             cat /tmp/jobs-body.json
             echo
