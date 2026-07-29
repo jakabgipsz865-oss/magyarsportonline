@@ -1,0 +1,55 @@
+# Review-queue triage sweep (2026-07-29, "queue-tisztító és triage réteg"
+# sprint) — meghívja a `/api/internal/triage-sweep` végpontot. Alapértelmezetten
+# ténylegesen végrehajtja a sweep-et (auto-repair + archiválás); `dry_run: true`
+# esetén csak a kategóriánkénti számokat adja vissza, mellékhatás nélkül.
+name: Triage sweep (review queue)
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Csak a kategóriánkénti számokat kérje le, mellékhatás nélkül"
+        required: false
+        default: "false"
+
+permissions: {}
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Call triage-sweep endpoint
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -u
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET repo secret hiányzik — nincs mit futtatni." >&2
+            exit 1
+          fi
+          BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
+          echo "Target: $BASE (dry_run=$DRY_RUN)"
+
+          BODY=$(jq -n --argjson dryRun "$DRY_RUN" '{dryRun: $dryRun}')
+
+          code=$(curl -sS -o response.json -w '%{http_code}' --max-time 120 \
+            -X POST "$BASE/api/internal/triage-sweep" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d "$BODY")
+          echo "HTTP $code"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          jq '.' response.json >> "$GITHUB_STEP_SUMMARY" || cat response.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat response.json
+          [ "$code" = "200" ]
+
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: triage-sweep-result
+          path: response.json
