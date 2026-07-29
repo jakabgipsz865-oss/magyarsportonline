@@ -68,6 +68,13 @@ const FORBIDDEN_TERMINOLOGY_PATTERNS = [
   /(?<!\p{L})átvásárlás\p{L}*/iu,
   /(?<!\p{L})rekordjelentkező\p{L}*/iu,
   /(?<!\p{L})stratégiás szünet\p{L}*/iu,
+  /(?<!\p{L})szerződéskézbesítési tárgyalás\p{L}*/iu,
+  /(?<!\p{L})tv-kiválasztás\p{L}*/iu,
+  /(?<!\p{L})futballfedezet\p{L}*/iu,
+  /(?<!\p{L})csillam\p{L}*/iu,
+  /(?<!\p{L})borúslatos játékos\p{L}*/iu,
+  /(?<!\p{L})ambiciók(?!\p{L})/iu,
+  /(?<!\p{L})aláírta\b.{0,50}\baláírását(?!\p{L})/iu,
 ];
 
 function countMatches(text: string, pattern: RegExp): number {

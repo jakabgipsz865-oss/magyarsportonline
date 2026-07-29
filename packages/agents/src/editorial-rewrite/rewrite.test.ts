@@ -115,6 +115,26 @@ describe("rewriteForStyle", () => {
     expect(llm.jsonRequests[0]?.system).toContain("clean sheet");
   });
 
+  it("also matches a known Hungarian literal translation in the current draft", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: { rewritten_title_hu: "T", rewritten_lead_hu: "L", rewritten_body_hu: "B" },
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+
+    await rewriteForStyle(llm, {
+      facts: [],
+      titleHu: "T",
+      leadHu: "L",
+      bodyHu: "A klub folytatja a szerződéskézbesítési tárgyalásokat.",
+    });
+
+    const system = llm.jsonRequests[0]?.system ?? "";
+    expect(system).toContain("contract talks");
+    expect(system).toContain("szerződéses tárgyalások");
+  });
+
   it("omits the lexicon block when nothing matches", async () => {
     const llm = new FakeLlmClient();
     llm.queueJson({

@@ -1,14 +1,17 @@
 import { MODEL_TIERS, type LlmClient } from "@magyarsportonline/llm";
 import { z } from "zod";
 import {
+  correctionsToForbiddenLiteralTranslations,
   correctionsToLexiconEntries,
   correctionsToRecommendedPhrasings,
+  formatForbiddenTranslationsBlock,
   formatPromptExamplesBlock,
   formatRecommendedPhrasingsBlock,
   type EditorialCorrection,
 } from "../shared/editorial-corrections";
 import {
   FOOTBALL_LEXICON,
+  findLexiconMatchesInHungarianText,
   findRelevantLexiconEntries,
   formatLexiconBlock,
 } from "../shared/football-lexicon";
@@ -65,8 +68,8 @@ Szabályok:
 - Természetes, élő, mai magyar sportújságírói stílust használj — ne fordíts szó szerint, ne másold be a "facts" szövegét változtatás nélkül; fogalmazz újra, kerüld az ismétlést és a gépies, monoton mondatszerkezetet.
 - Ügyelj a magyar nyelvtanra: helyes névelőhasználat (a/az), ékezetek, ragozás és mondatszerkezet.
 - Szó szerinti idézetet KIZÁRÓLAG akkor használj, ha egy tény "factType" mezője "quote", és akkor is csak a megadott "quoteOriginal"/"quoteSpeaker" alapján, forrás-hivatkozással.
-- Ha a rendszerüzenet végén egy "FUTBALLNYELVI SZÓTÁR" blokk szerepel, az a "quoteOriginal" mezőkben előforduló angol futballkifejezések/szleng/idióma természetes magyar megfelelőit adja meg — ezeket használd az idézet átültetésekor, NE a megadott tükörfordítást.
-- Ha a rendszerüzenet végén "AJÁNLOTT MAGYAR SPORTÚJSÁGÍRÓI MEGFOGALMAZÁSOK" vagy "PROMPT PÉLDATÁR" blokk szerepel, azok korábbi, emberi szerkesztő által ténylegesen elfogadott javítások — kövesd a mintájukat, ezek nálad megbízhatóbb forrásból származnak, mint egy általános stílusszabály.
+- Ha a rendszerüzenet végén egy "FUTBALLNYELVI SZÓTÁR" blokk szerepel, az a tényekben vagy idézetekben felismert angol futballkifejezések, szleng és hibás magyar tükörfordítások természetes magyar megfelelőit adja meg — ezeket használd, NE a megadott tükörfordítást.
+- Ha a rendszerüzenet végén "TILTOTT TÜKÖRFORDÍTÁSOK", "AJÁNLOTT MAGYAR SPORTÚJSÁGÍRÓI MEGFOGALMAZÁSOK" vagy "PROMPT PÉLDATÁR" blokk szerepel, azok korábbi, emberi szerkesztő által ténylegesen elfogadott javítások — a tiltott alakot SOSEM használhatod, a többi mintát pedig kövesd; ezek nálad megbízhatóbb forrásból származnak, mint egy általános stílusszabály.
 - Ha a felhasználói üzenet "previousVersion" mezője nem null, a "change_summary_hu" mezőben egy rövid, magyar nyelvű összefoglalót adj arról, mi változott az előző verzióhoz képest. Ha "previousVersion" null (ez az első verzió), a "change_summary_hu" legyen null.`;
 
 const QUALITY_FIX_SYSTEM_PROMPT = `Magyar sportújságíró vagy. Az előző tervezeted NEM felelt meg a minőségi elvárásoknak — a felhasználói üzenet "previousAttempt" mezője mutatja a hibás tervezetet, "issues" mezője pedig a talált problémákat (pl. "title: looks_english" = a cím angolul maradt; "lead: empty" = a lead üres; "body: matches_source_verbatim" = a törzs szó szerint megegyezik egy ténnyel; "body: repeated_paragraph" = két bekezdés ugyanazt mondja el, csak átfogalmazva; "lead: duplicates_body" = a lead szó szerint megismétlődik egy bekezdésben).
@@ -82,34 +85,42 @@ const QUALITY_FIX_SYSTEM_PROMPT = `Magyar sportújságíró vagy. Az előző ter
 /**
  * A Hungarian Writer Agent sosem látja a nyers angol forráscikket (lásd a
  * `generateStoryVersion` docstringjét) — a facts.detailHu mezőket a Fact
- * Verification Agent már lefordítja. Az egyetlen valódi angol szöveg, ami
- * idáig eljut, a szó szerint megőrzött idézetek (`quoteOriginal`) — ezekben
- * fordulhat elő át nem ültetett futballszleng/idióma, amit a modellnek a
- * body_hu megfogalmazásakor természetes magyarra kell váltania. Ezért a
- * futballnyelvi lexikont (packages/agents/src/shared/football-lexicon.ts)
- * kizárólag ezen idézetek ellen illesztjük, nem a már magyar detailHu ellen.
+ * Verification Agent már lefordítja, de productionben ezekben is
+ * előfordult angolul maradt szakkifejezés és hibás magyar tükörfordítás.
+ * Ezért a lexikont a detailHu mezők és a szó szerint megőrzött idézetek
+ * (`quoteOriginal`) együttese ellen illesztjük.
  */
 function buildLexiconBlock(facts: WriterFact[], learnedCorrections: EditorialCorrection[]): string {
-  const englishQuotes = facts
-    .map((fact) => fact.quoteOriginal)
-    .filter((quote): quote is string => Boolean(quote))
+  const sourceText = facts
+    .flatMap((fact) => [fact.detailHu, fact.quoteOriginal])
+    .filter((text): text is string => Boolean(text))
     .join("\n");
-  if (!englishQuotes) {
+  if (!sourceText) {
     return "";
   }
   const combinedLexicon = [...FOOTBALL_LEXICON, ...correctionsToLexiconEntries(learnedCorrections)];
-  const entries = findRelevantLexiconEntries(englishQuotes, 20, combinedLexicon);
+  const entries = [
+    ...findRelevantLexiconEntries(sourceText, 20, combinedLexicon),
+    ...findLexiconMatchesInHungarianText(sourceText, combinedLexicon),
+  ]
+    .filter(
+      (entry, index, all) => all.findIndex((candidate) => candidate.en === entry.en) === index,
+    )
+    .slice(0, 20);
   const block = formatLexiconBlock(entries);
   return block ? `\n\n${block}` : "";
 }
 
 /** A statikus lexikonon túl a szerkesztő eddig elfogadott javításaiból is épít egy blokkot — lásd editorial-corrections.ts. */
 function buildLearnedGuidanceBlock(learnedCorrections: EditorialCorrection[]): string {
+  const forbiddenBlock = formatForbiddenTranslationsBlock(
+    correctionsToForbiddenLiteralTranslations(learnedCorrections).slice(0, 10),
+  );
   const phrasingsBlock = formatRecommendedPhrasingsBlock(
     correctionsToRecommendedPhrasings(learnedCorrections),
   );
   const examplesBlock = formatPromptExamplesBlock(learnedCorrections);
-  const blocks = [phrasingsBlock, examplesBlock].filter(Boolean);
+  const blocks = [forbiddenBlock, phrasingsBlock, examplesBlock].filter(Boolean);
   return blocks.length > 0 ? `\n\n${blocks.join("\n\n")}` : "";
 }
 
