@@ -384,9 +384,8 @@ export default async function ReviewQueuePage({ searchParams }: PageProps): Prom
             marginBottom: 16,
           }}
         >
-          <strong>A publikálás blokkolva.</strong> A rendszer a jelenlegi szövegen újra
-          lefuttatta a nyelvi, tény-, hitelességi és forrásellenőrzést. Javítsd a tételt,
-          majd próbáld újra.
+          <strong>A publikálás blokkolva.</strong> A rendszer a jelenlegi szövegen újra lefuttatta a
+          nyelvi, tény-, hitelességi és forrásellenőrzést. Javítsd a tételt, majd próbáld újra.
         </div>
       ) : null}
 

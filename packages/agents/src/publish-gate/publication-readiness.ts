@@ -1,8 +1,5 @@
 import type { WriterFact } from "../hungarian-writer/facts";
-import {
-  assessContentQuality,
-  type QualityIssue,
-} from "../hungarian-writer/quality-gate";
+import { assessContentQuality, type QualityIssue } from "../hungarian-writer/quality-gate";
 
 export type PublicationBlockerKind =
   | "content_quality_failed"
@@ -53,15 +50,9 @@ export function assessPublicationReadiness(
     facts: input.facts,
   });
   const minimumLengthIssues: QualityIssue[] = [
-    ...(input.titleHu.trim().length < 5
-      ? ([{ field: "title", kind: "too_short" }] as const)
-      : []),
-    ...(input.leadHu.trim().length < 20
-      ? ([{ field: "lead", kind: "too_short" }] as const)
-      : []),
-    ...(input.bodyHu.trim().length < 60
-      ? ([{ field: "body", kind: "too_short" }] as const)
-      : []),
+    ...(input.titleHu.trim().length < 5 ? ([{ field: "title", kind: "too_short" }] as const) : []),
+    ...(input.leadHu.trim().length < 20 ? ([{ field: "lead", kind: "too_short" }] as const) : []),
+    ...(input.bodyHu.trim().length < 60 ? ([{ field: "body", kind: "too_short" }] as const) : []),
   ];
   const qualityIssues = [...quality.issues, ...minimumLengthIssues];
   const blockers: PublicationBlocker[] = qualityIssues.map((qualityIssue) => ({

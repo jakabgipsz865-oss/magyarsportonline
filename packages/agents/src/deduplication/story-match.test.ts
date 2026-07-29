@@ -277,9 +277,7 @@ describe("scoreStoryMatch — strong event identity drives auto_merge", () => {
       ]),
     ).toBe(true);
     expect(
-      hasStrongEventIdentity([
-        { entityId: "chelsea", type: "team", nameCanonical: "Chelsea FC" },
-      ]),
+      hasStrongEventIdentity([{ entityId: "chelsea", type: "team", nameCanonical: "Chelsea FC" }]),
     ).toBe(false);
   });
 

@@ -163,9 +163,7 @@ export function classifyMatchCategory(matchedEntities: MatchedEntity[]): MatchCa
 export function hasStrongEventIdentity(matchedEntities: MatchedEntity[]): boolean {
   const specific = matchedEntities.filter(isSpecific);
   const teams = specific.filter((entity) => entity.type === "team");
-  const people = specific.filter(
-    (entity) => entity.type === "player" || entity.type === "coach",
-  );
+  const people = specific.filter((entity) => entity.type === "player" || entity.type === "coach");
 
   return teams.length >= 2 || (teams.length >= 1 && people.length >= 1);
 }
