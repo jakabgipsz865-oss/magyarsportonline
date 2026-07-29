@@ -171,6 +171,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           sourceName: sourceNameByUrl.get(article.sourceUrl) ?? "(ismeretlen forrás)",
           sourceUrl: article.sourceUrl,
           titleOriginal: article.titleOriginal,
+          subtitleOriginal: article.subtitleOriginal,
           bodyOriginal: article.bodyOriginal,
           publishedAtSource: article.publishedAtSource,
           ingestedAt: article.ingestedAt,
