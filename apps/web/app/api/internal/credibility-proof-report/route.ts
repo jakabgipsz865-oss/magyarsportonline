@@ -5,13 +5,8 @@ import { createRepositories } from "../../../../lib/db";
 import { env } from "../../../../lib/env";
 import { getLogger } from "../../../../lib/logger";
 
-const {
-  FACT_TYPE_LABELS_HU,
-  buildContradictionDetails,
-  buildSourceBreakdown,
-  quoteOf,
-  rawDetailOf,
-} = factVerification;
+const { FACT_TYPE_LABELS_HU, buildContradictionDetails, buildSourceBreakdown, claimDetailHu } =
+  factVerification;
 
 const { auditStoryMerge, entityMatchesText, classifyMatchCategory, MATCH_CATEGORY_LABELS_HU } =
   deduplication;
@@ -42,13 +37,6 @@ type MatchedEntity = deduplication.MatchedEntity;
  * végponté.
  */
 export const maxDuration = 60;
-
-function claimDetailHu(fact: FactWithSourceInfo): string {
-  if (fact.factType === "quote") {
-    return quoteOf(fact.payload) ?? rawDetailOf(fact.payload) ?? "(nincs részlet)";
-  }
-  return rawDetailOf(fact.payload) ?? quoteOf(fact.payload) ?? "(nincs részlet)";
-}
 
 /** A Story domináns (leggyakoribb) fact_type-ja — az "eseménytípus" közelítése, LLM-hívás nélkül. */
 function dominantFactType(facts: FactWithSourceInfo[]): string | null {

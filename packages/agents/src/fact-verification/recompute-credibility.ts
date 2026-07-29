@@ -5,6 +5,7 @@ import type {
   StorySourceRepository,
 } from "@magyarsportonline/db";
 import { mergeClaims, type FactWithSource } from "./claim-merge";
+import { rawDetailOf } from "./contradiction-check";
 import {
   buildContradictionDetails,
   buildScoreBreakdown,
@@ -51,6 +52,20 @@ export function quoteOf(payload: unknown): string | null {
     return quote.length > 0 ? quote : null;
   }
   return null;
+}
+
+/**
+ * A human-readable rendering of one Fact's claim (2026-07-28, credibility
+ * explanation sprint) — a direct quote when the payload has one, otherwise
+ * the raw structured detail. Shared by the credibility proof-report and the
+ * admin review detail view (apps/web/lib/review-detail.ts) so both surfaces
+ * render a claim identically.
+ */
+export function claimDetailHu(fact: { factType: string; payload: unknown }): string {
+  if (fact.factType === "quote") {
+    return quoteOf(fact.payload) ?? rawDetailOf(fact.payload) ?? "(nincs részlet)";
+  }
+  return rawDetailOf(fact.payload) ?? quoteOf(fact.payload) ?? "(nincs részlet)";
 }
 
 /**

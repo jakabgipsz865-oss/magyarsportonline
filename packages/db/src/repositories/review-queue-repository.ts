@@ -5,7 +5,15 @@ import { reviewQueueItems, stories, storyVersions } from "../schema/index";
 
 export type ReviewQueueItem = typeof reviewQueueItems.$inferSelect;
 
-/** A review felület listanézetéhez szükséges, joinolt olvasási alak. */
+/**
+ * A review felület listanézetéhez szükséges, joinolt olvasási alak.
+ * Jóváhagyás ELŐTT a szerkesztőnek látnia kell a teljes magyar cikket
+ * (nem csak a cím/lead-et) és a hitelességi mutatót is (2026-07-29,
+ * "admin review — teljes bizonyíték jóváhagyás előtt" sprint) — a
+ * forrásokat, forráscikk-linkeket, ellentmondásokat és a kép
+ * forrását/licencét a hívó (apps/web/lib/review-detail.ts) egészíti ki,
+ * mert azok több táblát érintő, per-Story lekérdezést igényelnek.
+ */
 export interface PendingReviewItem {
   id: string;
   storyId: string;
@@ -14,9 +22,15 @@ export interface PendingReviewItem {
   createdAt: Date;
   titleHu: string;
   leadHu: string;
+  bodyHu: string;
   confidenceScore: string | null;
   riskLevel: RiskLevel | null;
   slug: string | null;
+  imageUrl: string | null;
+  credibilityScore: number | null;
+  credibilityBand: string | null;
+  credibilityLabelHu: string | null;
+  credibilityJustificationHu: string | null;
 }
 
 /** Bounded-context repository for the Publish Gate (docs/architecture/02-agents.md §2.7). */
@@ -62,9 +76,15 @@ export class ReviewQueueRepository {
         createdAt: reviewQueueItems.createdAt,
         titleHu: storyVersions.titleHu,
         leadHu: storyVersions.leadHu,
+        bodyHu: storyVersions.bodyHu,
         confidenceScore: stories.confidenceScore,
         riskLevel: stories.riskLevel,
         slug: stories.slug,
+        imageUrl: stories.imageUrl,
+        credibilityScore: stories.credibilityScore,
+        credibilityBand: stories.credibilityBand,
+        credibilityLabelHu: stories.credibilityLabelHu,
+        credibilityJustificationHu: stories.credibilityJustificationHu,
       })
       .from(reviewQueueItems)
       .innerJoin(stories, eq(reviewQueueItems.storyId, stories.id))
