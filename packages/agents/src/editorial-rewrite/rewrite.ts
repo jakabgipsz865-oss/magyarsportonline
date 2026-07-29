@@ -13,6 +13,7 @@ import {
 } from "../shared/editorial-corrections";
 import {
   FOOTBALL_LEXICON,
+  findLexiconMatchesInHungarianText,
   findRelevantLexiconEntries,
   formatLexiconBlock,
 } from "../shared/football-lexicon";
@@ -82,7 +83,14 @@ function buildLexiconBlock(
     return "";
   }
   const combinedLexicon = [...FOOTBALL_LEXICON, ...correctionsToLexiconEntries(learnedCorrections)];
-  const entries = findRelevantLexiconEntries(searchText, 20, combinedLexicon);
+  const entries = [
+    ...findRelevantLexiconEntries(searchText, 20, combinedLexicon),
+    ...findLexiconMatchesInHungarianText(searchText, combinedLexicon),
+  ]
+    .filter(
+      (entry, index, all) => all.findIndex((candidate) => candidate.en === entry.en) === index,
+    )
+    .slice(0, 20);
   const block = formatLexiconBlock(entries);
   return block ? `\n\n${block}` : "";
 }

@@ -91,6 +91,31 @@ describe("generateStoryVersion", () => {
     expect(llm.jsonRequests[0]?.system).toContain("→");
   });
 
+  it("adds a lexicon correction when a fact already contains a known Hungarian literal translation", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: { title_hu: "T", lead_hu: "L", body_hu: "B", change_summary_hu: null },
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+
+    await generateStoryVersion(llm, {
+      facts: [
+        {
+          factType: "contract",
+          detailHu: "A klub folytatja a szerződéskézbesítési tárgyalásokat.",
+          quoteOriginal: null,
+          quoteSpeaker: null,
+        },
+      ],
+      previousVersion: null,
+    });
+
+    const system = llm.jsonRequests[0]?.system ?? "";
+    expect(system).toContain("contract talks");
+    expect(system).toContain("szerződéses tárgyalások");
+  });
+
   it("omits the lexicon block when no quote contains a known term", async () => {
     const llm = new FakeLlmClient();
     llm.queueJson({
@@ -171,6 +196,36 @@ describe("generateStoryVersion", () => {
     expect(system).toContain("AJÁNLOTT MAGYAR SPORTÚJSÁGÍRÓI MEGFOGALMAZÁSOK");
     expect(system).toContain("PROMPT PÉLDATÁR");
     expect(system).toContain("A vezetőedző elismerően nyilatkozott a csapat teljesítményéről.");
+  });
+
+  it("adds learned forbidden literal translations before generating a new draft", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: { title_hu: "T", lead_hu: "L", body_hu: "B", change_summary_hu: null },
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+
+    await generateStoryVersion(llm, {
+      facts: [],
+      previousVersion: null,
+      learnedCorrections: [
+        {
+          id: "correction-3",
+          category: "literal_translation",
+          termEn: null,
+          originalSentenceEn: "Contract talks resumed on Monday.",
+          currentSentenceHu: "szerződéskézbesítési tárgyalások",
+          correctedSentenceHu: "szerződéses tárgyalások",
+          note: null,
+        },
+      ],
+    });
+
+    const system = llm.jsonRequests[0]?.system ?? "";
+    expect(system).toContain("TILTOTT TÜKÖRFORDÍTÁSOK");
+    expect(system).toContain('NE: "szerződéskézbesítési tárgyalások"');
+    expect(system).toContain('HELYETTE: "szerződéses tárgyalások"');
   });
 
   it("omits learned guidance blocks when no corrections are given", async () => {

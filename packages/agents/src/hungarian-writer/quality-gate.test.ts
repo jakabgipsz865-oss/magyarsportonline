@@ -185,6 +185,13 @@ describe("assessContentQuality", () => {
     "szabad átvételben csatlakozott",
     "a büntetőkirekesztés előtt",
     "stopperidőben szerzett gólt",
+    "szerződéskézbesítési tárgyalásokat kezdett",
+    "a következő TV-kiválasztások",
+    "a BBC futballfedezete",
+    "a csillamra hajtott",
+    "borúslatos játékosok érkeztek",
+    "új ambiciók vezérlik",
+    "aláírta a támadó aláírását",
   ])("flags known bad football terminology: %s", (badPhrase) => {
     const result = assessContentQuality({
       titleHu: "A klub fontos döntés előtt áll",
