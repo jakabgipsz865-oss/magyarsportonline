@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, or } from "drizzle-orm";
 import type { ReviewQueueReason, ReviewQueueStatus, RiskLevel } from "@magyarsportonline/shared";
 import type { Database } from "../client";
 import { reviewQueueItems, stories, storyVersions } from "../schema/index";
@@ -97,8 +97,21 @@ export class ReviewQueueRepository {
       .from(reviewQueueItems)
       .innerJoin(stories, eq(reviewQueueItems.storyId, stories.id))
       .innerJoin(storyVersions, eq(reviewQueueItems.storyVersionId, storyVersions.id))
-      .where(eq(reviewQueueItems.status, "pending"))
+      .where(
+        and(
+          eq(reviewQueueItems.status, "pending"),
+          or(isNull(reviewQueueItems.snoozedUntil), lte(reviewQueueItems.snoozedUntil, new Date())),
+        ),
+      )
       .orderBy(asc(reviewQueueItems.createdAt));
+  }
+
+  /** "Később" — a tétel `pending` marad, csak `until`-ig kikerül a `listPending()` eredményéből (nem terminal döntés). */
+  async snooze(id: string, until: Date): Promise<void> {
+    await this.db
+      .update(reviewQueueItems)
+      .set({ snoozedUntil: until })
+      .where(eq(reviewQueueItems.id, id));
   }
 
   /** Lezárja a tételt (approved/rejected/edited) — a Story státuszváltása a hívó felelőssége. */

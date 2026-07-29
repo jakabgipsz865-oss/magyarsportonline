@@ -11,8 +11,16 @@ const DUPLICATE_SCAN_WINDOW_DAYS = 30;
 
 /** Reprocessing a Story calls real LLM stages (Hungarian Writer, SEO) synchronously — bounded per sweep so a single request can't time out; a repeated sweep call drains more, same pattern as scheduled-pipeline.yml's job-processing loop. */
 const MAX_REPROCESS_PER_SWEEP = 8;
-/** Recomputing credibility is pure DB read/write, no LLM call — much cheaper than a reprocess, so it gets a far larger (but still bounded, to keep one request comfortably inside its time budget) per-sweep batch. */
-const MAX_CREDIBILITY_RECOMPUTES_PER_SWEEP = 100;
+/**
+ * Recomputing credibility is pure DB read/write, no LLM call — much cheaper
+ * than a reprocess, so it gets a far larger per-sweep batch, run
+ * concurrently (see `credibilityOnlyResults` below). A first production run
+ * at 100 with a SEQUENTIAL loop hit Vercel's FUNCTION_INVOCATION_TIMEOUT;
+ * after parallelizing, this cap is kept at 60 (rather than pushed back to
+ * 100) for a comfortable safety margin, since real concurrency is still
+ * bounded by the DB connection pool (postgres.js default max 10).
+ */
+const MAX_CREDIBILITY_RECOMPUTES_PER_SWEEP = 60;
 
 export interface TriagedReviewItem extends PendingReviewDetail {
   triageCategory: StoryTriageCategory;
@@ -168,27 +176,55 @@ export async function runTriageSweep(
       .map((item) => item.storyId),
   );
 
-  for (const item of repairable) {
-    const doCredibility = needsCredibility.has(item.storyId);
-    const doReprocess = needsReprocess.has(item.storyId);
-    if (!doCredibility && !doReprocess) {
-      continue; // over this call's cap — picked up by a later sweep call
+  async function recomputeCredibility(storyId: string): Promise<void> {
+    await factVerification.recomputeCredibilityForStory(
+      {
+        factRepository: repos.factRepository,
+        storySourceRepository: repos.storySourceRepository,
+        storyRepository: repos.storyRepository,
+        storyCredibilityHistoryRepository: repos.storyCredibilityHistoryRepository,
+      },
+      storyId,
+    );
+  }
+
+  // A real production run at MAX_CREDIBILITY_RECOMPUTES_PER_SWEEP=100 hit
+  // Vercel's FUNCTION_INVOCATION_TIMEOUT because 100 sequential DB
+  // round-trips (each several queries) added up past the route's 250s
+  // budget. Credibility recompute has no LLM call and no cross-item
+  // ordering requirement, so items needing ONLY that repair run
+  // concurrently — the postgres.js pool (default max 10 connections) caps
+  // real parallelism, but that's still a large win over one-at-a-time.
+  // Items also needing a (rate-limit-sensitive) LLM reprocess stay in the
+  // sequential loop below so reprocess calls aren't fired concurrently.
+  const credibilityOnlyIds = [...needsCredibility].filter((id) => !needsReprocess.has(id));
+  const credibilityOnlyResults = await Promise.allSettled(
+    credibilityOnlyIds.map((storyId) => recomputeCredibility(storyId)),
+  );
+  credibilityOnlyResults.forEach((result, index) => {
+    const storyId = credibilityOnlyIds[index];
+    if (!storyId) return;
+    if (result.status === "fulfilled") {
+      autoRepaired += 1;
+    } else {
+      errors.push({
+        storyId,
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      });
     }
+  });
+
+  for (const item of repairable) {
+    const doReprocess = needsReprocess.has(item.storyId);
+    if (!doReprocess) {
+      continue; // handled above (concurrently) or over this call's cap
+    }
+    const doCredibility = needsCredibility.has(item.storyId);
     try {
       if (doCredibility) {
-        await factVerification.recomputeCredibilityForStory(
-          {
-            factRepository: repos.factRepository,
-            storySourceRepository: repos.storySourceRepository,
-            storyRepository: repos.storyRepository,
-            storyCredibilityHistoryRepository: repos.storyCredibilityHistoryRepository,
-          },
-          item.storyId,
-        );
+        await recomputeCredibility(item.storyId);
       }
-      if (doReprocess) {
-        await reprocessStoryById(item.storyId);
-      }
+      await reprocessStoryById(item.storyId);
       autoRepaired += 1;
     } catch (error) {
       errors.push({

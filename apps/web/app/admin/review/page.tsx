@@ -1,7 +1,13 @@
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { approveReviewItem, rejectReviewItem } from "../../../lib/review";
+import { AdminHeader } from "../_components/admin-header";
+import {
+  approveReviewItem,
+  editReviewItemContent,
+  rejectReviewItem,
+  snoozeReviewItem,
+} from "../../../lib/review";
 import { listTriagedReviewItems, type TriagedReviewItem } from "../../../lib/review-triage";
 
 // DB-driven admin nézet — sosem prerendelt, mindig friss (a betöltéskor
@@ -52,6 +58,33 @@ async function rejectAction(formData: FormData): Promise<void> {
   const itemId = formData.get("itemId");
   if (typeof itemId === "string" && itemId.length > 0) {
     await rejectReviewItem(itemId);
+  }
+  revalidatePath("/admin/review");
+}
+
+async function laterAction(formData: FormData): Promise<void> {
+  "use server";
+  const itemId = formData.get("itemId");
+  if (typeof itemId === "string" && itemId.length > 0) {
+    await snoozeReviewItem(itemId);
+  }
+  revalidatePath("/admin/review");
+}
+
+async function editAction(formData: FormData): Promise<void> {
+  "use server";
+  const itemId = formData.get("itemId");
+  const titleHu = formData.get("titleHu");
+  const leadHu = formData.get("leadHu");
+  const bodyHu = formData.get("bodyHu");
+  if (
+    typeof itemId === "string" &&
+    itemId.length > 0 &&
+    typeof titleHu === "string" &&
+    typeof leadHu === "string" &&
+    typeof bodyHu === "string"
+  ) {
+    await editReviewItemContent(itemId, { titleHu, leadHu, bodyHu });
   }
   revalidatePath("/admin/review");
 }
@@ -146,6 +179,48 @@ function ReviewCard({
         <div style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>{item.bodyHu}</div>
       </details>
 
+      {decidable ? (
+        <details style={{ marginBottom: 12 }}>
+          <summary style={{ cursor: "pointer", fontWeight: 600 }}>✏️ Szerkesztés</summary>
+          <form
+            action={editAction}
+            style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}
+          >
+            <input type="hidden" name="itemId" value={item.id} />
+            <label>
+              Cím
+              <input
+                type="text"
+                name="titleHu"
+                defaultValue={item.titleHu}
+                style={{ width: "100%", padding: 6 }}
+              />
+            </label>
+            <label>
+              Lead
+              <textarea
+                name="leadHu"
+                defaultValue={item.leadHu}
+                rows={2}
+                style={{ width: "100%", padding: 6 }}
+              />
+            </label>
+            <label>
+              Cikk törzse
+              <textarea
+                name="bodyHu"
+                defaultValue={item.bodyHu}
+                rows={10}
+                style={{ width: "100%", padding: 6, fontFamily: "inherit" }}
+              />
+            </label>
+            <button type="submit" style={{ alignSelf: "flex-start" }}>
+              💾 Mentés
+            </button>
+          </form>
+        </details>
+      ) : null}
+
       <div
         style={{
           border: "1px solid #e0c060",
@@ -219,7 +294,7 @@ function ReviewCard({
         {" · "}Bekerült: {item.createdAt.toLocaleString("hu-HU")}
       </p>
       {decidable ? (
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <form action={approveAction}>
             <input type="hidden" name="itemId" value={item.id} />
             <button type="submit">✅ Jóváhagyás és publikálás</button>
@@ -227,6 +302,10 @@ function ReviewCard({
           <form action={rejectAction}>
             <input type="hidden" name="itemId" value={item.id} />
             <button type="submit">❌ Elutasítás</button>
+          </form>
+          <form action={laterAction}>
+            <input type="hidden" name="itemId" value={item.id} />
+            <button type="submit">⏳ Később</button>
           </form>
         </div>
       ) : (
@@ -285,10 +364,8 @@ export default async function ReviewQueuePage({ searchParams }: PageProps): Prom
   const decidable = category === "human_decision_required" || category === "ready_for_review";
 
   return (
-    <main>
-      <p>
-        <Link href="/">← Vissza a főoldalra</Link>
-      </p>
+    <main style={{ maxWidth: 900, margin: "0 auto", padding: "0 12px" }}>
+      <AdminHeader activePath="/admin/review" />
       <h1>Review queue</h1>
 
       <nav style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>

@@ -1,0 +1,1 @@
+ALTER TABLE "review_queue_items" ADD COLUMN "snoozed_until" timestamp with time zone;
