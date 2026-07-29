@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Database } from "../client";
 import { rawArticles } from "../schema/index";
 
@@ -28,6 +28,32 @@ export class RawArticleRepository {
       throw new Error("RawArticle insert returned no row");
     }
     return row;
+  }
+
+  /**
+   * Upgrades a previously stored RSS snippet when the Source Fetcher can
+   * later retrieve the same URL's complete article. The origin predicate
+   * makes this monotonic: a full article can never be overwritten by a
+   * shorter feed payload on a later ingest cycle.
+   */
+  async upgradeFromFullArticle(
+    id: string,
+    data: Pick<
+      NewRawArticle,
+      | "titleOriginal"
+      | "subtitleOriginal"
+      | "bodyOriginal"
+      | "authorOriginal"
+      | "publishedAtSource"
+      | "imageUrl"
+    >,
+  ): Promise<boolean> {
+    const rows = await this.db
+      .update(rawArticles)
+      .set({ ...data, contentOrigin: "full_article" })
+      .where(and(eq(rawArticles.id, id), eq(rawArticles.contentOrigin, "rss_snippet")))
+      .returning({ id: rawArticles.id });
+    return rows.length > 0;
   }
 
   async getById(id: string): Promise<RawArticle | null> {

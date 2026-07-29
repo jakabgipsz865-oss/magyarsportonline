@@ -41,21 +41,25 @@ const SOURCE_2 = {
 
 function buildDeps(overrides?: {
   existingUrls?: Set<string>;
+  existingOrigin?: "rss_snippet" | "full_article";
   adapter?: SourceAdapter;
   sources?: (typeof SOURCE)[];
   maxNewArticlesPerRun?: number;
 }): SourceIngestDeps & {
   inserted: Array<{ sourceUrl: string }>;
+  upgraded: Array<{ id: string; bodyOriginal: string }>;
   emitted: unknown[];
   fetchResults: Array<{ sourceId: string; status: string }>;
 } {
   const existingUrls = overrides?.existingUrls ?? new Set<string>();
   const inserted: Array<{ sourceUrl: string }> = [];
+  const upgraded: Array<{ id: string; bodyOriginal: string }> = [];
   const emitted: unknown[] = [];
   const fetchResults: Array<{ sourceId: string; status: string }> = [];
 
   const deps: SourceIngestDeps & {
     inserted: Array<{ sourceUrl: string }>;
+    upgraded: Array<{ id: string; bodyOriginal: string }>;
     emitted: unknown[];
     fetchResults: Array<{ sourceId: string; status: string }>;
   } = {
@@ -67,12 +71,23 @@ function buildDeps(overrides?: {
     },
     rawArticleRepository: {
       findBySourceUrl: vi.fn(async (url: string) =>
-        existingUrls.has(url) ? ({ id: "existing" } as never) : null,
+        existingUrls.has(url)
+          ? ({
+              id: "existing",
+              contentOrigin: overrides?.existingOrigin ?? "full_article",
+            } as never)
+          : null,
       ),
       insert: vi.fn(async (data: { sourceUrl: string }) => {
         inserted.push({ sourceUrl: data.sourceUrl });
         return { id: `new-${inserted.length}`, ...data } as never;
       }),
+      upgradeFromFullArticle: vi.fn(
+        async (id: string, data: { bodyOriginal: string }): Promise<boolean> => {
+          upgraded.push({ id, bodyOriginal: data.bodyOriginal });
+          return true;
+        },
+      ),
     },
     agentRunRepository: { record: vi.fn(async () => undefined) },
     dispatcher: {
@@ -103,6 +118,7 @@ function buildDeps(overrides?: {
       destination: { write: () => true } as unknown as NodeJS.WritableStream,
     }),
     inserted,
+    upgraded,
     emitted,
     fetchResults,
   };
@@ -132,6 +148,21 @@ describe("runSourceIngest", () => {
     expect(results).toEqual([{ sourceId: SOURCE.id, ingestedCount: 0, status: "ok" }]);
     expect(deps.inserted).toEqual([]);
     expect(deps.emitted).toEqual([]);
+    expect(deps.upgraded).toEqual([]);
+  });
+
+  it("upgrades an existing RSS snippet when full article extraction later succeeds", async () => {
+    const deps = buildDeps({
+      existingUrls: new Set(["https://example.com/1"]),
+      existingOrigin: "rss_snippet",
+    });
+
+    const results = await runSourceIngest(deps);
+
+    expect(results).toEqual([{ sourceId: SOURCE.id, ingestedCount: 0, status: "ok" }]);
+    expect(deps.inserted).toEqual([]);
+    expect(deps.emitted).toEqual([]);
+    expect(deps.upgraded).toEqual([{ id: "existing", bodyOriginal: "Body" }]);
   });
 
   it("shares maxNewArticlesPerRun across all active sources, not per source (2026-07-29 fix)", async () => {
