@@ -17,4 +17,6 @@ export const reviewQueueItems = pgTable("review_queue_items", {
   reviewNote: text("review_note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  /** "Később" (snooze) a review UI-n: a tétel `pending` marad, csak a lekérdezés bújtatja el eddig az időpontig — nem terminal döntés, mint approve/reject (2026-07-29). */
+  snoozedUntil: timestamp("snoozed_until", { withTimezone: true }),
 });

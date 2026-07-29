@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { AdminHeader } from "../_components/admin-header";
 import {
   decideMissedMergeReview,
   refreshAndListMissedMergeReviews,
@@ -182,10 +183,8 @@ export default async function MissedMergeReviewPage(): Promise<ReactNode> {
   const { pending, decided, decidedCount } = await refreshAndListMissedMergeReviews();
 
   return (
-    <main>
-      <p>
-        <Link href="/">← Vissza a főoldalra</Link>
-      </p>
+    <main style={{ maxWidth: 900, margin: "0 auto", padding: "0 12px" }}>
+      <AdminHeader activePath="/admin/missed-merge-review" />
       <h1>Elmulasztott merge — kézi felülvizsgálat</h1>
       <p>
         {pending.length === 0
