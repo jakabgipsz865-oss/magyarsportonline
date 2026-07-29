@@ -89,3 +89,18 @@ export const socialPostStatusEnum = pgEnum("social_post_status", [
   "retracted",
 ]);
 export const agentRunStatusEnum = pgEnum("agent_run_status", ["success", "error", "skipped"]);
+/**
+ * A `pipeline_jobs` (2026-07-29, aszinkron pipeline sprint) állapotgépe —
+ * lásd packages/db/src/schema/pipeline-jobs.ts megjegyzését a teljes
+ * indoklásért. Szándékosan nincs külön "failed" állapot: egy sikertelen,
+ * de még újrapróbálható job visszakerül "pending"-be (jövőbeli
+ * `available_at`-tal, `attempts`/`last_error` jelzi a történetét) — csak a
+ * `max_attempts`-ot elért, VÉGLEGESEN sikertelen job kap "dead_letter"-t,
+ * ami admin/observability célból megmarad, nem tűnik el.
+ */
+export const pipelineJobStatusEnum = pgEnum("pipeline_job_status", [
+  "pending",
+  "in_progress",
+  "completed",
+  "dead_letter",
+]);
