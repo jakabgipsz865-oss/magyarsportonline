@@ -36,6 +36,10 @@ export function estimateCostUsd(model: string, inputTokens: number, outputTokens
  */
 export const CLOUDFLARE_MODEL_PRICING: Record<string, ModelPricing> = {
   "@cf/qwen/qwen3-30b-a3b-fp8": { inputUsdPerMTok: 0.051, outputUsdPerMTok: 0.34 },
+  "@cf/meta/llama-3.3-70b-instruct-fp8-fast": {
+    inputUsdPerMTok: 0.29,
+    outputUsdPerMTok: 2.25,
+  },
 };
 
 /** Konzervatív fallback ismeretlen Cloudflare modell-ID-re. */

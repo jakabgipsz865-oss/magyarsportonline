@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assessContentQuality } from "./quality-gate";
+import { assessContentQuality, removeGeneratedRepetition } from "./quality-gate";
 
 const FACTS = [
   {
@@ -221,5 +221,34 @@ describe("assessContentQuality", () => {
     });
 
     expect(result.issues).toContainEqual({ field: "lead", kind: "forbidden_terminology" });
+  });
+});
+
+describe("removeGeneratedRepetition", () => {
+  it("removes lead copies and repeated body sentences without inventing or rewriting text", () => {
+    const leadHu =
+      "A Barcelona két felkészülési mérkőzést játszik Angliában. A keret a St George's Parkban edz.";
+    const result = removeGeneratedRepetition({
+      leadHu,
+      bodyHu:
+        "A Barcelona két felkészülési mérkőzést játszik Angliában. A keret a St George's Parkban edz.\n\nHansi Flick több fiatal játékost is nevezett az utazó keretbe. A csapat pénteken lép pályára először.\n\nHansi Flick több fiatal játékost is nevezett az utazó keretbe.\n\nA második találkozót hétfőn rendezik meg.",
+    });
+
+    expect(result).toEqual({
+      leadHu,
+      bodyHu:
+        "Hansi Flick több fiatal játékost is nevezett az utazó keretbe. A csapat pénteken lép pályára először.\n\nA második találkozót hétfőn rendezik meg.",
+    });
+  });
+
+  it("leaves distinct paragraphs unchanged", () => {
+    const bodyHu =
+      "A kapus a második félidőben büntetőt védett.\n\nA vezetőedző a lefújás után dicsérte a csapat védekezését.";
+    expect(
+      removeGeneratedRepetition({
+        leadHu: "A hazai csapat egygólos győzelmet aratott a bajnoki mérkőzésen.",
+        bodyHu,
+      }).bodyHu,
+    ).toBe(bodyHu);
   });
 });

@@ -48,10 +48,10 @@ export const env = createEnv({
     // Cloudflare Paid plant vagy bekapcsolt billinget.
     CLOUDFLARE_API_TOKEN: z.string().min(1).optional(),
 
-    // Ingyenes napi kerettel elérhető, a magyart hivatalosan is támogató
-    // Qwen3 MoE modell alapértelmezésben (packages/llm/src/cloudflare-client.ts)
-    // — kód nélkül felülírható, ha másik Workers AI modellt szeretnénk.
-    CLOUDFLARE_AI_MODEL: z.string().min(1).default("@cf/qwen/qwen3-30b-a3b-fp8"),
+    // Cloudflare JSON Mode-ot hivatalosan támogató modell. Az adapter a
+    // korábbi/hibás, strukturált kimenetet nem támogató env-értéket is erre
+    // a fail-safe alapmodellre cseréli.
+    CLOUDFLARE_AI_MODEL: z.string().min(1).default("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
 
     // Csak akkor kötelező ténylegesen, ha LLM_PROVIDER=anthropic (lib/llm.ts).
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
