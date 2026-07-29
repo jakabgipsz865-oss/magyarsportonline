@@ -21,6 +21,7 @@ export interface OriginalSourceContent {
   sourceUrl: string;
   titleOriginal: string;
   bodyOriginal: string;
+  contentOrigin: string;
 }
 
 /**
@@ -171,6 +172,7 @@ export class StorySourceRepository {
         sourceUrl: rawArticles.sourceUrl,
         titleOriginal: rawArticles.titleOriginal,
         bodyOriginal: rawArticles.bodyOriginal,
+        contentOrigin: rawArticles.contentOrigin,
       })
       .from(storySources)
       .innerJoin(rawArticles, eq(storySources.rawArticleId, rawArticles.id))
