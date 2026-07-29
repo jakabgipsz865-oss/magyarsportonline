@@ -136,40 +136,60 @@ export async function handleStoryContentDrafted(
               bodyHu: rewritten.bodyHu,
               facts,
             });
-            const updated = await deps.storyVersionRepository.updateDraftContent(version.id, {
-              titleHu: rewritten.titleHu,
-              leadHu: rewritten.leadHu,
-              bodyHu: rewritten.bodyHu,
-              editorialRewriteApplied: true,
-              qualityIssues: quality.issues,
-            });
-            editorialRewriteApplied = updated;
-            if (!updated) {
+            if (!quality.passed) {
               deps.logger.warn(
-                { correlationId: event.correlation_id, storyId: story.id, versionId: version.id },
-                "editorial rewrite: version was published before the rewrite could be saved, discarding it",
+                {
+                  correlationId: event.correlation_id,
+                  storyId: story.id,
+                  versionId: version.id,
+                  issues: quality.issues,
+                },
+                "editorial rewrite: rewritten text failed the quality gate, keeping original wording",
               );
-            } else if (learnedCorrections.length > 0) {
-              // "Mérhető szerkesztői memória" (2026-07-28 sprint): csak akkor
-              // mérünk, ha az átírás ténylegesen megtörtént és el is mentődött
-              // — egy elutasított vagy fallback-átírás nem tükrözi a modell
-              // tanulását.
-              const generatedText = `${rewritten.titleHu}\n${rewritten.leadHu}\n${rewritten.bodyHu}`;
-              const englishQuotes = facts
-                .map((fact) => fact.quoteOriginal)
-                .filter((quote): quote is string => Boolean(quote))
-                .join("\n");
-              const sourceText = `${englishQuotes}\n${version.titleHu}\n${version.leadHu}\n${version.bodyHu}`;
-              for (const correction of learnedCorrections) {
-                const result = evaluateCorrectionApplication(correction, generatedText, sourceText);
-                if (result) {
-                  await deps.editorialCorrectionApplicationRepository.create({
-                    correctionId: correction.id,
+            } else {
+              const updated = await deps.storyVersionRepository.updateDraftContent(version.id, {
+                titleHu: rewritten.titleHu,
+                leadHu: rewritten.leadHu,
+                bodyHu: rewritten.bodyHu,
+                editorialRewriteApplied: true,
+                qualityIssues: quality.issues,
+              });
+              editorialRewriteApplied = updated;
+              if (!updated) {
+                deps.logger.warn(
+                  {
+                    correlationId: event.correlation_id,
                     storyId: story.id,
-                    stage: "editorial_rewrite",
-                    verdict: result.verdict,
-                    evidence: result.evidence,
-                  });
+                    versionId: version.id,
+                  },
+                  "editorial rewrite: version was published before the rewrite could be saved, discarding it",
+                );
+              } else if (learnedCorrections.length > 0) {
+                // "Mérhető szerkesztői memória" (2026-07-28 sprint): csak akkor
+                // mérünk, ha az átírás ténylegesen megtörtént és el is mentődött
+                // — egy elutasított vagy fallback-átírás nem tükrözi a modell
+                // tanulását.
+                const generatedText = `${rewritten.titleHu}\n${rewritten.leadHu}\n${rewritten.bodyHu}`;
+                const englishQuotes = facts
+                  .map((fact) => fact.quoteOriginal)
+                  .filter((quote): quote is string => Boolean(quote))
+                  .join("\n");
+                const sourceText = `${englishQuotes}\n${version.titleHu}\n${version.leadHu}\n${version.bodyHu}`;
+                for (const correction of learnedCorrections) {
+                  const result = evaluateCorrectionApplication(
+                    correction,
+                    generatedText,
+                    sourceText,
+                  );
+                  if (result) {
+                    await deps.editorialCorrectionApplicationRepository.create({
+                      correctionId: correction.id,
+                      storyId: story.id,
+                      stage: "editorial_rewrite",
+                      verdict: result.verdict,
+                      evidence: result.evidence,
+                    });
+                  }
                 }
               }
             }

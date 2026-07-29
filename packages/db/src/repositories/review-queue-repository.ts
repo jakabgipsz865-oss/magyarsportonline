@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lte, or } from "drizzle-orm";
 import type { ReviewQueueReason, ReviewQueueStatus, RiskLevel } from "@magyarsportonline/shared";
 import type { Database } from "../client";
 import { reviewQueueItems, stories, storyVersions } from "../schema/index";
@@ -40,6 +40,12 @@ export interface PendingReviewItem {
   qualityIssues: unknown;
 }
 
+export interface PendingReviewFilters {
+  itemId?: string;
+  createdAfter?: Date;
+  limit?: number;
+}
+
 /** Bounded-context repository for the Publish Gate (docs/architecture/02-agents.md §2.7). */
 export class ReviewQueueRepository {
   constructor(private readonly db: Database) {}
@@ -73,7 +79,7 @@ export class ReviewQueueRepository {
   }
 
   /** Nyitott (pending) tételek a Story/verzió megjelenítési mezőivel, legrégebbi elöl. */
-  async listPending(itemId?: string): Promise<PendingReviewItem[]> {
+  async listPending(filters: PendingReviewFilters = {}): Promise<PendingReviewItem[]> {
     return this.db
       .select({
         id: reviewQueueItems.id,
@@ -105,10 +111,12 @@ export class ReviewQueueRepository {
         and(
           eq(reviewQueueItems.status, "pending"),
           or(isNull(reviewQueueItems.snoozedUntil), lte(reviewQueueItems.snoozedUntil, new Date())),
-          itemId ? eq(reviewQueueItems.id, itemId) : undefined,
+          filters.itemId ? eq(reviewQueueItems.id, filters.itemId) : undefined,
+          filters.createdAfter ? gte(reviewQueueItems.createdAt, filters.createdAfter) : undefined,
         ),
       )
-      .orderBy(asc(reviewQueueItems.createdAt));
+      .orderBy(asc(reviewQueueItems.createdAt))
+      .limit(filters.limit ?? 10_000);
   }
 
   /** "Később" — a tétel `pending` marad, csak `until`-ig kikerül a `listPending()` eredményéből (nem terminal döntés). */

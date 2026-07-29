@@ -422,47 +422,40 @@ export async function runIngestPipeline(): Promise<
 }
 
 /**
- * Entry point for `/api/internal/reprocess-no-llm`: finds every Story whose
- * *latest* version either (a) is still the deterministic `NoLlmClient`
- * passthrough (`NO_LLM_MODEL_LABEL`), or (b) came from a real, non-fallback
- * LLM call but still fails the Content Quality Gate (empty/still-English/
- * source-verbatim field — see hungarian-writer/quality-gate.ts; this covers
- * the case where Fact Verification's own No-LLM fallback silently poisoned
- * a Fact's `detail_hu` with English passthrough text, so even a genuinely
- * successful Writer call produced bad Hungarian) — and re-emits
- * `story/facts.verified` for it. This re-runs Hungarian Writer → SEO →
- * Publish Gate with whichever LLM provider is *currently* configured,
- * without touching Fact Verification (the underlying Facts haven't
- * changed, only the Writer's ability to translate them has). Safe/additive:
- * `createNextVersion` never overwrites a prior version, so a Story already
- * re-written via corroboration or a previous reprocess pass that passed
- * quality is left untouched.
- *
- * One-off operational tool for the situation where a misconfigured LLM
- * provider (or its Fact-extraction dependency) got fixed after articles had
- * already been ingested — not part of the regular ingest/publish flow.
+ * Enqueues complete Fact Verification → Hungarian Writer → Editorial
+ * Rewrite → SEO → Publish Gate regeneration for Stories backed by a fetched
+ * full article. Normal mode selects fallback or quality-failing versions;
+ * a controlled rollout may force fresh automatic versions for every
+ * candidate. Existing versions remain as an immutable audit trail.
  */
-export async function reprocessNoLlmStories(): Promise<{ reprocessedStoryIds: string[] }> {
+export async function reprocessNoLlmStories(options: {
+  limit: number;
+  includePublished: boolean;
+  forceRegeneration: boolean;
+}): Promise<{ reprocessedStoryIds: string[] }> {
   const repos = createRepositories();
-  const dispatcher = buildDispatcher(repos);
-  const logger = getLogger();
+  const emitter = buildQueueingEmitter(repos.pipelineJobRepository);
 
-  // Same per-request time-budget reasoning as DEFAULT_MAX_NEW_ARTICLES_PER_RUN
-  // above — each reprocessed Story is another real writer + self-check call
-  // chain. Remaining candidates stay picked up by the next call.
   const summaries = await repos.storyVersionRepository.listLatestVersionSummaries();
+  const recentStories = await repos.storyRepository.listRecent(2_000);
+  const statusByStoryId = new Map(recentStories.map((story) => [story.id, story.status]));
+  // Regenerate currently public content first. This guarantees that a
+  // production rollout replaces or retracts every old public version before
+  // filling the remaining target with unpublished candidates.
+  const orderedSummaries = [...summaries].sort(
+    (a, b) =>
+      Number(statusByStoryId.get(b.storyId) === "published") -
+      Number(statusByStoryId.get(a.storyId) === "published"),
+  );
   const storyIds: string[] = [];
-  for (const summary of summaries) {
-    if (storyIds.length >= DEFAULT_MAX_NEW_ARTICLES_PER_RUN) {
+  for (const summary of orderedSummaries) {
+    if (storyIds.length >= options.limit) {
       break;
     }
-    if (summary.generatedByModel === NO_LLM_MODEL_LABEL) {
-      storyIds.push(summary.storyId);
-      continue;
-    }
-    if (!summary.isAiGenerated) {
-      continue;
-    }
+    let needsRegeneration =
+      options.forceRegeneration ||
+      summary.generatedByModel === NO_LLM_MODEL_LABEL ||
+      !summary.isAiGenerated;
     const facts = (await repos.factRepository.listByStoryId(summary.storyId)).map(
       hungarianWriter.toWriterFact,
     );
@@ -472,13 +465,27 @@ export async function reprocessNoLlmStories(): Promise<{ reprocessedStoryIds: st
       bodyHu: summary.bodyHu,
       facts,
     });
-    if (!quality.passed) {
+    needsRegeneration ||= !quality.passed;
+    if (options.includePublished && statusByStoryId.get(summary.storyId) === "published") {
+      needsRegeneration = true;
+    }
+    if (!needsRegeneration) {
+      continue;
+    }
+    const fullArticleSourceCount = await repos.storySourceRepository.countFullArticleByStoryId(
+      summary.storyId,
+    );
+    if (fullArticleSourceCount > 0) {
       storyIds.push(summary.storyId);
     }
   }
 
   for (const storyId of storyIds) {
-    await emitFactsVerifiedForStory(repos, dispatcher, logger, storyId);
+    await emitter.emit({
+      ...createEventEnvelope({ correlationId: crypto.randomUUID() }),
+      type: "story/created",
+      payload: { story_id: storyId },
+    });
   }
 
   return { reprocessedStoryIds: storyIds };

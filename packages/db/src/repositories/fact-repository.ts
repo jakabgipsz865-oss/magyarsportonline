@@ -36,6 +36,23 @@ export class FactRepository {
     return this.db.insert(facts).values(rows).returning();
   }
 
+  /**
+   * Atomically replaces the derived Fact set for a Story after a complete
+   * successful extraction pass. Provider failures happen before this call,
+   * so the previous verified facts remain intact and the durable job can
+   * retry; a successful regeneration cannot leave stale fallback facts
+   * mixed with the new Hungarian facts.
+   */
+  async replaceForStory(storyId: string, rows: NewFact[]): Promise<Fact[]> {
+    return this.db.transaction(async (tx) => {
+      await tx.delete(facts).where(eq(facts.storyId, storyId));
+      if (rows.length === 0) {
+        return [];
+      }
+      return tx.insert(facts).values(rows).returning();
+    });
+  }
+
   async listByStoryId(storyId: string): Promise<Fact[]> {
     return this.db.select().from(facts).where(eq(facts.storyId, storyId));
   }

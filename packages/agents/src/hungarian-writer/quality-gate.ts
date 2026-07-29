@@ -30,6 +30,11 @@ export interface QualityAssessment {
 }
 
 const HUNGARIAN_DIACRITICS = /[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/;
+const MIN_FIELD_LENGTH: Record<QualityIssueField, number> = {
+  title: 15,
+  lead: 80,
+  body: 800,
+};
 
 /**
  * Whole-word Hungarian function words common enough that their total absence
@@ -114,12 +119,20 @@ function matchesFactVerbatim(text: string, facts: WriterFact[]): boolean {
   });
 }
 
-function assessField(field: QualityIssueField, text: string, facts: WriterFact[]): QualityIssue[] {
+function assessField(
+  field: QualityIssueField,
+  text: string,
+  facts: WriterFact[],
+  enforceMinimumLength: boolean,
+): QualityIssue[] {
   const trimmed = text.trim();
   if (trimmed.length === 0) {
     return [{ field, kind: "empty" }];
   }
   const issues: QualityIssue[] = [];
+  if (enforceMinimumLength && trimmed.length < MIN_FIELD_LENGTH[field]) {
+    issues.push({ field, kind: "too_short" });
+  }
   if (looksEnglish(text)) {
     issues.push({ field, kind: "looks_english" });
   }
@@ -220,10 +233,19 @@ function leadDuplicatesBodyParagraph(leadHu: string, bodyHu: string): boolean {
  * a full language-detection dependency.
  */
 export function assessContentQuality(input: QualityAssessmentInput): QualityAssessment {
+  // Full articles are required to yield at least six facts upstream, so their
+  // writer output must meet the production article-length floor. The second
+  // branch still blocks unmistakable three-field placeholders while allowing
+  // deliberately compact unit fixtures and genuinely short source briefs.
+  const enforceMinimumLength =
+    input.facts.length >= 6 ||
+    (input.titleHu.trim().length < 10 &&
+      input.leadHu.trim().length < 40 &&
+      input.bodyHu.trim().length < 100);
   const issues: QualityIssue[] = [
-    ...assessField("title", input.titleHu, input.facts),
-    ...assessField("lead", input.leadHu, input.facts),
-    ...assessField("body", input.bodyHu, input.facts),
+    ...assessField("title", input.titleHu, input.facts, enforceMinimumLength),
+    ...assessField("lead", input.leadHu, input.facts, enforceMinimumLength),
+    ...assessField("body", input.bodyHu, input.facts, enforceMinimumLength),
   ];
   if (hasRepeatedParagraph(input.bodyHu)) {
     issues.push({ field: "body", kind: "repeated_paragraph" });

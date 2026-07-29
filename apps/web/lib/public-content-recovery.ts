@@ -38,6 +38,14 @@ export interface PublicContentRecoveryResult {
   items: PublicRecoveryItem[];
 }
 
+export interface StalePublicRetractionResult {
+  publishedBefore: string;
+  scanned: number;
+  kept: number;
+  retracted: number;
+  retractedStories: Array<{ storyId: string; slug: string; publishedAt: string }>;
+}
+
 function blockerLabel(blocker: publishGate.PublicationBlocker): string {
   if (!blocker.qualityIssue) {
     return blocker.kind;
@@ -120,5 +128,43 @@ export async function recoverUnsafePublicContent(
       ? items.filter((item) => item.action === "retracted").length
       : items.filter((item) => item.blockers.length > 0).length,
     items,
+  };
+}
+
+/**
+ * Removes public projections that were not freshly published during an
+ * automatic rollout. The cutoff is recorded before regeneration starts, so
+ * an old/manual/fallback version survives only when the full current pipeline
+ * creates and publishes a new version for the same Story.
+ */
+export async function retractPublicContentOlderThan(
+  deps: Pick<
+    PublicContentRecoveryDeps,
+    "storyReadModelRepository" | "storyRepository" | "reviewQueueRepository"
+  >,
+  publishedBefore: Date,
+): Promise<StalePublicRetractionResult> {
+  const publicRows = await deps.storyReadModelRepository.listPublished({ limit: 500, offset: 0 });
+  const staleRows = publicRows.filter((row) => row.publishedAt < publishedBefore);
+
+  for (const row of staleRows) {
+    await deps.storyRepository.updateStatus(row.storyId, "retracted");
+    await deps.reviewQueueRepository.rejectAllPendingForStory(
+      row.storyId,
+      `Automatikus production rollout: a Story ${publishedBefore.toISOString()} után nem készült el újra`,
+    );
+    await deps.storyReadModelRepository.deleteByStoryId(row.storyId);
+  }
+
+  return {
+    publishedBefore: publishedBefore.toISOString(),
+    scanned: publicRows.length,
+    kept: publicRows.length - staleRows.length,
+    retracted: staleRows.length,
+    retractedStories: staleRows.map((row) => ({
+      storyId: row.storyId,
+      slug: row.slug,
+      publishedAt: row.publishedAt.toISOString(),
+    })),
   };
 }

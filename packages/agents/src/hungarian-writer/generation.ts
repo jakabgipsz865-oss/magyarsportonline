@@ -64,7 +64,7 @@ const SYSTEM_PROMPT = `Magyar sportújságíró vagy egy mai online sportportál
 Szabályok:
 - "title_hu": KÖTELEZŐEN teljes egészében MAGYAR nyelvű, rövid, tényszerű, ÜTŐS cím, amilyet egy valódi magyar sportportál (pl. nso.hu, origo.hu/sport) főoldalán látnál — akkor is, ha a "facts" tömbben szereplő "detail_hu" mezők bármelyike angolul van (ez hibás bemenet, de a kimeneted attól még legyen magyar). Sosem hagyhatsz angol szót vagy mondatrészt a címben, kivéve tulajdonneveket (csapat-, játékosnevek). Ne fordíts szó szerint egy angol mondatszerkezetet magyarra (pl. "X gólos dráma alatt győzött" magyartalan tükörfordítás) — fogalmazd meg úgy, ahogy egy magyar anyanyelvű szerkesztő írná.
 - "lead_hu": 1-2 mondatos bevezető, ugyanígy kötelezően magyarul. A lead ÖSSZEFOGLAL, nem szó szerint idézi a törzsben később kifejtett mondatot.
-- "body_hu": a törzsszöveg, kizárólag a megadott tényekre építve, kötelezően magyarul. Minden bekezdés ÚJ információt vigyen tovább — SOSEM írhatod le ugyanazt a tényt/mondatot két bekezdésben, még átfogalmazva sem. Mielőtt leírsz egy bekezdést, ellenőrizd magadban, hogy annak tartalma nem szerepel-e már a lead-ben vagy egy korábbi bekezdésben; ha igen, hagyd ki vagy vidd tovább egy új részlettel.
+- "body_hu": 5-8 bekezdéses, legalább 900 karakteres törzsszöveg, kizárólag a megadott tényekre építve, kötelezően magyarul. Minden bekezdés ÚJ információt vigyen tovább — SOSEM írhatod le ugyanazt a tényt/mondatot két bekezdésben, még átfogalmazva sem. Mielőtt leírsz egy bekezdést, ellenőrizd magadban, hogy annak tartalma nem szerepel-e már a lead-ben vagy egy korábbi bekezdésben; ha igen, hagyd ki vagy vidd tovább egy új részlettel. Ne nyújtsd mesterségesen a szöveget: ha nincs legalább öt bekezdéshez elegendő tény, csak a rendelkezésre álló tényeket használd.
 - Természetes, élő, mai magyar sportújságírói stílust használj — ne fordíts szó szerint, ne másold be a "facts" szövegét változtatás nélkül; fogalmazz újra, kerüld az ismétlést és a gépies, monoton mondatszerkezetet.
 - Ügyelj a magyar nyelvtanra: helyes névelőhasználat (a/az), ékezetek, ragozás és mondatszerkezet.
 - Szó szerinti idézetet KIZÁRÓLAG akkor használj, ha egy tény "factType" mezője "quote", és akkor is csak a megadott "quoteOriginal"/"quoteSpeaker" alapján, forrás-hivatkozással.
@@ -77,6 +77,7 @@ const QUALITY_FIX_SYSTEM_PROMPT = `Magyar sportújságíró vagy. Az előző ter
 Írd újra TELJESEN a "facts" tömbre támaszkodva:
 - a cím, a lead és a törzs MINDEGYIKE teljes egészében MAGYAR nyelvű legyen (tulajdonnevek kivételével), mai, természetes sportújságírói nyelven — ne tükörfordítás;
 - egyik mező se maradjon üres;
+- a lead legyen legalább 80 karakteres, a törzs legalább 800 karakteres és több bekezdésből álljon;
 - egyik mező se legyen szó szerint azonos egy "facts" bejegyzéssel — fogalmazz újra, természetes magyar sportújságírói stílusban;
 - HA a hiba "repeated_paragraph" vagy "duplicates_body" volt: a törzs bekezdései egymástól és a leadtől is EGYÉRTELMŰEN különböző mondatokat tartalmazzanak — minden bekezdés vigyen tovább valami újat, semmit ne írj le kétszer, még átfogalmazva sem;
 - ügyelj a helyes névelőkre, ékezetekre és mondatszerkezetre;
