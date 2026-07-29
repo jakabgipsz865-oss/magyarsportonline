@@ -11,6 +11,7 @@ import { withAgentRun } from "../shared/with-agent-run";
 import { decidePublish } from "./rule";
 
 export * from "./rule";
+export * from "./triage";
 
 export const AGENT_VERSION = "publish-gate@0.1.0";
 

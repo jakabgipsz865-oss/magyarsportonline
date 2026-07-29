@@ -31,6 +31,11 @@ export interface PendingReviewItem {
   credibilityBand: string | null;
   credibilityLabelHu: string | null;
   credibilityJustificationHu: string | null;
+  lastUpdatedAt: Date;
+  /** `false` means the No-LLM passthrough produced this version's content — never real AI-translated Hungarian text (2026-07-29, triage sprint). */
+  isAiGenerated: boolean;
+  /** Content Quality Gate findings for this version (hungarian-writer/quality-gate.ts) — empty/null means none found. */
+  qualityIssues: unknown;
 }
 
 /** Bounded-context repository for the Publish Gate (docs/architecture/02-agents.md §2.7). */
@@ -85,6 +90,9 @@ export class ReviewQueueRepository {
         credibilityBand: stories.credibilityBand,
         credibilityLabelHu: stories.credibilityLabelHu,
         credibilityJustificationHu: stories.credibilityJustificationHu,
+        lastUpdatedAt: stories.lastUpdatedAt,
+        isAiGenerated: storyVersions.isAiGenerated,
+        qualityIssues: storyVersions.qualityIssues,
       })
       .from(reviewQueueItems)
       .innerJoin(stories, eq(reviewQueueItems.storyId, stories.id))
