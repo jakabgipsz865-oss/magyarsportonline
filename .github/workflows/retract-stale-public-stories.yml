@@ -1,0 +1,42 @@
+name: Retract stale public stories
+
+on:
+  workflow_dispatch:
+    inputs:
+      published_before:
+        description: "ISO timestamp; every older public Story is retracted"
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  retract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Retract stale public content
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PUBLISHED_BEFORE: ${{ inputs.published_before }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET repo secret is missing." >&2
+            exit 1
+          fi
+          BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
+          code=$(curl -sS -o retracted.json -w '%{http_code}' --max-time 60 \
+            -X POST "$BASE/api/internal/story-repair/retract-stale-public?publishedBefore=$PUBLISHED_BEFORE" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          jq . retracted.json
+          test "$code" = "200"
+
+      - name: Upload retraction evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stale-public-retraction-${{ github.run_id }}
+          path: retracted.json
+          retention-days: 30
