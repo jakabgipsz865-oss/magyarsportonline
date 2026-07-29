@@ -25,14 +25,20 @@ export interface SourceIngestDeps {
   adapters: Partial<Record<Source["type"], SourceAdapter>>;
   logger: Logger;
   /**
-   * Caps how many *new* articles a single call processes per source, per run.
-   * Each new article's downstream pipeline (dedup → merge → fact
-   * verification → writing → SEO → publish gate) runs synchronously, in the
-   * same request — with a real LLM provider this is several sequential
-   * network calls per article, which can exceed a serverless function's
-   * execution time limit for a large batch. Leftover new articles are picked
-   * up by the next scheduled ingest run (already-ingested URLs are never
-   * re-processed either way). `undefined` (the default) means no cap.
+   * Caps how many *new* articles a single call processes, TOTAL ACROSS ALL
+   * ACTIVE SOURCES in the run (2026-07-29 fix — this used to reset per
+   * source, which meant N active sources could still process up to N ×
+   * this value new articles in one request; a real production run with
+   * BBC Sport + Sky Sports both active and this cap already at 1 still hit
+   * Vercel's 60s `FUNCTION_INVOCATION_TIMEOUT`, HTTP 504, at 60.7s — 2
+   * sources × 1 article each was still too much synchronous LLM work for
+   * one Hobby-tier request). Each new article's downstream pipeline (dedup
+   * → merge → fact verification → writing → SEO → publish gate) runs
+   * synchronously, in the same request — with a real LLM provider this is
+   * several sequential network calls per article. Leftover new articles
+   * (from this source or any later one) are picked up by the next
+   * scheduled ingest run (already-ingested URLs are never re-processed
+   * either way). `undefined` (the default) means no cap.
    */
   maxNewArticlesPerRun?: number | undefined;
 }
@@ -54,6 +60,9 @@ export interface SourceIngestResult {
 export async function runSourceIngest(deps: SourceIngestDeps): Promise<SourceIngestResult[]> {
   const sources = await deps.sourceRepository.listActive();
   const results: SourceIngestResult[] = [];
+  // Shared across every source in this run — see maxNewArticlesPerRun's
+  // doc comment for why this must be global, not reset per source.
+  let remainingBudget = deps.maxNewArticlesPerRun;
 
   for (const source of sources) {
     // This id identifies the fetch-cycle's own agent_runs audit entry, not
@@ -61,6 +70,15 @@ export async function runSourceIngest(deps: SourceIngestDeps): Promise<SourceIng
     // independent correlation_id chains, one per new RawArticle (below).
     const runCorrelationId = crypto.randomUUID();
     const log = deps.logger.child({ agentName: "source-ingest", correlationId: runCorrelationId });
+
+    if (remainingBudget !== undefined && remainingBudget <= 0) {
+      log.info(
+        { sourceId: source.id },
+        "run-wide maxNewArticlesPerRun budget already exhausted by an earlier source, skipping",
+      );
+      results.push({ sourceId: source.id, ingestedCount: 0, status: "ok" });
+      continue;
+    }
 
     try {
       const ingestedCount = await withAgentRun(
@@ -70,8 +88,11 @@ export async function runSourceIngest(deps: SourceIngestDeps): Promise<SourceIng
           correlationId: runCorrelationId,
           triggerEvent: "cron/dispatch-ingest",
         },
-        () => ingestOneSource(deps, source, log),
+        () => ingestOneSource(deps, source, log, remainingBudget),
       );
+      if (remainingBudget !== undefined) {
+        remainingBudget -= ingestedCount;
+      }
       await deps.sourceRepository.recordFetchResult(source.id, { status: "ok" });
       results.push({ sourceId: source.id, ingestedCount, status: "ok" });
     } catch (error) {
@@ -91,6 +112,7 @@ async function ingestOneSource(
   deps: SourceIngestDeps,
   source: Source,
   log: Logger,
+  remainingBudget: number | undefined,
 ): Promise<number> {
   const adapter = deps.adapters[source.type];
   if (!adapter) {
@@ -101,10 +123,10 @@ async function ingestOneSource(
   let ingestedCount = 0;
 
   for (const article of articles) {
-    if (deps.maxNewArticlesPerRun !== undefined && ingestedCount >= deps.maxNewArticlesPerRun) {
+    if (remainingBudget !== undefined && ingestedCount >= remainingBudget) {
       log.info(
-        { sourceId: source.id, cap: deps.maxNewArticlesPerRun },
-        "reached maxNewArticlesPerRun for this run, remaining new articles deferred to the next ingest",
+        { sourceId: source.id, cap: remainingBudget },
+        "reached the run-wide maxNewArticlesPerRun budget, remaining new articles deferred to the next ingest",
       );
       break;
     }
