@@ -1,0 +1,72 @@
+name: Edit an unpublished reviewed story
+
+on:
+  workflow_dispatch:
+    inputs:
+      item_id:
+        description: "Pending review queue item ID"
+        required: true
+        type: string
+      content_json:
+        description: "JSON object containing titleHu, leadHu and bodyHu"
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  edit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate and save the editorial payload
+        env:
+          ITEM_ID: ${{ inputs.item_id }}
+          CONTENT_JSON: ${{ inputs.content_json }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          printf '%s' "$CONTENT_JSON" \
+            | jq --arg itemId "$ITEM_ID" \
+              '{
+                itemId: $itemId,
+                titleHu: .titleHu,
+                leadHu: .leadHu,
+                bodyHu: .bodyHu
+              }
+              | select(
+                  (.titleHu | type) == "string"
+                  and (.leadHu | type) == "string"
+                  and (.bodyHu | type) == "string"
+                )' \
+            > evidence/request.json
+          test -s evidence/request.json
+
+      - name: Update the unpublished draft
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -u
+          BASE="https://magyarsportonline-web.vercel.app"
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET repo secret hiányzik." >&2
+            exit 1
+          fi
+
+          code=$(curl -sS -o evidence/response.json -w '%{http_code}' --max-time 60 \
+            -X POST "$BASE/api/internal/review-queue/edit" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            --data-binary @evidence/request.json)
+          echo "edit: HTTP $code"
+          jq . evidence/response.json
+          test "$code" = "200"
+
+      - name: Upload editorial edit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editorial-edit-${{ github.run_id }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 30

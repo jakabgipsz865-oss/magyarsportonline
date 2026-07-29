@@ -1,7 +1,12 @@
 name: Gather admin-dashboard production evidence
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      item_id:
+        description: "Optional review item ID; includes its original source text"
+        required: false
+        type: string
 
 permissions: {}
 
@@ -13,6 +18,7 @@ jobs:
       - name: Approvable review-queue items (ready_for_review / human_decision_required)
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          ITEM_ID: ${{ inputs.item_id }}
         run: |
           set -u
           BASE="https://magyarsportonline-web.vercel.app"
@@ -20,11 +26,17 @@ jobs:
             echo "CRON_SECRET repo secret hiányzik." >&2
             exit 1
           fi
-          curl -sS --max-time 60 "$BASE/api/internal/review-queue" \
-            -H "Authorization: Bearer $CRON_SECRET" -o review-queue.json
+          if [ -n "${ITEM_ID:-}" ]; then
+            curl -sS --get --max-time 60 "$BASE/api/internal/review-queue" \
+              --data-urlencode "itemId=$ITEM_ID" \
+              -H "Authorization: Bearer $CRON_SECRET" -o review-queue.json
+          else
+            curl -sS --max-time 60 "$BASE/api/internal/review-queue" \
+              -H "Authorization: Bearer $CRON_SECRET" -o review-queue.json
+          fi
           echo '### Jóváhagyható tételek (ready_for_review / human_decision_required)' >> "$GITHUB_STEP_SUMMARY"
           echo '```json' >> "$GITHUB_STEP_SUMMARY"
-          jq '[.items[] | select(.triageCategory == "ready_for_review" or .triageCategory == "human_decision_required")] | .[0:8] | map({id, storyId, titleHu, slug, triageCategory})' review-queue.json | tee -a "$GITHUB_STEP_SUMMARY"
+          jq '[.items[] | select(.triageCategory == "ready_for_review" or .triageCategory == "human_decision_required")] | .[0:8] | map({id, storyId, titleHu, slug, triageCategory, sources})' review-queue.json | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Real published public Story slugs
