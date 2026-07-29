@@ -150,7 +150,7 @@ export async function rewriteForStyle(
         }),
       },
     ],
-    // 3072 (raised from 2048 on 2026-07-28): a 25-cikkes megerősítő teszt
+    // 4096 (raised from 2048, then 3072): a 25-cikkes megerősítő teszt
     // megmutatta, hogy a stílus-guide szigorítása (clause-by-clause
     // önellenőrzés) és a lexikonblokk mérete miatt a rewrite hívás
     // fallback-aránya 12%->24%-ra nőtt, mind "invalid_json_output" — a
@@ -159,7 +159,7 @@ export async function rewriteForStyle(
     // ~1163 output tokent használnak, tehát a keret emelése a legtöbb
     // híváson nem növel költséget, csak a kevés, ténylegesen több
     // gondolkodást igénylő esetet oldja meg.
-    maxTokens: 3072,
+    maxTokens: 4096,
     jsonSchema: REWRITE_JSON_SCHEMA,
   });
 
