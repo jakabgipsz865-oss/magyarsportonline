@@ -1,0 +1,59 @@
+name: Retract unsafe public stories
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Valóban vonja vissza a readiness-kapun elbukó publikus Storykat"
+        required: true
+        type: boolean
+        default: false
+      limit:
+        description: "Legfeljebb hány publikus Storyt vizsgáljon"
+        required: false
+        default: "100"
+
+permissions: {}
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Run public content recovery
+        env:
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APPLY: ${{ inputs.apply }}
+          LIMIT: ${{ inputs.limit }}
+        run: |
+          set -eu
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET repo secret hiányzik." >&2
+            exit 1
+          fi
+          BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
+          BODY=$(jq -n --argjson apply "$APPLY" --argjson limit "$LIMIT" \
+            '{apply: $apply, limit: $limit}')
+          code=$(curl -sS -o recovery.json -w '%{http_code}' --max-time 60 \
+            -X POST "$BASE/api/internal/story-repair/retract-unsafe-public" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d "$BODY")
+          cat recovery.json | jq .
+          {
+            echo "## Public content recovery"
+            echo "- HTTP: $code"
+            echo "- Apply: $APPLY"
+            echo '```json'
+            cat recovery.json | jq '{dryRun, scanned, kept, retracted, items}'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$code" = "200" ]
+
+      - name: Upload recovery backup
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-content-recovery-${{ github.run_id }}
+          path: recovery.json
