@@ -31,9 +31,19 @@ const SOURCE = {
   lastErrorAt: null,
 };
 
+const SOURCE_2 = {
+  ...SOURCE,
+  id: "22222222-2222-4222-8222-222222222222",
+  name: "Sky Sports - Football",
+  baseUrl: "https://www.skysports.com/football",
+  fetchConfig: { url: "https://www.skysports.com/rss/12040" },
+};
+
 function buildDeps(overrides?: {
   existingUrls?: Set<string>;
   adapter?: SourceAdapter;
+  sources?: (typeof SOURCE)[];
+  maxNewArticlesPerRun?: number;
 }): SourceIngestDeps & {
   inserted: Array<{ sourceUrl: string }>;
   emitted: unknown[];
@@ -50,7 +60,7 @@ function buildDeps(overrides?: {
     fetchResults: Array<{ sourceId: string; status: string }>;
   } = {
     sourceRepository: {
-      listActive: vi.fn(async () => [SOURCE]),
+      listActive: vi.fn(async () => overrides?.sources ?? [SOURCE]),
       recordFetchResult: vi.fn(async (sourceId: string, result: { status: "ok" | "error" }) => {
         fetchResults.push({ sourceId, status: result.status });
       }),
@@ -87,6 +97,7 @@ function buildDeps(overrides?: {
           ],
         } satisfies SourceAdapter),
     },
+    maxNewArticlesPerRun: overrides?.maxNewArticlesPerRun,
     logger: createLogger({
       destination: { write: () => true } as unknown as NodeJS.WritableStream,
     }),
@@ -120,6 +131,47 @@ describe("runSourceIngest", () => {
     expect(results).toEqual([{ sourceId: SOURCE.id, ingestedCount: 0, status: "ok" }]);
     expect(deps.inserted).toEqual([]);
     expect(deps.emitted).toEqual([]);
+  });
+
+  it("shares maxNewArticlesPerRun across all active sources, not per source (2026-07-29 fix)", async () => {
+    // Regression test for a real production 504: with the cap reset per
+    // source, 2 active sources each getting their own budget of 1 still
+    // processed 2 full downstream pipelines in one request. The budget must
+    // be a single, shared total across the whole run.
+    let call = 0;
+    const deps = buildDeps({
+      sources: [SOURCE, SOURCE_2],
+      maxNewArticlesPerRun: 1,
+      adapter: {
+        fetch: async () => {
+          call += 1;
+          return [
+            {
+              sourceUrl: `https://example.com/${call}`,
+              titleOriginal: "Title",
+              subtitleOriginal: null,
+              bodyOriginal: "Body",
+              authorOriginal: null,
+              publishedAtSource: null,
+              imageUrl: null,
+            },
+          ];
+        },
+      },
+    });
+
+    const results = await runSourceIngest(deps);
+
+    expect(deps.inserted).toHaveLength(1);
+    expect(deps.emitted).toHaveLength(1);
+    expect(results).toEqual([
+      { sourceId: SOURCE.id, ingestedCount: 1, status: "ok" },
+      { sourceId: SOURCE_2.id, ingestedCount: 0, status: "ok" },
+    ]);
+    // The skipped second source was never actually fetched this run — its
+    // fetch result (and therefore lastFetchedAt) must be left untouched, so
+    // it naturally sorts first next run (source-repository.ts listActive).
+    expect(deps.fetchResults).toEqual([{ sourceId: SOURCE.id, status: "ok" }]);
   });
 
   it("records a failed fetch result and continues without throwing", async () => {

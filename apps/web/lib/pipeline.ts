@@ -188,16 +188,16 @@ export function buildDispatcher(repos: Repositories = createRepositories()): InP
  * ingest request bounded; anything left over is picked up by the next
  * scheduled run (URLs already ingested are never reprocessed either way).
  *
- * This cap is applied PER SOURCE (packages/agents/src/source-ingest/index.ts
- * `ingestOneSource`), not once across the whole run — so with N active
- * sources, a single ingest request's worst case is N × this value new
- * articles, each getting the full LLM pipeline. Confirmed via a real
- * production run (2026-07-28): with BBC Sport + Sky Sports both active at
- * the previous value of 2, a single `/api/internal/cron/dispatch-ingest`
- * call hit Vercel's 60s `FUNCTION_INVOCATION_TIMEOUT` (HTTP 504) — 2 sources
- * × 2 articles was too much LLM work for one Hobby-tier request. Lowered to
- * 1 to keep the worst case (2 sources × 1) at the same total budget the
- * single-source BBC-only setup was originally tuned for.
+ * This cap is applied GLOBALLY across the whole run (2026-07-29 fix —
+ * packages/agents/src/source-ingest/index.ts `runSourceIngest`), not reset
+ * per source. It used to reset per source, which meant N active sources
+ * could still process up to N × this value new articles in one request —
+ * confirmed via TWO separate real production 504s on 2026-07-28/29: first
+ * with the per-source cap at 2 (2 sources × 2 articles), then again with
+ * the per-source cap already lowered to 1 (2 sources × 1 article still hit
+ * Vercel's 60s `FUNCTION_INVOCATION_TIMEOUT` at 60.7s). The cap is now
+ * shared across every source in the run, so this value is the actual
+ * worst-case total regardless of how many sources are active.
  */
 const DEFAULT_MAX_NEW_ARTICLES_PER_RUN = 1;
 

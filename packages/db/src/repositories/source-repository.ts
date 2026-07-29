@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Database } from "../client";
 import { sources } from "../schema/index";
 
@@ -15,8 +15,22 @@ export type Source = typeof sources.$inferSelect;
 export class SourceRepository {
   constructor(private readonly db: Database) {}
 
+  /**
+   * Ordered least-recently-fetched first (2026-07-29) — matters now that
+   * `runSourceIngest`'s `maxNewArticlesPerRun` budget is shared across all
+   * active sources in a run (packages/agents/src/source-ingest/index.ts):
+   * a source skipped because an earlier source already spent the budget is
+   * never fetched that run, so its `lastFetchedAt` stays unchanged and it
+   * naturally sorts to the front next run. Without this ordering, whichever
+   * source happens to come first would silently starve every other source
+   * of the shared budget forever.
+   */
   async listActive(): Promise<Source[]> {
-    return this.db.select().from(sources).where(eq(sources.isActive, true));
+    return this.db
+      .select()
+      .from(sources)
+      .where(eq(sources.isActive, true))
+      .orderBy(sql`${sources.lastFetchedAt} ASC NULLS FIRST`);
   }
 
   async getById(id: string): Promise<Source | null> {
