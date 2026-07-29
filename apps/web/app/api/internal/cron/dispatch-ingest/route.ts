@@ -12,13 +12,20 @@ import { runIngestPipeline } from "../../../../../lib/pipeline";
  * GET és POST ugyanazt csinálja: a Vercel Cron GET-tel hív, a kézi/CI
  * indítás (GitHub Actions ütemezett workflow, curl) POST-tal.
  *
- * maxDuration = 60: a Vercel Hobby csomagon engedélyezett maximum — egy
- * valódi LLM-providerrel (nem No-LLM fallback) a fact-verification + writer
- * + self-check lánc cikkenként több valódi hálózati kör, ezért a
- * runIngestPipeline DEFAULT_MAX_NEW_ARTICLES_PER_RUN limitje mellett is
- * szükséges a lehető legnagyobb function-időkeret.
+ * maxDuration = 300 (2026-07-29, ideiglenes rövid távú stabilizálás — lásd
+ * docs/open-decisions.md): két valódi 504-es incidens (2026-07-28/29,
+ * `FUNCTION_INVOCATION_TIMEOUT`) bizonyította, hogy egyetlen cikk teljes,
+ * szinkron pipeline-lánca (fact-verification + writer + editorial-rewrite,
+ * mind valódi LLM-hívásokkal) is túllépheti a korábbi 60mp-es korlátot. Ez a
+ * projekt 2026-07-27-én jött létre — a Vercel "Fluid Compute" 2025 áprilisa
+ * óta minden ÚJ projekten alapértelmezetten aktív, ami Hobby csomagon 300mp-ig
+ * engedélyezi a maxDuration-t (a korábbi 60mp helyett). Ez CSAK ideiglenes
+ * intézkedés: a végleges megoldás a pipeline job-alapú, aszinkron
+ * átalakítása (docs/open-decisions.md), hogy egyetlen HTTP-timeout se tudjon
+ * egy teljes Story-feldolgozást megszakítani — az architekturális munka ettől
+ * függetlenül folytatódik.
  */
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 async function handleDispatch(request: NextRequest): Promise<NextResponse> {
   const authHeader = request.headers.get("authorization");
