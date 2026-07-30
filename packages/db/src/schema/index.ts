@@ -23,3 +23,4 @@ export * from "./editorial-correction-applications";
 export * from "./pipeline-jobs";
 export * from "./story-match-decisions";
 export * from "./missed-merge-reviews";
+export * from "./knowledge-review-patterns";

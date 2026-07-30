@@ -32,6 +32,7 @@ function storyVersion(overrides?: Partial<Record<string, unknown>>) {
 const LEARNED_CORRECTION = {
   id: "correction-1",
   storyId: "some-other-story",
+  portableKey: null,
   category: "literal_translation" as const,
   termEn: null,
   originalSentenceEn: "The team won in a five-goal thriller.",
