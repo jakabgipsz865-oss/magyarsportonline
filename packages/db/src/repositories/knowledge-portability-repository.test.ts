@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   containsKnowledgeRedaction,
   KNOWLEDGE_REDACTION_MARKER,
+  normalizePortableSourceIdentity,
   restoreKnowledgeRedactions,
 } from "./knowledge-portability-repository";
 
@@ -28,5 +29,14 @@ describe("knowledge portability secret handling", () => {
     const imported = { apiKey: KNOWLEDGE_REDACTION_MARKER };
     expect(containsKnowledgeRedaction(imported)).toBe(true);
     expect(restoreKnowledgeRedactions(imported, undefined)).toEqual(imported);
+  });
+
+  it("keeps separately named feeds distinct even on the same base URL", () => {
+    expect(normalizePortableSourceIdentity("Football feed", "https://example.com/")).not.toBe(
+      normalizePortableSourceIdentity("Transfer feed", "https://example.com"),
+    );
+    expect(normalizePortableSourceIdentity(" Football feed ", "https://EXAMPLE.com/")).toBe(
+      normalizePortableSourceIdentity("football FEED", "https://example.com"),
+    );
   });
 });

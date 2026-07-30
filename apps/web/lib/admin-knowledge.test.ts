@@ -37,6 +37,19 @@ describe("admin knowledge package", () => {
       /Duplikált hordozható kulcs/,
     );
   });
+
+  it("accepts separately named Source records that share a portal base URL", () => {
+    const knowledgePackage = makePackage();
+    knowledgePackage.content.sources = [
+      makeSource("Football feed", "https://example.com"),
+      makeSource("Transfer feed", "https://example.com/"),
+    ];
+    knowledgePackage.metadata.counts.sources = 2;
+    knowledgePackage.integrity.contentDigest = knowledge.digestValue(knowledgePackage.content);
+    expect(knowledge.parseAdminKnowledgePackage(JSON.stringify(knowledgePackage))).toEqual(
+      knowledgePackage,
+    );
+  });
 });
 
 function makePackage(): ReturnType<KnowledgeModule["parseAdminKnowledgePackage"]> {
@@ -105,5 +118,30 @@ function makePackage(): ReturnType<KnowledgeModule["parseAdminKnowledgePackage"]
       algorithm: "sha256",
       contentDigest: knowledge.digestValue(content),
     },
+  };
+}
+
+function makeSource(name: string, baseUrl: string) {
+  return {
+    key: knowledge.sourcePortableKey(name, baseUrl),
+    name,
+    baseUrl,
+    type: "rss" as const,
+    language: "en",
+    licenseType: "public_rss" as const,
+    reliabilityTier: "B" as const,
+    fetchConfig: { url: `${baseUrl.replace(/\/+$/, "")}/feed.xml` },
+    isActive: false,
+    country: "GB",
+    leagueTags: null,
+    category: "trusted_media" as const,
+    contentMode: "full_text" as const,
+    trustBaseline: 75,
+    robotsStatus: null,
+    termsStatus: null,
+    attributionRule: null,
+    imagePolicy: null,
+    pollingFrequencyMinutes: 15,
+    extractorName: null,
   };
 }

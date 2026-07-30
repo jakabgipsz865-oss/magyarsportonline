@@ -37,8 +37,9 @@ metaadatot, valamint SHA-256 tartalmi lenyomatot tartalmaz.
 
 A korrekció, Source és review-minta determinisztikus természetes/tartalmi kulcsot
 kap. Ugyanaz a csomag újra importálható: változatlan rekordból nem lesz
-duplikátum. Source esetén az alap-URL, szerkesztői tudásnál a rossz→jó minta
-teljes tartalma a kulcs alapja.
+duplikátum. Source esetén a normalizált név és alap-URL együtt, szerkesztői
+tudásnál a rossz→jó minta teljes tartalma a kulcs alapja. Így két külön nevű
+feed akkor is önálló Source marad, ha ugyanazt a portál-alap-URL-t használják.
 
 ## Környezetek közötti migráció
 

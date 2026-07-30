@@ -8,6 +8,7 @@ import {
 } from "@magyarsportonline/agents";
 import {
   KNOWLEDGE_REDACTION_MARKER,
+  normalizePortableSourceIdentity,
   type KnowledgeImportCounts,
   type KnowledgeImportInput,
   type PortableReviewPatternInput,
@@ -178,7 +179,7 @@ export const knowledgePackageSchema = z
       }
     }
     for (const [index, item] of value.content.sources.entries()) {
-      if (item.key !== digestValue(normalizeUrl(item.baseUrl))) {
+      if (item.key !== sourcePortableKey(item.name, item.baseUrl)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["content", "sources", index, "key"],
@@ -273,7 +274,7 @@ export async function buildAdminKnowledgePackage(): Promise<AdminKnowledgePackag
   const sourceRows = [...snapshot.sources]
     .sort((a, b) => normalizeUrl(a.baseUrl).localeCompare(normalizeUrl(b.baseUrl)))
     .map((row, index) => ({
-      key: digestValue(normalizeUrl(row.baseUrl)),
+      key: sourcePortableKey(row.name, row.baseUrl),
       name: row.name,
       baseUrl: row.baseUrl,
       type: row.type,
@@ -677,6 +678,10 @@ function isSecretKey(key: string): boolean {
 
 function normalizeUrl(value: string): string {
   return value.trim().replace(/\/+$/, "").toLowerCase();
+}
+
+export function sourcePortableKey(name: string, baseUrl: string): string {
+  return digestValue(normalizePortableSourceIdentity(name, baseUrl));
 }
 
 function toJsonValue(value: unknown): JsonValue {
