@@ -165,7 +165,9 @@ export class KnowledgePortabilityRepository {
 
       for (const source of input.sources) {
         const current = existing.sources.find(
-          (row) => normalizeUrl(row.baseUrl) === normalizeUrl(source.baseUrl),
+          (row) =>
+            normalizePortableSourceIdentity(row.name, row.baseUrl) ===
+            normalizePortableSourceIdentity(source.name, source.baseUrl),
         );
         const values = sourceValues(source, current ?? null, input.applySourceActivation);
         if (current) {
@@ -228,7 +230,9 @@ async function calculateImportCounts(
 
   for (const source of input.sources) {
     const current = existing.sources.find(
-      (row) => normalizeUrl(row.baseUrl) === normalizeUrl(source.baseUrl),
+      (row) =>
+        normalizePortableSourceIdentity(row.name, row.baseUrl) ===
+        normalizePortableSourceIdentity(source.name, source.baseUrl),
     );
     if (!current) {
       counts.sources.create += 1;
@@ -345,6 +349,10 @@ function sourceEquals(
 
 function normalizeUrl(value: string): string {
   return value.trim().replace(/\/+$/, "").toLowerCase();
+}
+
+export function normalizePortableSourceIdentity(name: string, baseUrl: string): string {
+  return `${name.trim().toLowerCase()}\n${normalizeUrl(baseUrl)}`;
 }
 
 function stableStringify(value: unknown): string {
