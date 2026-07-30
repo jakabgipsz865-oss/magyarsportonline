@@ -94,10 +94,12 @@ function validateExport(exportPath, reportPath) {
     errors,
   );
 
-  const duplicateCount =
-    duplicateKeys(knowledgePackage.content?.editorialCorrections) +
-    duplicateKeys(knowledgePackage.content?.sources) +
-    duplicateKeys(knowledgePackage.content?.reviewLearningPatterns);
+  const duplicateCounts = {
+    editorialCorrections: duplicateKeys(knowledgePackage.content?.editorialCorrections),
+    sources: duplicateKeys(knowledgePackage.content?.sources),
+    reviewLearningPatterns: duplicateKeys(knowledgePackage.content?.reviewLearningPatterns),
+  };
+  const duplicateCount = Object.values(duplicateCounts).reduce((sum, count) => sum + count, 0);
   assert(duplicateCount === 0, `duplicate portable keys in export: ${duplicateCount}`, errors);
 
   const report = {
@@ -107,6 +109,8 @@ function validateExport(exportPath, reportPath) {
     redactedPathCount: knowledgePackage.security?.redactedPaths?.length ?? 0,
     sensitiveFieldCount: sensitiveFields.length,
     knownProductionSecretsPresent: false,
+    duplicateCounts,
+    duplicateSourceGroups: describeDuplicateSourceGroups(knowledgePackage.content?.sources),
     duplicateCount,
     errorCount: errors.length,
     errors,
@@ -257,6 +261,31 @@ function duplicateKeys(items = []) {
     keys.add(item.key);
   }
   return duplicates;
+}
+
+function describeDuplicateSourceGroups(items = []) {
+  const groups = new Map();
+  for (const item of items) {
+    const current = groups.get(item.key) ?? [];
+    current.push(item);
+    groups.set(item.key, current);
+  }
+  return [...groups.values()]
+    .filter((group) => group.length > 1)
+    .map((group) => {
+      const comparable = group.map(({ key: _key, ...item }) => item);
+      const fields = new Set(comparable.flatMap((item) => Object.keys(item)));
+      return {
+        records: group.length,
+        allContentIdentical: comparable.every(
+          (item) => stableStringify(item) === stableStringify(comparable[0]),
+        ),
+        differingFields: [...fields].filter((field) => {
+          const values = comparable.map((item) => stableStringify(item[field]));
+          return values.some((value) => value !== values[0]);
+        }),
+      };
+    });
 }
 
 function assert(condition, message, errors) {

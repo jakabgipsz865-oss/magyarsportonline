@@ -271,38 +271,44 @@ export async function buildAdminKnowledgePackage(): Promise<AdminKnowledgePackag
     })
     .sort((a, b) => a.key.localeCompare(b.key));
 
-  const sourceRows = [...snapshot.sources]
-    .sort((a, b) => normalizeUrl(a.baseUrl).localeCompare(normalizeUrl(b.baseUrl)))
-    .map((row, index) => ({
-      key: sourcePortableKey(row.name, row.baseUrl),
-      name: row.name,
-      baseUrl: row.baseUrl,
-      type: row.type,
-      language: row.language,
-      licenseType: row.licenseType,
-      reliabilityTier: row.reliabilityTier,
-      fetchConfig: redactSecrets(
-        row.fetchConfig,
-        `content.sources[${index}].fetchConfig`,
-        redactedPaths,
-      ),
-      isActive: row.isActive,
-      country: row.country,
-      leagueTags: toJsonValue(row.leagueTags),
-      category: row.category,
-      contentMode: row.contentMode,
-      trustBaseline: row.trustBaseline,
-      robotsStatus: row.robotsStatus,
-      termsStatus: row.termsStatus,
-      attributionRule: row.attributionRule,
-      imagePolicy: redactSecrets(
-        row.imagePolicy,
-        `content.sources[${index}].imagePolicy`,
-        redactedPaths,
-      ),
-      pollingFrequencyMinutes: row.pollingFrequencyMinutes,
-      extractorName: row.extractorName,
-    }));
+  const sourceRows = deduplicatePortableSources(
+    [...snapshot.sources]
+      .sort((a, b) => normalizeUrl(a.baseUrl).localeCompare(normalizeUrl(b.baseUrl)))
+      .map((row) => ({
+        key: sourcePortableKey(row.name, row.baseUrl),
+        name: row.name,
+        baseUrl: row.baseUrl,
+        type: row.type,
+        language: row.language,
+        licenseType: row.licenseType,
+        reliabilityTier: row.reliabilityTier,
+        fetchConfig: toJsonValue(row.fetchConfig),
+        isActive: row.isActive,
+        country: row.country,
+        leagueTags: toJsonValue(row.leagueTags),
+        category: row.category,
+        contentMode: row.contentMode,
+        trustBaseline: row.trustBaseline,
+        robotsStatus: row.robotsStatus,
+        termsStatus: row.termsStatus,
+        attributionRule: row.attributionRule,
+        imagePolicy: toJsonValue(row.imagePolicy),
+        pollingFrequencyMinutes: row.pollingFrequencyMinutes,
+        extractorName: row.extractorName,
+      })),
+  ).map((row, index) => ({
+    ...row,
+    fetchConfig: redactSecrets(
+      row.fetchConfig,
+      `content.sources[${index}].fetchConfig`,
+      redactedPaths,
+    ),
+    imagePolicy: redactSecrets(
+      row.imagePolicy,
+      `content.sources[${index}].imagePolicy`,
+      redactedPaths,
+    ),
+  }));
 
   const reviewLearningPatterns = buildReviewPatterns(snapshot, correctionKeyById);
   const staticKnowledge = buildStaticKnowledge();
@@ -682,6 +688,25 @@ function normalizeUrl(value: string): string {
 
 export function sourcePortableKey(name: string, baseUrl: string): string {
   return digestValue(normalizePortableSourceIdentity(name, baseUrl));
+}
+
+export function deduplicatePortableSources(
+  rows: Array<z.infer<typeof sourceSchema>>,
+): Array<z.infer<typeof sourceSchema>> {
+  const byKey = new Map<string, z.infer<typeof sourceSchema>>();
+  for (const row of rows) {
+    const existing = byKey.get(row.key);
+    if (!existing) {
+      byKey.set(row.key, row);
+      continue;
+    }
+    if (stableStringify(existing) !== stableStringify(row)) {
+      throw new Error(
+        `Ellentmondó Source Registry rekordok azonos hordozható kulccsal: ${row.key}`,
+      );
+    }
+  }
+  return [...byKey.values()];
 }
 
 function toJsonValue(value: unknown): JsonValue {
