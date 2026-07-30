@@ -103,6 +103,11 @@ jobs:
               exit 1
             fi
             processed=$(python3 -c "import json;print(json.load(open('/tmp/jobs-body.json'))['processed'])" 2>/dev/null || echo 0)
+            quota_deferred=$(python3 -c "import json;print(str(json.load(open('/tmp/jobs-body.json')).get('quotaDeferred', False)).lower())" 2>/dev/null || echo false)
+            if [ "$quota_deferred" = "true" ]; then
+              echo "Cloudflare daily neuron quota deferred until the reported retryAt; stopping this drain loop."
+              break
+            fi
             if [ "$processed" = "0" ]; then
               echo "Queue drained."
               break

@@ -62,7 +62,12 @@ jobs:
             processed=$(jq -r '.processed' /tmp/jobs.json)
             failed=$(jq -r '.failed' /tmp/jobs.json)
             dead_lettered=$(jq -r '.deadLettered' /tmp/jobs.json)
+            quota_deferred=$(jq -r '.quotaDeferred // false' /tmp/jobs.json)
             test "$dead_lettered" = "0"
+            if [ "$quota_deferred" = "true" ]; then
+              echo "Cloudflare daily neuron quota deferred; stopping this rollout drain loop."
+              break
+            fi
             if [ "$failed" -gt "0" ]; then
               empty_passes=0
               sleep 35
