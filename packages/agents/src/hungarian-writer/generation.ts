@@ -55,19 +55,18 @@ export interface GeneratedContent {
   leadHu: string;
   bodyHu: string;
   changeSummaryHu: string | null;
-  /** true, ha ez a tartalom egy LLM-hiba miatti fallback-válaszból (pl. Gemini kvótahiba) származik, nem valódi AI-generálásból — lásd LlmUsage.isFallback (client.ts). */
+  /** true, ha ez a tartalom egy LLM-hiba miatti No-LLM fallback-válaszból származik, nem valódi AI-generálásból — lásd LlmUsage.isFallback (client.ts). */
   isFallback: boolean;
-  /** Provider-failover esetén a választ ténylegesen kiszolgáló modell. */
-  servedByModel?: string;
 }
 
 const SYSTEM_PROMPT = `Magyar sportújságíró vagy egy mai online sportportálnál. Kizárólag a felhasználói üzenetben JSON-ként megadott "facts" tömbre támaszkodva írj eredeti, magyar nyelvű hírt — SOSEM fordítás, és SOSEM tartalmazhat olyan állítást, ami nincs a tények között. Ha egy infó hiányzik, ne találd ki.
 
 Szabályok:
-- "title_hu": KÖTELEZŐEN teljes egészében MAGYAR nyelvű, rövid, tényszerű, ÜTŐS cím, amilyet egy valódi magyar sportportál (pl. nso.hu, origo.hu/sport) főoldalán látnál — akkor is, ha a "facts" tömbben szereplő "detail_hu" mezők bármelyike angolul van (ez hibás bemenet, de a kimeneted attól még legyen magyar). Sosem hagyhatsz angol szót vagy mondatrészt a címben, kivéve tulajdonneveket (csapat-, játékosnevek). Ne fordíts szó szerint egy angol mondatszerkezetet magyarra (pl. "X gólos dráma alatt győzött" magyartalan tükörfordítás) — fogalmazd meg úgy, ahogy egy magyar anyanyelvű szerkesztő írná.
-- "lead_hu": 1-2 mondatos bevezető, ugyanígy kötelezően magyarul. A lead ÖSSZEFOGLAL, nem szó szerint idézi a törzsben később kifejtett mondatot.
-- "body_hu": 5-8 bekezdéses, legalább 900 karakteres törzsszöveg, kizárólag a megadott tényekre építve, kötelezően magyarul. Minden bekezdés ÚJ információt vigyen tovább — SOSEM írhatod le ugyanazt a tényt/mondatot két bekezdésben, még átfogalmazva sem. Mielőtt leírsz egy bekezdést, ellenőrizd magadban, hogy annak tartalma nem szerepel-e már a lead-ben vagy egy korábbi bekezdésben; ha igen, hagyd ki vagy vidd tovább egy új részlettel. Ne nyújtsd mesterségesen a szöveget: ha nincs legalább öt bekezdéshez elegendő tény, csak a rendelkezésre álló tényeket használd.
+- "title_hu": KÖTELEZŐEN teljes egészében MAGYAR nyelvű, 6-14 szavas, igés, cselekvő, rövid és tényszerű cím, amilyet egy valódi magyar sportportál (pl. nso.hu, m4sport.hu) főoldalán látnál. Ha van releváns szám vagy eredmény a tényekben, emeld előtérbe. Akkor is magyarul írj, ha a "detail_hu" hibásan angol; tulajdonneveken kívül ne maradjon angol szöveg. Ne fordíts szó szerint angol mondatszerkezetet (pl. "X gólos dráma alatt győzött") — fogalmazz anyanyelvi szerkesztőként.
+- "lead_hu": 1-2 mondatos, lehetőleg 40 szó alatti magyar bevezető. Kontextusba helyezi a címet és összefoglal, de nem idézi szó szerint a törzs első mondatát.
+- "body_hu": 5-8 bekezdéses, legalább 900 karakteres törzsszöveg, kizárólag a megadott tényekre építve, kötelezően magyarul. Egy bekezdés 2-4 rövid, egyenes szórendű mondat legyen. Minden bekezdés ÚJ információt vigyen tovább — SOSEM írhatod le ugyanazt a tényt/mondatot két bekezdésben, még átfogalmazva sem. Mielőtt leírsz egy bekezdést, ellenőrizd magadban, hogy annak tartalma nem szerepel-e már a lead-ben vagy egy korábbi bekezdésben; ha igen, hagyd ki vagy vidd tovább egy új részlettel. Ne nyújtsd mesterségesen a szöveget: ha nincs legalább öt bekezdéshez elegendő tény, csak a rendelkezésre álló tényeket használd.
 - Természetes, élő, mai magyar sportújságírói stílust használj — ne fordíts szó szerint, ne másold be a "facts" szövegét változtatás nélkül; fogalmazz újra, kerüld az ismétlést és a gépies, monoton mondatszerkezetet.
+- A hangnem legyen magabiztos és tényközlő, de ne száraz. A dráma a tényekből fakadjon, ne szenzációhajhász jelzőkből.
 - Ügyelj a magyar nyelvtanra: helyes névelőhasználat (a/az), ékezetek, ragozás és mondatszerkezet.
 - Szó szerinti idézetet KIZÁRÓLAG akkor használj, ha egy tény "factType" mezője "quote", és akkor is csak a megadott "quoteOriginal"/"quoteSpeaker" alapján, forrás-hivatkozással.
 - Ha a rendszerüzenet végén egy "FUTBALLNYELVI SZÓTÁR" blokk szerepel, az a tényekben vagy idézetekben felismert angol futballkifejezések, szleng és hibás magyar tükörfordítások természetes magyar megfelelőit adja meg — ezeket használd, NE a megadott tükörfordítást.
@@ -103,13 +102,13 @@ function buildLexiconBlock(facts: WriterFact[], learnedCorrections: EditorialCor
   }
   const combinedLexicon = [...FOOTBALL_LEXICON, ...correctionsToLexiconEntries(learnedCorrections)];
   const entries = [
-    ...findRelevantLexiconEntries(sourceText, 20, combinedLexicon),
+    ...findRelevantLexiconEntries(sourceText, 12, combinedLexicon),
     ...findLexiconMatchesInHungarianText(sourceText, combinedLexicon),
   ]
     .filter(
       (entry, index, all) => all.findIndex((candidate) => candidate.en === entry.en) === index,
     )
-    .slice(0, 20);
+    .slice(0, 12);
   const block = formatLexiconBlock(entries);
   return block ? `\n\n${block}` : "";
 }
@@ -117,12 +116,13 @@ function buildLexiconBlock(facts: WriterFact[], learnedCorrections: EditorialCor
 /** A statikus lexikonon túl a szerkesztő eddig elfogadott javításaiból is épít egy blokkot — lásd editorial-corrections.ts. */
 function buildLearnedGuidanceBlock(learnedCorrections: EditorialCorrection[]): string {
   const forbiddenBlock = formatForbiddenTranslationsBlock(
-    correctionsToForbiddenLiteralTranslations(learnedCorrections).slice(0, 10),
+    correctionsToForbiddenLiteralTranslations(learnedCorrections).slice(0, 6),
   );
   const phrasingsBlock = formatRecommendedPhrasingsBlock(
     correctionsToRecommendedPhrasings(learnedCorrections),
+    6,
   );
-  const examplesBlock = formatPromptExamplesBlock(learnedCorrections);
+  const examplesBlock = formatPromptExamplesBlock(learnedCorrections, 6);
   const blocks = [forbiddenBlock, phrasingsBlock, examplesBlock].filter(Boolean);
   return blocks.length > 0 ? `\n\n${blocks.join("\n\n")}` : "";
 }
@@ -141,12 +141,10 @@ async function runGenerationCall(
       buildLexiconBlock(facts, learnedCorrections) +
       buildLearnedGuidanceBlock(learnedCorrections),
     messages: [{ role: "user", content: JSON.stringify(userContent) }],
-    // Qwen3 counts hidden reasoning against this ceiling. Production
-    // responses containing the requested multi-paragraph article were
-    // observed truncated mid-JSON at 2048, so leave enough room for both
-    // reasoning and the complete structured payload. Unused capacity is not
-    // billed as generated output.
-    maxTokens: 4096,
+    // A kimenet 900-1500 karakteres cikk és négy rövid JSON-mező. A
+    // production Llama 3.3 nem használ rejtett Qwen reasoning tokent, ezért
+    // a 4096-os korlát csak felesleges neuron-kitettség volt.
+    maxTokens: 2048,
     jsonSchema: GENERATION_JSON_SCHEMA,
   });
 
@@ -161,7 +159,6 @@ async function runGenerationCall(
     bodyHu: cleaned.bodyHu,
     changeSummaryHu: parsed.change_summary_hu,
     isFallback: result.isFallback ?? false,
-    ...(result.servedByModel ? { servedByModel: result.servedByModel } : {}),
   };
 }
 

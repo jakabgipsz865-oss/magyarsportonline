@@ -79,4 +79,37 @@ export class PipelineJobRepository {
       WHERE id = ${jobId}
     `);
   }
+
+  /**
+   * Infrastructure-wide capacity pauses (currently the Cloudflare daily
+   * neuron allocation) are not job failures. Put the claimed job back
+   * without consuming an attempt, and persist a recognizable error marker
+   * that acts as a durable circuit breaker for later worker invocations.
+   */
+  async deferWithoutAttempt(jobId: string, reason: string, delayMs: number): Promise<void> {
+    await this.db.execute(sql`
+      UPDATE ${pipelineJobs}
+      SET status = 'pending',
+          attempts = GREATEST(attempts - 1, 0),
+          available_at = now() + (${delayMs}::text || ' milliseconds')::interval,
+          last_error = ${reason},
+          locked_at = NULL,
+          updated_at = now()
+      WHERE id = ${jobId}
+    `);
+  }
+
+  /** Returns the end of an active persisted circuit-breaker window. */
+  async findActiveDeferral(errorPrefix: string): Promise<Date | null> {
+    const rows = await this.db.execute<{ available_at: Date }>(sql`
+      SELECT available_at
+      FROM ${pipelineJobs}
+      WHERE status = 'pending'
+        AND available_at > now()
+        AND last_error LIKE ${`${errorPrefix}%`}
+      ORDER BY available_at DESC
+      LIMIT 1
+    `);
+    return rows[0]?.available_at ?? null;
+  }
 }

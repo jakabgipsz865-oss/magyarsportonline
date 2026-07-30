@@ -25,6 +25,7 @@ describe("selfCheckContent", () => {
       isFallback: false,
     });
     expect(llm.jsonRequests[0]?.model).toBe(MODEL_TIERS.selfCheck);
+    expect(llm.jsonRequests[0]?.maxTokens).toBe(512);
   });
 
   it("propagates isFallback when the LLM client served this call from a fallback", async () => {

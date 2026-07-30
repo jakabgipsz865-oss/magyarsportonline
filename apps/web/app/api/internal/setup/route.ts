@@ -29,7 +29,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       seeded: true,
       counts,
       llmProvider: env.LLM_PROVIDER,
-      monthlyLlmBudgetUsd: env.LLM_MONTHLY_BUDGET_USD,
     });
   } catch (error) {
     getLogger().error(

@@ -17,15 +17,15 @@ import type { AgentRunRecorder } from "../shared/with-agent-run";
 import { withAgentRun } from "../shared/with-agent-run";
 import { rewriteForStyle } from "./rewrite";
 
-/** A modell hány legfrissebb szerkesztői javítást lásson híváskánt — lásd editorial-corrections.ts blokk-limitjeit (10), ennél bőven adunk neki keresési alapanyagot. */
-const LEARNED_CORRECTIONS_LIMIT = 50;
+/** Elég keresési alap a releváns, promptonként legfeljebb hat javítás kiválasztásához. */
+const LEARNED_CORRECTIONS_LIMIT = 20;
 
 export * from "./ab-test";
 export * from "./readability";
 export * from "./rewrite";
 export * from "./style-guide";
 
-export const AGENT_VERSION = "editorial-rewrite@0.1.0";
+export const AGENT_VERSION = "editorial-rewrite@0.2.0";
 
 export interface Emitter {
   emit(event: unknown): Promise<void>;
@@ -50,12 +50,11 @@ type Trigger = Extract<SportsNewsEvent, { type: "story/content.drafted" }>;
 
 /**
  * Editorial Rewrite Agent (docs/editorial-style-guide.md): sits between the
- * Hungarian Writer and SEO agents. Takes the Writer's already fact-checked
- * title/lead/body and asks for a stylistic-only pass toward how a real
- * Hungarian sports portal actually writes — the Writer's own prompt already
- * asks for natural Hungarian, but has no concept of *this specific outlet's*
- * house style, and mixing "get the facts right" with "make it read like
- * Nemzeti Sport" in one call makes both harder to get right.
+ * Hungarian Writer and SEO agents. The Writer already carries the house
+ * style, football lexicon, and learned corrections. Therefore this agent
+ * spends Cloudflare neurons only when the deterministic quality gate left
+ * concrete issues on the draft; a clean draft passes through without an
+ * extra rewrite/self-check pair.
  *
  * Never trusts the rewrite blindly: it re-runs the Hungarian Writer's own
  * fact-consistency self-check against the *rewritten* text before accepting
@@ -88,6 +87,9 @@ export async function handleStoryContentDrafted(
 
       let editorialRewriteApplied = false;
 
+      const hasQualityIssues =
+        Array.isArray(version.qualityIssues) && version.qualityIssues.length > 0;
+
       if (version.isPublished) {
         // Shouldn't happen at this pipeline stage (Publish Gate runs after
         // SEO, which runs after this agent) — defensive guard only, so a
@@ -98,6 +100,11 @@ export async function handleStoryContentDrafted(
         deps.logger.warn(
           { correlationId: event.correlation_id, storyId: story.id, versionId: version.id },
           "editorial rewrite: version already published, skipping",
+        );
+      } else if (!hasQualityIssues) {
+        deps.logger.info(
+          { correlationId: event.correlation_id, storyId: story.id, versionId: version.id },
+          "editorial rewrite: deterministic quality gate passed, skipping LLM rewrite",
         );
       } else {
         const facts = (await deps.factRepository.listByStoryId(story.id)).map(toWriterFact);

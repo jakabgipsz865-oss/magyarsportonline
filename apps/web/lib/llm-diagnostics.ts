@@ -15,13 +15,9 @@ const DIAGNOSTIC_REQUEST: JsonCompletionRequest = {
   system:
     'Válaszolj KIZÁRÓLAG ezzel a JSON-nal, más szöveg nélkül: {"consistent": true, "fact_consistency_score": 1, "issues": []}',
   messages: [{ role: "user", content: "diagnosztikai teszthívás" }],
-  // 2048, mert a valódi self-check hívás (hungarian-writer/self-check.ts)
-  // is ennyit használ (2026-07-28-tól, 1024-ről emelve) — a Qwen3 egy
-  // reasoning modell, ami a rejtett gondolkodási tokenjeit is a max_tokens
-  // keretből fedezi, így egy túl szűk keret üres `content`-et eredményezhet
-  // és JSON.parse hibát dob, ami a hitelesítéstől független, önmagában
-  // okozott hamis negatív lenne ebben a diagnosztikában.
-  maxTokens: 2048,
+  // Három rövid mezős diagnosztikai JSON; a production Llama 3.3 modellnek
+  // nincs szüksége a korábbi Qwen reasoninghez fenntartott tokenkeretre.
+  maxTokens: 256,
   jsonSchema: {
     type: "object",
     properties: {
@@ -159,12 +155,8 @@ async function tryRawCloudflareCall(): Promise<RawCallOutcome> {
 /**
  * Read-only diagnostic for "why did the Editorial A/B test's LLM calls all
  * fall back" (2026-07-28 incident): distinguishes an *actual* Cloudflare
- * call failure (bad token, model unavailable, network/service error —
- * `ProviderFallbackLlmClient`'s domain, triggered on ANY error) from the
- * *unrelated* monthly budget guard (`BudgetGuardedLlmClient`, which only
- * wraps `LLM_PROVIDER=anthropic` — never consulted at all when
- * `LLM_PROVIDER=cloudflare`, which is what's actually configured here).
- * Never writes to the database.
+ * call failure (bad token, model unavailable, quota, network/service error).
+ * The production client is Cloudflare-only and fail-closed.
  */
 export async function runLlmDiagnostics(): Promise<{
   config: {
@@ -177,10 +169,6 @@ export async function runLlmDiagnostics(): Promise<{
     cloudflareAccountIdMasked: string | null;
     cloudflareAccountIdConfigured: boolean;
     cloudflareApiTokenConfigured: boolean;
-    geminiApiKeyConfigured: boolean;
-    anthropicApiKeyConfigured: boolean;
-    monthlyBudgetUsd: number;
-    budgetGuardAppliesToThisProvider: boolean;
     /**
      * "production" | "preview" | "development" | null — Vercel injects
      * `VERCEL_ENV` automatically into every deployment (docs.vercel.com
@@ -268,13 +256,6 @@ export async function runLlmDiagnostics(): Promise<{
       cloudflareAccountIdMasked: maskAccountId(env.CLOUDFLARE_ACCOUNT_ID),
       cloudflareAccountIdConfigured: Boolean(env.CLOUDFLARE_ACCOUNT_ID),
       cloudflareApiTokenConfigured: Boolean(env.CLOUDFLARE_API_TOKEN),
-      geminiApiKeyConfigured: Boolean(env.GEMINI_API_KEY),
-      anthropicApiKeyConfigured: Boolean(env.ANTHROPIC_API_KEY),
-      monthlyBudgetUsd: env.LLM_MONTHLY_BUDGET_USD,
-      // BudgetGuardedLlmClient is only constructed for LLM_PROVIDER=anthropic
-      // (apps/web/lib/llm.ts getLlmClient) — cloudflare/gemini use
-      // ProviderFallbackLlmClient instead, which has no budget concept at all.
-      budgetGuardAppliesToThisProvider: env.LLM_PROVIDER === "anthropic",
       vercelEnv: process.env["VERCEL_ENV"] ?? null,
       vercelDeploymentId: process.env["VERCEL_DEPLOYMENT_ID"] ?? null,
       vercelGitCommitSha: process.env["VERCEL_GIT_COMMIT_SHA"] ?? null,

@@ -84,13 +84,13 @@ function buildLexiconBlock(
   }
   const combinedLexicon = [...FOOTBALL_LEXICON, ...correctionsToLexiconEntries(learnedCorrections)];
   const entries = [
-    ...findRelevantLexiconEntries(searchText, 20, combinedLexicon),
+    ...findRelevantLexiconEntries(searchText, 12, combinedLexicon),
     ...findLexiconMatchesInHungarianText(searchText, combinedLexicon),
   ]
     .filter(
       (entry, index, all) => all.findIndex((candidate) => candidate.en === entry.en) === index,
     )
-    .slice(0, 20);
+    .slice(0, 12);
   const block = formatLexiconBlock(entries);
   return block ? `\n\n${block}` : "";
 }
@@ -114,8 +114,9 @@ function buildLearnedGuidanceBlock(
   const forbiddenBlock = formatForbiddenTranslationsBlock(forbidden);
   const phrasingsBlock = formatRecommendedPhrasingsBlock(
     correctionsToRecommendedPhrasings(learnedCorrections),
+    6,
   );
-  const examplesBlock = formatPromptExamplesBlock(learnedCorrections);
+  const examplesBlock = formatPromptExamplesBlock(learnedCorrections, 6);
   const blocks = [forbiddenBlock, phrasingsBlock, examplesBlock].filter(Boolean);
   return blocks.length > 0 ? `\n\n${blocks.join("\n\n")}` : "";
 }
@@ -150,16 +151,10 @@ export async function rewriteForStyle(
         }),
       },
     ],
-    // 4096 (raised from 2048, then 3072): a 25-cikkes megerősítő teszt
-    // megmutatta, hogy a stílus-guide szigorítása (clause-by-clause
-    // önellenőrzés) és a lexikonblokk mérete miatt a rewrite hívás
-    // fallback-aránya 12%->24%-ra nőtt, mind "invalid_json_output" — a
-    // Qwen3 rejtett gondolkodási tokenjei a nagyobb feladat miatt gyakrabban
-    // merítik ki a 2048-as keretet. A sikeres hívások átlagosan csak
-    // ~1163 output tokent használnak, tehát a keret emelése a legtöbb
-    // híváson nem növel költséget, csak a kevés, ténylegesen több
-    // gondolkodást igénylő esetet oldja meg.
-    maxTokens: 4096,
+    // A rewrite csak hibás draftnál fut, és ugyanakkora cikket ad vissza,
+    // mint a Writer. A production Llama 3.3-hoz nincs szükség a korábbi
+    // Qwen hidden-reasoning tartalékára.
+    maxTokens: 2048,
     jsonSchema: REWRITE_JSON_SCHEMA,
   });
 

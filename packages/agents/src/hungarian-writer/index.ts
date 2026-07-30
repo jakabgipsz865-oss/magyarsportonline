@@ -26,18 +26,15 @@ import type { EditorialCorrection } from "../shared/editorial-corrections";
 import type { AgentRunRecorder } from "../shared/with-agent-run";
 import { withAgentRun } from "../shared/with-agent-run";
 
-/** A modell hány legfrissebb szerkesztői javítást lásson híváskánt — lásd editorial-corrections.ts blokk-limitjeit (10), ennél bőven adunk neki keresési alapanyagot. */
-const LEARNED_CORRECTIONS_LIMIT = 50;
+/** Elég keresési alap a releváns, promptonként legfeljebb hat javítás kiválasztásához. */
+const LEARNED_CORRECTIONS_LIMIT = 20;
 
 export * from "./facts";
 export * from "./generation";
 export * from "./quality-gate";
 export * from "./self-check";
 
-export const AGENT_VERSION = "hungarian-writer@0.1.0";
-
-/** One regenerate attempt if the self-check flags the first draft as inconsistent (docs/architecture/02-agents.md §2.5: "max 2 retry"). */
-export const MAX_SELF_CHECK_ATTEMPTS = 2;
+export const AGENT_VERSION = "hungarian-writer@0.2.0";
 
 const FALLBACK_UPDATE_SUMMARY = "Frissítés az új információk alapján.";
 
@@ -65,11 +62,10 @@ type Trigger = Extract<SportsNewsEvent, { type: "story/facts.verified" }>;
 /**
  * Hungarian Writer Agent (docs/architecture/02-agents.md §2.5). Generates
  * from the Fact set only (never raw source text — see facts.ts), then
- * re-verifies its own output against the same Fact set (self-check.ts),
- * regenerating once if the first draft is flagged inconsistent. Always
- * creates a `StoryVersion`, even after the retry budget is exhausted — the
- * confidence gate on whether that version auto-publishes is the Publish
- * Gate's job (docs/architecture/02-agents.md §2.7), not this agent's.
+ * re-verifies its own output against the same Fact set (self-check.ts).
+ * An inconsistent draft is persisted with its low score for auditability,
+ * but is never blindly regenerated: the Publish Gate blocks it. This avoids
+ * spending two more Cloudflare calls on a result that still requires review.
  */
 export async function handleStoryFactsVerified(
   deps: HungarianWriterDeps,
@@ -119,17 +115,11 @@ export async function handleStoryFactsVerified(
       });
       let check = await selfCheckContent(deps.llm, { facts, ...generated });
 
-      for (let attempt = 1; attempt < MAX_SELF_CHECK_ATTEMPTS && !check.consistent; attempt++) {
+      if (!check.consistent) {
         deps.logger.warn(
           { correlationId: event.correlation_id, storyId: story.id, issues: check.issues },
-          "self-check flagged the draft as inconsistent, regenerating",
+          "self-check flagged the draft as inconsistent; persisting it for fail-closed review",
         );
-        generated = await generateStoryVersion(deps.llm, {
-          facts,
-          previousVersion,
-          learnedCorrections,
-        });
-        check = await selfCheckContent(deps.llm, { facts, ...generated });
       }
 
       // Content Quality Gate (Content Quality & Reliability Hardening
@@ -213,17 +203,15 @@ export async function handleStoryFactsVerified(
         }
       }
 
-      // `deps.llm.modelLabel` — ha a kliens (pl. GeminiLlmClient) a
-      // ténylegesen hívott modellt jelzi, azt használjuk a DB-rekordban;
-      // ennek hiányában (pl. AnthropicLlmClient) MODEL_TIERS.writing marad
-      // a helyes érték, változatlan viselkedéssel.
+      // A production kliens a tényleges Cloudflare modellt jelzi; a logikai
+      // writer tier csak teszt/local kliensekhez marad tartalék.
       const version = await deps.storyVersionRepository.createNextVersion(story.id, {
         titleHu: generated.titleHu,
         leadHu: generated.leadHu,
         bodyHu: generated.bodyHu,
         changeSummaryHu,
         generatedByModel: isAiGenerated
-          ? (generated.servedByModel ?? deps.llm.modelLabel ?? MODEL_TIERS.writing)
+          ? (deps.llm.modelLabel ?? MODEL_TIERS.writing)
           : NO_LLM_MODEL_LABEL,
         isAiGenerated,
         promptVersion: AGENT_VERSION,

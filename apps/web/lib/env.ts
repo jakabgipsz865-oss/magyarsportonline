@@ -14,7 +14,7 @@ import { z } from "zod";
  *
  * Per docs/adr/0004-phase-0-env-vars-optional.md: each variable becomes
  * `required()` in the phase that actually wires it to real functionality,
- * not before. `DATABASE_URL`, `ANTHROPIC_API_KEY`, and `CRON_SECRET` made
+ * not before. `DATABASE_URL` and `CRON_SECRET` made
  * that transition with the MVP end-to-end pipeline (lib/db.ts, lib/llm.ts,
  * app/api/internal/cron/dispatch-ingest) — the remaining variables below
  * are still ahead of their wiring and stay optional.
@@ -24,17 +24,13 @@ export const env = createEnv({
     // Wired: packages/db kliens (lib/db.ts).
     DATABASE_URL: z.string().url(),
 
-    // LLM_PROVIDER=none (alapértelmezés) esetén a pipeline a determinisztikus
+    // LLM_PROVIDER=none esetén a pipeline a determinisztikus
     // NoLlmClient adaptert használja (packages/llm/src/no-llm-client.ts) —
-    // nincs API-hívás, nincs költség, semmilyen API-kulcs nem szükséges.
-    // LLM_PROVIDER=cloudflare esetén CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN,
-    // LLM_PROVIDER=anthropic esetén ANTHROPIC_API_KEY, LLM_PROVIDER=gemini
-    // esetén GEMINI_API_KEY kötelező — ezt a feltételes kényszert lib/llm.ts
-    // ellenőrzi (createEnv nem támogat egyszerűen mező-közti feltételes
-    // validációt). Jelenlegi (2026-07) döntés: Cloudflare Workers AI az
-    // aktív teszt-provider — a Gemini és Anthropic adapter megmarad, de
-    // egyik sincs bekapcsolva (lásd docs/infrastructure-setup.md).
-    LLM_PROVIDER: z.enum(["none", "anthropic", "gemini", "cloudflare"]).default("none"),
+    // kizárólag explicit helyi fejlesztéshez/teszthez. A production
+    // alapértelmezés Cloudflare Workers AI; más AI-provider nincs a runtime
+    // konfigurációban. A Cloudflare kulcsok feltételes kötelezőségét
+    // lib/llm.ts ellenőrzi.
+    LLM_PROVIDER: z.enum(["none", "cloudflare"]).default("cloudflare"),
 
     // Csak akkor kötelező ténylegesen, ha LLM_PROVIDER=cloudflare (lib/llm.ts).
     // Cloudflare Dashboard → jobb felső saroktól jobbra → Account ID.
@@ -44,32 +40,14 @@ export const env = createEnv({
     // "Workers AI" jogosultságú API-token (Cloudflare Dashboard → My Profile
     // → API Tokens) — kizárólag szerveroldalon (apps/web/lib/llm.ts) kerül
     // felhasználásra, sosem jut a kliens-oldali bundle-be (lásd `client: {}`
-    // lent). Ingyenes napi Neuron-kerettel használható, nem igényel
-    // Cloudflare Paid plant vagy bekapcsolt billinget.
+    // lent). Production terheléshez a Workers Paid plan az infrastruktúra
+    // része; az ingyenes napi kvóta nem rendelkezésre-állási garancia.
     CLOUDFLARE_API_TOKEN: z.string().min(1).optional(),
 
     // Cloudflare JSON Mode-ot hivatalosan támogató modell. Az adapter a
     // korábbi/hibás, strukturált kimenetet nem támogató env-értéket is erre
     // a fail-safe alapmodellre cseréli.
     CLOUDFLARE_AI_MODEL: z.string().min(1).default("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-
-    // Csak akkor kötelező ténylegesen, ha LLM_PROVIDER=anthropic (lib/llm.ts).
-    ANTHROPIC_API_KEY: z.string().min(1).optional(),
-
-    // Csak akkor kötelező ténylegesen, ha LLM_PROVIDER=gemini (lib/llm.ts).
-    // Ingyenes tier — a Google AI Studio-ban generálható API kulcs, nem
-    // igényel fizetős Google Cloud billinget.
-    GEMINI_API_KEY: z.string().min(1).optional(),
-
-    // Ingyenes tierben elérhető, stabil Flash-Lite modell alapértelmezésben
-    // (packages/llm/src/gemini-client.ts) — kód nélkül felülírható, ha
-    // Google időközben megváltoztatja a free-tier kínálatot.
-    GEMINI_MODEL: z.string().min(1).default("gemini-2.0-flash-lite"),
-
-    // A futó alkalmazás havi Anthropic-költségplafonja USD-ben — elérésekor
-    // a Budget Guard automatikusan No-LLM módra vált (packages/llm/src/budget-guard.ts),
-    // a pipeline nem áll le.
-    LLM_MONTHLY_BUDGET_USD: z.coerce.number().positive().default(5),
 
     // Admin/review felület (/admin/review) HTTP Basic auth jelszava.
     // Ha nincs beállítva, az admin felület 503-mal letiltva marad —
