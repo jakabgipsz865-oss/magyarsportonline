@@ -546,6 +546,10 @@ export default async function EditorialAbReviewPage(): Promise<ReactNode> {
 
   const correctionsByStoryId = new Map<string, EditorialCorrectionRow[]>();
   for (const correction of allCorrections) {
+    // A tudáscsomagból importált korrekció hordozható, ezért nincs
+    // célkörnyezeti Story FK-ja; a globális lexikonban továbbra is működik,
+    // de nem tartozik egy konkrét A/B snapshot kártyájához.
+    if (correction.storyId === null) continue;
     const existing = correctionsByStoryId.get(correction.storyId) ?? [];
     existing.push(correction);
     correctionsByStoryId.set(correction.storyId, existing);

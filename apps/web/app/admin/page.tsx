@@ -109,6 +109,23 @@ export default async function AdminDashboardPage(): Promise<ReactNode> {
         </p>
         <p style={{ margin: "4px 0 0", fontWeight: 600 }}>Story merge review — döntésre vár</p>
       </Link>
+
+      <Link
+        href="/admin/knowledge"
+        style={{
+          display: "block",
+          border: "1px solid #476582",
+          borderRadius: 8,
+          padding: 16,
+          textDecoration: "none",
+          color: "inherit",
+          maxWidth: 320,
+          marginTop: 12,
+        }}
+      >
+        <p style={{ margin: 0, fontSize: "1.25em", fontWeight: 700 }}>Tudás export / import</p>
+        <p style={{ margin: "4px 0 0" }}>Verziózott backup, migráció és validált visszaállítás</p>
+      </Link>
     </main>
   );
 }

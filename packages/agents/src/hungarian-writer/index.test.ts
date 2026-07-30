@@ -52,6 +52,7 @@ const FACT: Fact = {
 const LEARNED_CORRECTION = {
   id: "correction-1",
   storyId: "some-other-story",
+  portableKey: null,
   category: "terminology" as const,
   termEn: "super-sub",
   originalSentenceEn: "He is a real super-sub for this team.",
