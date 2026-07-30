@@ -7,8 +7,13 @@ on:
         description: "Optional review item ID; includes its original source text"
         required: false
         type: string
+      expected_production_commit:
+        description: "The exact Vercel production commit expected in the export"
+        required: false
+        type: string
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   evidence:
@@ -74,3 +79,155 @@ jobs:
           else
             echo "ADMIN_SECRET nincs beállítva GitHub secretként (vagy nem egyezik) — automata screenshot NEM lehetséges enélkül." >> "$GITHUB_STEP_SUMMARY"
           fi
+
+  knowledge-portability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: knowledge
+          POSTGRES_PASSWORD: knowledge
+          POSTGRES_DB: knowledge
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://knowledge:knowledge@localhost:5432/knowledge
+      CRON_SECRET: isolated-test-cron-secret
+      ADMIN_SECRET: isolated-test-admin-secret
+      LLM_PROVIDER: none
+      VERCEL_GIT_COMMIT_SHA: ${{ inputs.expected_production_commit }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and start isolated test environment
+        run: |
+          set -euo pipefail
+          pnpm build
+          mkdir -p knowledge-evidence
+          pnpm --filter @magyarsportonline/web exec next start -H 127.0.0.1 -p 3000 \
+            > knowledge-evidence/test-app.log 2>&1 &
+          echo "$!" > knowledge-evidence/test-app.pid
+          for i in $(seq 1 30); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
+              -u "admin:$ADMIN_SECRET" http://127.0.0.1:3000/admin/knowledge || true)
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat knowledge-evidence/test-app.log
+          exit 1
+
+      - name: Export and validate real production knowledge
+        env:
+          PRODUCTION_ADMIN_SECRET: ${{ secrets.ADMIN_SECRET }}
+          PRODUCTION_CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          EXPECTED_PRODUCTION_COMMIT: ${{ inputs.expected_production_commit }}
+        run: |
+          set -euo pipefail
+          test -n "$EXPECTED_PRODUCTION_COMMIT"
+          curl -fsS --max-time 120 \
+            -u "admin:$PRODUCTION_ADMIN_SECRET" \
+            https://magyarsportonline-web.vercel.app/api/admin/knowledge/export \
+            -o knowledge-evidence/production-knowledge.json
+          node scripts/validate-knowledge-portability.mjs validate-export \
+            knowledge-evidence/production-knowledge.json \
+            knowledge-evidence/export-validation.json
+
+      - name: Preview, apply, and prove idempotent import
+        run: |
+          set -euo pipefail
+          BASE=http://127.0.0.1:3000
+          PACKAGE=knowledge-evidence/production-knowledge.json
+          COMMON_ARGS=(-H "Content-Type: application/json; charset=utf-8" -H "X-MSO-Knowledge-Import: 1")
+
+          curl -fsS --max-time 120 -X POST \
+            "$BASE/api/admin/knowledge/import?mode=preview&applySourceActivation=true" \
+            -u "admin:$ADMIN_SECRET" "${COMMON_ARGS[@]}" --data-binary "@$PACKAGE" \
+            -o knowledge-evidence/import-preview.json
+          jq -e '.ok == true' knowledge-evidence/import-preview.json
+
+          digest=$(jq -r '.integrity.contentDigest' "$PACKAGE")
+          curl -fsS --max-time 120 -X POST \
+            "$BASE/api/admin/knowledge/import?mode=apply&applySourceActivation=true&expectedDigest=$digest" \
+            -u "admin:$ADMIN_SECRET" "${COMMON_ARGS[@]}" --data-binary "@$PACKAGE" \
+            -o knowledge-evidence/import-apply.json
+          jq -e '.ok == true' knowledge-evidence/import-apply.json
+
+          curl -fsS --max-time 120 -X POST \
+            "$BASE/api/admin/knowledge/import?mode=preview&applySourceActivation=true" \
+            -u "admin:$ADMIN_SECRET" "${COMMON_ARGS[@]}" --data-binary "@$PACKAGE" \
+            -o knowledge-evidence/import-idempotency-preview.json
+          jq -e '.ok == true' knowledge-evidence/import-idempotency-preview.json
+
+          curl -fsS --max-time 120 \
+            -u "admin:$ADMIN_SECRET" \
+            "$BASE/api/admin/knowledge/export" \
+            -o knowledge-evidence/test-environment-after-import.json
+
+          node scripts/validate-knowledge-portability.mjs compare-import \
+            "$PACKAGE" \
+            knowledge-evidence/test-environment-after-import.json \
+            knowledge-evidence/import-preview.json \
+            knowledge-evidence/import-apply.json \
+            knowledge-evidence/import-idempotency-preview.json \
+            knowledge-evidence/import-proof.json
+
+      - name: Publish masked evidence summary
+        if: always()
+        run: |
+          echo "## Admin knowledge production proof" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f knowledge-evidence/import-proof.json ]; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            jq '{
+              productionCommit,
+              productionCounts,
+              importPreview: .importPreview.counts,
+              actualImport: .actualImport.counts,
+              postImportIdempotencyPreview: .postImportIdempotencyPreview.counts,
+              contentComparisons,
+              duplicateCount,
+              errorCount,
+              rollback
+            }' knowledge-evidence/import-proof.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          elif [ -f knowledge-evidence/export-validation.json ]; then
+            cat knowledge-evidence/export-validation.json >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No proof report was produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload production knowledge proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-knowledge-production-proof-${{ github.run_id }}
+          path: |
+            knowledge-evidence/export-validation.json
+            knowledge-evidence/import-preview.json
+            knowledge-evidence/import-apply.json
+            knowledge-evidence/import-idempotency-preview.json
+            knowledge-evidence/import-proof.json
+          if-no-files-found: warn
+          retention-days: 7
