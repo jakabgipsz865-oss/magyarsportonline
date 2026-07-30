@@ -101,7 +101,7 @@ export class PipelineJobRepository {
 
   /** Returns the end of an active persisted circuit-breaker window. */
   async findActiveDeferral(errorPrefix: string): Promise<Date | null> {
-    const rows = await this.db.execute<{ available_at: Date }>(sql`
+    const rows = await this.db.execute<{ available_at: Date | string }>(sql`
       SELECT available_at
       FROM ${pipelineJobs}
       WHERE status = 'pending'
@@ -110,6 +110,12 @@ export class PipelineJobRepository {
       ORDER BY available_at DESC
       LIMIT 1
     `);
-    return rows[0]?.available_at ?? null;
+    const availableAt = rows[0]?.available_at;
+    if (!availableAt) {
+      return null;
+    }
+    // Raw Drizzle/Postgres execute() may expose timestamptz as an ISO
+    // string even though schema-backed selects return Date instances.
+    return availableAt instanceof Date ? availableAt : new Date(availableAt);
   }
 }
