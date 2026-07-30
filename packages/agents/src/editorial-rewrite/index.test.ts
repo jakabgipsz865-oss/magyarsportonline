@@ -23,7 +23,7 @@ function storyVersion(overrides?: Partial<Record<string, unknown>>) {
     selfCheckFallback: false,
     editorialRewriteApplied: false,
     isPublished: false,
-    qualityIssues: null,
+    qualityIssues: [{ field: "body", kind: "too_short" }],
     createdAt: new Date(),
     ...overrides,
   };
@@ -106,6 +106,22 @@ function triggerEvent() {
 }
 
 describe("handleStoryContentDrafted (Editorial Rewrite Agent)", () => {
+  it("uses zero LLM calls when the Writer draft already passed the deterministic quality gate", async () => {
+    const llm = new FakeLlmClient();
+    const deps = buildDeps({ llm, version: storyVersion({ qualityIssues: [] }) });
+
+    await handleStoryContentDrafted(deps, triggerEvent());
+
+    expect(llm.jsonRequests).toHaveLength(0);
+    expect(deps.storyVersionRepository.updateDraftContent).not.toHaveBeenCalled();
+    expect(deps.emitted).toEqual([
+      expect.objectContaining({
+        type: "story/editorial.rewritten",
+        payload: { story_id: "story-1", story_version_id: "v1", editorial_rewrite_applied: false },
+      }),
+    ]);
+  });
+
   it("applies the rewrite and emits story/editorial.rewritten when the fact-check passes", async () => {
     const llm = new FakeLlmClient();
     llm.queueJson({

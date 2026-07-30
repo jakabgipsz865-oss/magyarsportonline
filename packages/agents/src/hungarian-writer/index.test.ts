@@ -260,19 +260,17 @@ describe("handleStoryFactsVerified", () => {
     });
   });
 
-  it("regenerates once when the self-check reports an inconsistency", async () => {
+  it("does not spend a blind regeneration on an inconsistent draft and persists the blocking score", async () => {
     const deps = buildDeps();
     queueGeneration(deps.llm, { title_hu: "Rossz cím" });
     queueSelfCheck(deps.llm, false, 0.2);
-    queueGeneration(deps.llm, { title_hu: "Jó cím" });
-    queueSelfCheck(deps.llm, true, 0.9);
 
     await handleStoryFactsVerified(deps, triggerEvent());
 
-    expect(deps.llm.jsonRequests).toHaveLength(4);
+    expect(deps.llm.jsonRequests).toHaveLength(2);
     expect(deps.createNextVersionCalls[0]).toMatchObject({
-      titleHu: "Jó cím",
-      factConsistencyScore: 0.9,
+      titleHu: "Rossz cím",
+      factConsistencyScore: 0.2,
     });
   });
 

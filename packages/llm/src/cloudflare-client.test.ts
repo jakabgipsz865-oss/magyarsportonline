@@ -4,6 +4,7 @@ import {
   CloudflareWorkersAiLlmClient,
   DEFAULT_CLOUDFLARE_MODEL,
   describeCloudflareError,
+  isCloudflareDailyNeuronQuotaError,
 } from "./cloudflare-client";
 
 function jsonResponse(body: unknown, init?: { status?: number }): Response {
@@ -38,7 +39,10 @@ describe("CloudflareWorkersAiLlmClient", () => {
       expect(String(url)).toBe(
         "https://api.cloudflare.com/client/v4/accounts/acc-123/ai/v1/chat/completions",
       );
-      expect(init?.headers).toMatchObject({ authorization: "Bearer secret-token" });
+      expect(init?.headers).toMatchObject({
+        authorization: "Bearer secret-token",
+        "x-session-affinity": "magyarsportonline-production-v1",
+      });
       const body = JSON.parse(String(init?.body)) as {
         model: string;
         temperature: number;
@@ -191,5 +195,24 @@ describe("describeCloudflareError", () => {
     );
     expect(describeCloudflareError(new CloudflareApiError("http", 400, "x"))).toBe("http_400");
     expect(describeCloudflareError(new Error("boom"))).toBe("unknown_error");
+  });
+});
+
+describe("isCloudflareDailyNeuronQuotaError", () => {
+  it("distinguishes the daily neuron allocation from a transient 429", () => {
+    expect(
+      isCloudflareDailyNeuronQuotaError(
+        new CloudflareApiError(
+          "http",
+          429,
+          "Cloudflare Workers AI error 429: daily free allocation of 10,000 neurons exceeded",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      isCloudflareDailyNeuronQuotaError(
+        new CloudflareApiError("http", 429, "Cloudflare Workers AI error 429: rate limited"),
+      ),
+    ).toBe(false);
   });
 });

@@ -59,20 +59,10 @@ export async function selfCheckContent(
         }),
       },
     ],
-    // 4096 (raised from 1024, then 2048): production rollout retries
-    // confirmed that Qwen3 can still exhaust 2048 with hidden reasoning
-    // before closing the structured JSON response for a full article.
-    // Successful calls use only what they need; this is a ceiling, not a
-    // fixed output allocation.
-    //
-    // A prior real 10-article A/B run
-    // proved every self-check fallback was "invalid_json_output" (Qwen3's
-    // hidden reasoning tokens exhausting max_tokens before any visible JSON
-    // came out), never a real inconsistency — 20% of calls were losing
-    // otherwise-good rewrites to this, not to an actual fact problem. See
-    // the same root cause already fixed for the editorial-rewrite call
-    // (rewrite.ts, 2048) and the A/B test's judge call.
-    maxTokens: 4096,
+    // Három rövid JSON-mező; a production Llama 3.3 nem használ rejtett
+    // Qwen reasoning tokent. A kisebb plafon közvetlenül korlátozza az
+    // ellenőrző hívás neuronfogyasztását.
+    maxTokens: 512,
     jsonSchema: SELF_CHECK_JSON_SCHEMA,
   });
 

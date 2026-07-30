@@ -1,6 +1,8 @@
 import { parseEvent } from "@magyarsportonline/events";
+import { isCloudflareDailyNeuronQuotaError } from "@magyarsportonline/llm";
 import { NextResponse, type NextRequest } from "next/server";
 import { createRepositories } from "../../../../../lib/db";
+import { delayUntilNextCloudflareQuotaReset } from "../../../../../lib/cloudflare-quota";
 import { env } from "../../../../../lib/env";
 import { getLogger } from "../../../../../lib/logger";
 import { buildQueueingEmitter, dispatchJobToHandler } from "../../../../../lib/pipeline";
@@ -41,6 +43,7 @@ const BUDGET_MS = 35_000; // wide margin under the CONFIRMED real ~60.18s ceilin
 const STALE_LOCK_MS = 10 * 60_000; // an in_progress job locked longer than this is presumed abandoned
 const BASE_BACKOFF_MS = 30_000;
 const MAX_BACKOFF_MS = 30 * 60_000;
+const CLOUDFLARE_QUOTA_ERROR_PREFIX = "[cloudflare_daily_neuron_quota]";
 
 /** Exponential backoff, capped — `attempts` is already post-increment (claimBatch increments it), so attempt 1 -> 30s, 2 -> 1min, 3 -> 2min, ... */
 function backoffFor(attempts: number): number {
@@ -57,11 +60,27 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
   const emitter = buildQueueingEmitter(repos.pipelineJobRepository);
   const logger = getLogger();
   const deadline = Date.now() + BUDGET_MS;
+  const activeQuotaDeferral = await repos.pipelineJobRepository.findActiveDeferral(
+    CLOUDFLARE_QUOTA_ERROR_PREFIX,
+  );
+  if (activeQuotaDeferral) {
+    return NextResponse.json({
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+      deadLettered: 0,
+      quotaDeferred: true,
+      retryAt: activeQuotaDeferral.toISOString(),
+      errors: [],
+    });
+  }
 
   let processed = 0;
   let succeeded = 0;
   let failed = 0;
   let deadLettered = 0;
+  let quotaDeferred = false;
+  let quotaRetryAt: string | null = null;
   const errors: Array<{
     jobId: string;
     eventType: string;
@@ -83,6 +102,22 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
       succeeded += 1;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      if (isCloudflareDailyNeuronQuotaError(error)) {
+        const now = new Date();
+        const delayMs = delayUntilNextCloudflareQuotaReset(now);
+        quotaRetryAt = new Date(now.getTime() + delayMs).toISOString();
+        await repos.pipelineJobRepository.deferWithoutAttempt(
+          job.id,
+          `${CLOUDFLARE_QUOTA_ERROR_PREFIX} ${message}`,
+          delayMs,
+        );
+        quotaDeferred = true;
+        logger.warn(
+          { jobId: job.id, retryAt: quotaRetryAt },
+          "Cloudflare daily neuron quota exhausted; pipeline deferred without consuming an attempt",
+        );
+        break;
+      }
       const exhausted = job.attempts >= job.maxAttempts;
       await repos.pipelineJobRepository.fail(job.id, message, backoffFor(job.attempts));
       if (exhausted) {
@@ -105,7 +140,15 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  return NextResponse.json({ processed, succeeded, failed, deadLettered, errors });
+  return NextResponse.json({
+    processed,
+    succeeded,
+    failed,
+    deadLettered,
+    quotaDeferred,
+    retryAt: quotaRetryAt,
+    errors,
+  });
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {

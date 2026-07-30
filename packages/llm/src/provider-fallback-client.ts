@@ -23,14 +23,14 @@ export interface ProviderFallbackLogger {
 }
 
 export interface ProviderFallbackOptions {
-  /** A valódi (jellemzően ingyenes tierű) kliens. */
+  /** A valódi kliens. */
   inner: LlmClient;
-  /** Bármilyen hibára ide esünk vissza (jellemzően NoLlmClient) — a rendszer nem áll le. */
+  /** Csak nem-production, `failClosed: false` módban használt fallback kliens. */
   fallback: LlmClient;
   providerName: string;
   logger: ProviderFallbackLogger;
   usageSink?: LlmUsageSink;
-  /** Alapértelmezés: mindig 0 (ingyenes tier — nincs mért költség). */
+  /** Alapértelmezés: 0, ha a hívó nem ad költségmodellt. */
   estimateCostUsd?: (model: string, inputTokens: number, outputTokens: number) => number;
   /** Csak a naplóüzenet tartalmához — nem befolyásolja, hogy történik-e fallback. */
   describeError?: (error: unknown) => string;
@@ -40,27 +40,18 @@ export interface ProviderFallbackOptions {
    * rethrown so the durable pipeline job can retry with backoff.
    */
   failClosed?: boolean;
-  /**
-   * `provider` esetén a fallback is valódi LLM: ne jelöljük No-LLM
-   * tartalomnak, és adjuk tovább a tényleges fallback-modell címkéjét.
-   */
-  fallbackMode?: "no_llm" | "provider";
 }
 
 /**
- * Reaktív provider-fallback dekorátor: minden hívást megpróbál a valódi
- * (`inner`) klienssel, és BÁRMILYEN hibára (kvóta, 429, 403, szolgáltatás-
- * vagy hálózati hiba) átirányít a `fallback` kliensre — a pipeline emiatt
- * sosem áll le. Szándékosan tágabb hibakezelés, mint a
- * `BudgetGuardedLlmClient`-é (ami csak a proaktív költség-plafonra esik
- * vissza, a tényleges API-hívás hibáját nem nyeli el): itt a cél egy
- * ingyenes tier rutinszerű kvótakimerülésének/instabilitásának
- * transzparens, sosem-megálló lekezelése.
+ * Usage-metering és hibakezelő dekorátor. `failClosed: true` mellett
+ * minden provider-hibát újradob a tartós queue-nak; productionben ez az
+ * egyetlen engedélyezett működés. A fallback ág kizárólag explicit helyi
+ * kompatibilitási mód.
  */
 export class ProviderFallbackLlmClient implements LlmClient {
   constructor(private readonly options: ProviderFallbackOptions) {}
 
-  /** A ténylegesen válaszoló (vagy válaszra kísérletet tevő) modell neve — a fallback esetén is az `inner` modelljét jelzi, hogy a hívó (Hungarian Writer) tudja, melyik konfigurált modell felé próbálkozott a rendszer. */
+  /** A tényleges production modell neve. */
   get modelLabel(): string | undefined {
     return this.options.inner.modelLabel;
   }
@@ -76,12 +67,6 @@ export class ProviderFallbackLlmClient implements LlmClient {
         throw error;
       }
       const fallbackResult = await this.options.fallback.completeText(request);
-      if (this.options.fallbackMode === "provider") {
-        return {
-          ...fallbackResult,
-          servedByModel: fallbackResult.servedByModel ?? this.options.fallback.modelLabel,
-        };
-      }
       return { ...fallbackResult, isFallback: true, fallbackReason: reason };
     }
   }
@@ -97,12 +82,6 @@ export class ProviderFallbackLlmClient implements LlmClient {
         throw error;
       }
       const fallbackResult = await this.options.fallback.completeJson(request);
-      if (this.options.fallbackMode === "provider") {
-        return {
-          ...fallbackResult,
-          servedByModel: fallbackResult.servedByModel ?? this.options.fallback.modelLabel,
-        };
-      }
       return { ...fallbackResult, isFallback: true, fallbackReason: reason };
     }
   }
@@ -117,9 +96,7 @@ export class ProviderFallbackLlmClient implements LlmClient {
       },
       this.options.failClosed
         ? `${this.options.providerName}: LLM call failed — failing closed for durable retry`
-        : this.options.fallbackMode === "provider"
-          ? `${this.options.providerName}: LLM call failed — failing over to the secondary LLM provider`
-          : `${this.options.providerName}: LLM call failed — falling back to No-LLM mode`,
+        : `${this.options.providerName}: LLM call failed — falling back to No-LLM mode`,
     );
     return reason;
   }

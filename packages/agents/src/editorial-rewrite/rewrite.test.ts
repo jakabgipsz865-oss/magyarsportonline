@@ -29,6 +29,7 @@ describe("rewriteForStyle", () => {
       isFallback: false,
     });
     expect(llm.jsonRequests[0]?.model).toBe(MODEL_TIERS.editorialRewrite);
+    expect(llm.jsonRequests[0]?.maxTokens).toBe(2048);
   });
 
   it("sends the current title/lead/body and facts in the request", async () => {

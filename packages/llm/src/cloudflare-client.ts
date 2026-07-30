@@ -37,6 +37,12 @@ export interface CloudflareWorkersAiClientOptions {
   baseUrl?: string;
   /** Tesztelhetőség: injektálható fetch. */
   fetchImpl?: typeof fetch;
+  /**
+   * Cloudflare prompt-prefix cache routing key. Stable across serverless
+   * invocations so identical static system prompts reach the same model
+   * instance more often.
+   */
+  sessionAffinity?: string;
 }
 
 export type CloudflareErrorKind =
@@ -58,12 +64,22 @@ export class CloudflareApiError extends Error {
   }
 }
 
+/** Cloudflare's daily free-allocation 429, as opposed to a short per-minute rate limit. */
+export function isCloudflareDailyNeuronQuotaError(error: unknown): boolean {
+  return (
+    error instanceof CloudflareApiError &&
+    error.kind === "http" &&
+    error.status === 429 &&
+    /(?:daily|per day).*(?:neuron|allocation|quota|limit)|(?:neuron|allocation|quota).*(?:daily|per day)/i.test(
+      error.message,
+    )
+  );
+}
+
 /**
- * Csak naplózási célra: rövid, ember-olvasható kategória a hibáról. NEM ez
- * dönti el, hogy történjen-e fallback — a ProviderFallbackLlmClient minden
- * hibára fallback-el (4xx/5xx, kvóta, hálózati hiba, JSON parse-hiba és a
- * lentebbi séma-teljesség-ellenőrzés hibája egyaránt), ez a függvény
- * kizárólag a log-üzenet tartalmát adja.
+ * Rövid, ember-olvasható hibakategória a naplóhoz. A production kliens
+ * minden kategóriát fail-closed módon újradob; ez a függvény nem változtat
+ * a vezérlésen.
  */
 export function describeCloudflareError(error: unknown): string {
   if (error instanceof CloudflareApiError) {
@@ -163,6 +179,7 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
   private readonly model: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly sessionAffinity: string;
 
   constructor(options: CloudflareWorkersAiClientOptions) {
     this.accountId = options.accountId;
@@ -177,6 +194,7 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
       : DEFAULT_CLOUDFLARE_MODEL;
     this.baseUrl = options.baseUrl ?? API_BASE;
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.sessionAffinity = options.sessionAffinity ?? "magyarsportonline-production-v1";
   }
 
   get modelLabel(): string {
@@ -244,6 +262,7 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
         headers: {
           "content-type": "application/json",
           authorization: `Bearer ${this.apiToken}`,
+          "x-session-affinity": this.sessionAffinity,
         },
         body: JSON.stringify(body),
       });

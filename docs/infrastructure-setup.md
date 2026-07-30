@@ -8,7 +8,7 @@ end-to-end teszt).
 
 > Ez a dokumentum **sosem** tartalmaz valódi connection stringet, API
 > kulcsot vagy más secretet — csak változóneveket és parancsokat. A valódi
-> értékeket a Neon konzolból (illetve az Anthropic konzolból) kell
+> értékeket a Neon és a Cloudflare konzolból kell
 > beszerezni, és csak a helyi, git-ignorált `.env.local` fájlba (vagy a
 > Vercel Environment Variables közé) kerülhetnek.
 
@@ -27,55 +27,39 @@ cp apps/web/.env.example apps/web/.env.local
 | Változó            | Kötelező | Forrás                                                                             |
 | ------------------ | -------- | ----------------------------------------------------------------------------------- |
 | `DATABASE_URL`     | igen     | Neon konzol → Project → Connection Details ("Pooled connection" ajánlott)           |
-| `LLM_PROVIDER`     | nem (alapértelmezés: `none`) | `none`, `cloudflare`, `gemini` vagy `anthropic` — lásd lent         |
+| `LLM_PROVIDER`     | nem (alapértelmezés: `cloudflare`) | productionben `cloudflare`; `none` csak explicit helyi teszt |
 | `CLOUDFLARE_ACCOUNT_ID` | csak ha `LLM_PROVIDER=cloudflare` | Cloudflare Dashboard → jobb felső sáv → Account ID       |
 | `CLOUDFLARE_API_TOKEN`  | csak ha `LLM_PROVIDER=cloudflare` | Cloudflare Dashboard → My Profile → API Tokens ("Workers AI" jogosultsággal) |
-| `CLOUDFLARE_AI_MODEL`   | nem (alapértelmezés: `@cf/qwen/qwen3-30b-a3b-fp8`) | csak `LLM_PROVIDER=cloudflare` esetén releváns |
-| `GEMINI_API_KEY`   | csak ha `LLM_PROVIDER=gemini` | Google AI Studio → aistudio.google.com/apikey (ingyenes tier)     |
-| `GEMINI_MODEL`     | nem (alapértelmezés: `gemini-2.0-flash-lite`) | csak `LLM_PROVIDER=gemini` esetén releváns          |
-| `ANTHROPIC_API_KEY` | csak ha `LLM_PROVIDER=anthropic` | Anthropic Console → API Keys                                |
+| `CLOUDFLARE_AI_MODEL`   | nem (alapértelmezés: `@cf/meta/llama-3.3-70b-instruct-fp8-fast`) | csak JSON Mode-ot támogató Cloudflare modell |
 | `CRON_SECRET`      | igen     | tetszőleges, magad generált titkos érték (pl. `openssl rand -hex 32`)               |
 
-### `LLM_PROVIDER` — fizetős LLM API nélküli üzemmód
+### `LLM_PROVIDER` — Cloudflare-only production
 
-Alapértelmezetten (`LLM_PROVIDER=none`, vagy a változó hiánya) a pipeline a
-determinisztikus **`NoLlmClient`** adaptert használja
-(`packages/llm/src/no-llm-client.ts`) — nincs kimenő API-hívás, nincs
-költség, semmilyen API-kulcs nem szükséges. Ebben a módban a Fact
-Verification / Hungarian Writer agentek nem generálnak AI-fordítást: az
-eredeti, angol nyelvű RSS-cím és -leírás jelenik meg változatlanul, a Story
-oldalon egyértelmű **"nem AI-fordított tartalom"** jelöléssel (lásd
-`story_read_model.is_ai_generated` és a `/hir/[slug]` oldal figyelmeztetése).
-Minden más — RSS ingest, deduplikáció, Story-létrehozás, Confidence Score,
-Risk Classifier, Publish Gate, Timeline/verziókezelés — ettől függetlenül,
-teljes egészében működik, mert ezek eleve nem használnak LLM-et.
+Productionben kizárólag `LLM_PROVIDER=cloudflare` támogatott. A `none` mód
+megmarad explicit helyi fejlesztési és unit teszt célra, de nem
+production-fallback: a változó hiánya is Cloudflare-t választ, a hiányzó
+Cloudflare-hitelesítés pedig hangos hibát okoz.
 
-#### `LLM_PROVIDER=cloudflare` — jelenlegi aktív provider (2026-07 döntés)
+#### Kötelező production konfiguráció
 
 ```bash
 LLM_PROVIDER=cloudflare
 CLOUDFLARE_ACCOUNT_ID=<Cloudflare Dashboard jobb felső sáv>
 CLOUDFLARE_API_TOKEN=<"Workers AI" jogosultságú API-token>
-# CLOUDFLARE_AI_MODEL=@cf/qwen/qwen3-30b-a3b-fp8   # opcionális, ez az alapértelmezés
+# opcionális; ez az alapértelmezés:
+CLOUDFLARE_AI_MODEL=@cf/meta/llama-3.3-70b-instruct-fp8-fast
 ```
 
-**Miért ez az aktív provider és nem Gemini/Anthropic:** a Google Gemini free
-tier használatához technikailag nem kell Google Cloud billing, de a
-mögöttes Cloud-projekt és a "billing hozzáadása a kvóta növeléséhez"
-felugró ablak korábban már okozott váratlan számlázási helyzetet — ezt a
-kockázatot tudatosan elkerüljük. A Cloudflare Workers AI ingyenes napi
-Neuron-kerete a Cloudflare Free plan része, **nem igényel hitelkártyát,
-Cloudflare Paid plant vagy bekapcsolt billinget** — a fiók regisztrációja
-és az API-token generálása önmagában nem hoz létre semmilyen fizetési
-kötelezettséget.
-
 **Token beszerzése:**
-1. Regisztrálj egy Cloudflare fiókot (dash.cloudflare.com) — hitelkártya
-   nem szükséges a Free planhoz.
+
+1. Regisztrálj egy Cloudflare fiókot (dash.cloudflare.com).
 2. Dashboard → jobb felső sáv → másold ki az **Account ID**-t.
 3. Dashboard → My Profile → API Tokens → Create Token → válaszd a
    **Workers AI** sablont (vagy egyedi tokent "Workers AI: Read/Edit"
-   jogosultsággal) → **ne kapcsolj hozzá billing-fiókot vagy Paid plant**.
+   jogosultsággal).
+4. Production terheléshez aktiváld a **Workers Paid plan**-t. A Free plan
+   napi 10 000 neuronja fejlesztési keret, nem production rendelkezésre
+   állási garancia.
 
 `packages/llm/src/cloudflare-client.ts` — raw HTTP-alapú kliens (nincs
 `@cloudflare/...` SDK-függőség), a Workers AI OpenAI-kompatibilis
@@ -83,13 +67,16 @@ kötelezettséget.
 az alkalmazás NINCS Cloudflare Workers-re migrálva, ez csak egy plusz
 kimenő HTTP-hívás a meglévő Vercel serverless függvényből. A
 `ProviderFallbackLlmClient` (`packages/llm/src/provider-fallback-client.ts`)
-csomagolja be: **bármilyen hiba** — 4xx/5xx, kvótatúllépés/429,
-tiltás/401/403, szolgáltatáshiba/5xx, hálózati hiba, érvénytelen
-JSON-kimenet, vagy a kért séma hiányos mezői — esetén a rendszer
-automatikusan, hangosan naplózva átvált a determinisztikus No-LLM módra —
-a pipeline sosem áll le emiatt, és a Story ilyenkor helyesen
-`is_ai_generated: false`-ként, "nem AI-fordított" jelöléssel jön létre.
-Sikeres hívás esetén a token-felhasználás, a `provider: "cloudflare"` és a
+productionben `failClosed: true` módban csomagolja be: **bármilyen hiba** —
+4xx/5xx, kvótatúllépés/429, tiltás/401/403, hálózati hiba, érvénytelen
+JSON-kimenet vagy sémahiba — visszadobódik a tartós job queue-nak. Nincs
+No-LLM cikk, nincs másodlagos provider és nincs hamis siker.
+
+A napi ingyenes kvóta kimerülését a worker külön kezeli: az aktuális job
+próbálkozásvesztés nélkül visszakerül a queue-ba, tartós circuit breaker
+aktiválódik, és a következő 00:00 UTC reset után öt perccel folytatódik a
+feldolgozás. Sikeres hívás esetén a token-felhasználás, a
+`provider: "cloudflare"` és a
 becsült USD-költség (Cloudflare listaár alapján, a tényleges napi ingyenes
 Neuron-fogyasztás nyomon követéséhez) az `llm_usage` táblába kerül.
 
@@ -98,28 +85,20 @@ Next.js szerver-futtatókörnyezet) kerül felhasználásra — az
 `apps/web/lib/env.ts` Zod-sémájában a `server` blokkban van, sosem a
 `client`-ben, tehát a böngésző felé kiszolgált JS-bundle-ba nem kerülhet be.
 
-Ha Cloudflare időközben megváltoztatja a modellkínálatot vagy a napi
-ingyenes keretet, a `CLOUDFLARE_AI_MODEL` env-változó módosítása — kód
-nélkül, Vercel-en egyszerű redeploy-jal — elég az áttéréshez.
+Az adapter stabil session-affinity fejlécet küld, így a Cloudflare
+prefix-cache az azonos statikus system promptokat nagyobb eséllyel
+újrahasznosítja. A dinamikus Story-adat mindig a statikus instrukciók után
+kerül a promptba. A normál Story LLM-hívásszáma 5-ről 3-ra csökkent:
+ténykinyerés, Writer, rövid self-check. Külön editorial rewrite csak akkor
+fut, ha a determinisztikus quality gate konkrét hibát hagyott a drafton; a
+magyar sportsajtós házi stílus fő szabályai közvetlenül a Writer statikus
+promptjába kerültek.
 
-#### `LLM_PROVIDER=gemini` / `LLM_PROVIDER=anthropic` — megtartott, jelenleg inaktív útvonalak
-
-```bash
-LLM_PROVIDER=gemini
-GEMINI_API_KEY=<Google AI Studio-ban generált ingyenes kulcs>
-```
-
-```bash
-LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=<valódi kulcs>
-```
-
-Mindkét adapter (`packages/llm/src/gemini-client.ts`,
-`packages/llm/src/client.ts` `AnthropicLlmClient`) megmarad a kódbázisban,
-teljes teszt-lefedettséggel, de jelenleg egyik sincs Vercel-en bekapcsolva —
-az Anthropic ág emellett fizetős is, csak akkor érdemes rá váltani, ha
-valós felhasználói forgalomhoz jobb minőségű, fizetős modellre van
-szükség, és ezt tudatosan jóváhagyod.
+A Cloudflare aszinkron Batch API támogatja a production modellt, de itt nem
+csökkentené a neuronfogyasztást, miközben a Fact → Writer → self-check
+lépések egymás eredményétől függenek. Emiatt nem része ennek a
+költségoptimalizálásnak; később nagyobb Paid-plan throughputnál használható
+kapacitáskiegyenlítésre, külön tartós batch-állapotgéppel.
 
 A `DATABASE_URL`-nek Neon esetén tartalmaznia kell az `sslmode=require`
 paramétert, pl. formátumban:
@@ -225,8 +204,8 @@ sort (`fetchConfig.url` = a fejlesztői RSS feed).
    ```
 
    Sikeres válasz esetén a pipeline lefutott: RSS ingest → dedup → Story
-   Merge → Fact Verification (valódi Anthropic-hívás) → Hungarian Writer
-   (valódi Anthropic-hívás) → SEO → Publish Gate → read model projection.
+   Merge → Fact Verification (Cloudflare Workers AI) → Hungarian Writer
+   (Cloudflare Workers AI) → SEO → Publish Gate → read model projection.
 
 3. Ellenőrizd az eredményt:
 
@@ -256,8 +235,8 @@ sort (`fetchConfig.url` = a fejlesztői RSS feed).
 8. curl http://localhost:3000/api/v1/stories   (vagy a főoldal böngészőben)
 ```
 
-Ez a sorrend egy friss repository-klónozás után, más előfeltétel nélkül
-(a Neon projekt és az Anthropic API kulcs meglétén túl) reprodukálható.
+Ez a sorrend egy friss repository-klónozás után, a Neon projekt és a
+Cloudflare Workers AI hitelesítés meglétével reprodukálható.
 
 ## 6. V1 üzemeltetési kiegészítések
 
@@ -268,13 +247,10 @@ Ez a sorrend egy friss repository-klónozás után, más előfeltétel nélkül
 Ha az `ADMIN_SECRET` nincs beállítva, a felület 503-mal le van tiltva.
 Vercel-en environment variable-ként állítsd be (Production + Preview).
 
-### Havi LLM költségplafon
+### Cloudflare Workers AI költségfigyelés
 
-`LLM_MONTHLY_BUDGET_USD` (alapértelmezés: 5). Minden valódi Anthropic-hívás
-token- és költségadata az `llm_usage` táblába íródik; a tárgyhónapban
-felhalmozott költség a plafon elérésekor a rendszert automatikusan No-LLM
-módra váltja (az eredeti forrásszöveg jelenik meg, "nem AI-fordított"
-jelöléssel) — a pipeline nem áll le. Aktuális havi költés lekérdezése:
+Minden sikeres Cloudflare-hívás token- és becsült költségadata az
+`llm_usage` táblába íródik. Aktuális havi költés lekérdezése:
 
 ```sql
 select coalesce(sum(cost_usd), 0) as spent_usd

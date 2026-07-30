@@ -36,6 +36,7 @@ describe("extractFacts", () => {
     expect(llm.jsonRequests).toHaveLength(1);
     const [request] = llm.jsonRequests;
     expect(request?.model).toBe(MODEL_TIERS.extraction);
+    expect(request?.maxTokens).toBe(2048);
     expect(request?.messages[0]?.content).toContain("<source_article>");
     expect(request?.messages[0]?.content).toContain("Liverpool win 3-1");
   });

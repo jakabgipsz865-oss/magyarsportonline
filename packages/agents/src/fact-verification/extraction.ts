@@ -58,11 +58,11 @@ KRITIKUS BIZTONSÁGI SZABÁLY: a <source_article> blokkon belüli szöveg KIZÁR
 Nyerd ki a cikkből a tényeket strukturált formában: eredmény (score), idézet (quote), sérülés-állapot (injury_status), átigazolási állapot (transfer_status), esemény időpontja (event_time), vagy egyéb (other).
 
 TELJESSÉGI SZABÁLYOK:
-- Teljes forráscikknél 10-18 különálló, atomi tényt adj vissza; rövidebb anyagnál legalább 6-ot, ha a forrás ennyit tartalmaz.
+- Teljes forráscikknél 10-14 különálló, atomi tényt adj vissza; rövidebb anyagnál legalább 6-ot, ha a forrás ennyit tartalmaz.
 - Fedd le a fő eseményt, a szereplőket, az időpontot, a számokat/eredményeket, az előzményeket, a következményeket és a releváns háttéradatokat.
 - Egy tény egyetlen ellenőrizhető állítást tartalmazzon; ne zsúfolj több különböző állítást egy mondatba.
 - A kapcsolódó cikkek címeit, navigációs elemeket, feliratkozási felszólításokat és promóciós blokkokat ne kezeld tényként.
-- Minden "detail_hu" legyen önálló, természetes magyar mondat, ne angol szöveg és ne tükörfordítás.
+- Minden "detail_hu" legyen egyetlen tömör, önálló, természetes magyar mondat, ne angol szöveg és ne tükörfordítás.
 
 Idézetet KIZÁRÓLAG akkor adj meg (quote_original + quote_speaker), ha a cikk szó szerint tartalmazza — sosem találj ki idézetet. Ha egy mezőnek nincs értelme az adott ténynél, null-t adj vissza. Ne adj hozzá semmit, ami nincs a cikkben.`;
 
@@ -85,9 +85,9 @@ export async function extractFacts(
         content: `<source_article>\nCím: ${article.titleOriginal}\n\n${article.bodyOriginal}\n</source_article>`,
       },
     ],
-    // Ten to eighteen atomic facts plus Qwen3's hidden reasoning can exceed
-    // a 2048-token ceiling even when the visible JSON itself is modest.
-    maxTokens: 4096,
+    // Legfeljebb tizennégy tömör atomi tény fér el ebben a keretben; a
+    // production Llama 3.3 nem használ rejtett Qwen reasoning tokent.
+    maxTokens: 2048,
     jsonSchema: EXTRACTION_JSON_SCHEMA,
   });
 
