@@ -50,6 +50,18 @@ describe("admin knowledge package", () => {
       knowledgePackage,
     );
   });
+
+  it("collapses only completely identical Source Registry records", () => {
+    const source = makeSource("Football feed", "https://example.com");
+    expect(knowledge.deduplicatePortableSources([source, { ...source }])).toEqual([source]);
+  });
+
+  it("fails closed for conflicting Source Registry records with the same key", () => {
+    const source = makeSource("Football feed", "https://example.com");
+    expect(() =>
+      knowledge.deduplicatePortableSources([source, { ...source, pollingFrequencyMinutes: 30 }]),
+    ).toThrow(/Ellentmondó Source Registry rekordok/);
+  });
 });
 
 function makePackage(): ReturnType<KnowledgeModule["parseAdminKnowledgePackage"]> {
