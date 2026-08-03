@@ -93,7 +93,7 @@ export async function extractFacts(
 
   const parsed = extractionResponseSchema.parse(result.data);
   const minimumFacts =
-    article.bodyOriginal.length >= 2500 ? 10 : article.bodyOriginal.length >= 1000 ? 6 : 1;
+    article.bodyOriginal.length >= 2500 ? 8 : article.bodyOriginal.length >= 1000 ? 6 : 1;
   if (parsed.facts.length < minimumFacts) {
     throw new Error(
       `Fact extraction returned ${parsed.facts.length} facts; expected at least ${minimumFacts} for a ${article.bodyOriginal.length}-character source`,

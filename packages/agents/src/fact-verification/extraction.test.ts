@@ -74,6 +74,29 @@ describe("extractFacts", () => {
         titleOriginal: "Full article",
         bodyOriginal: "A".repeat(2_500),
       }),
-    ).rejects.toThrow("expected at least 10");
+    ).rejects.toThrow("expected at least 8");
+  });
+
+  it("accepts eight distinct facts for a full article without an expensive retry", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: {
+        facts: Array.from({ length: 8 }, (_, index) => ({
+          fact_type: "other",
+          detail_hu: `Ellenőrzött tény ${index + 1}.`,
+          quote_original: null,
+          quote_speaker: null,
+        })),
+      },
+      inputTokens: 100,
+      outputTokens: 80,
+    });
+
+    const facts = await extractFacts(llm, {
+      titleOriginal: "Full article",
+      bodyOriginal: "A".repeat(2_500),
+    });
+
+    expect(facts).toHaveLength(8);
   });
 });
