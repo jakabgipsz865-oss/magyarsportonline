@@ -3,6 +3,12 @@ import type { Database } from "../client";
 import { pipelineJobs } from "../schema/index";
 
 export type PipelineJobRow = typeof pipelineJobs.$inferSelect;
+export interface PipelineQueueStatusCounts {
+  pending: number;
+  inProgress: number;
+  completed: number;
+  deadLetter: number;
+}
 
 /**
  * Bounded-context repository for the async pipeline sprint's durable job
@@ -19,6 +25,29 @@ export class PipelineJobRepository {
 
   async enqueue(event: unknown): Promise<void> {
     await this.db.insert(pipelineJobs).values({ event });
+  }
+
+  async getStatusCounts(): Promise<PipelineQueueStatusCounts> {
+    const rows = await this.db.execute<{
+      pending: number | string;
+      in_progress: number | string;
+      completed: number | string;
+      dead_letter: number | string;
+    }>(sql`
+      SELECT
+        count(*) FILTER (WHERE status = 'pending') AS pending,
+        count(*) FILTER (WHERE status = 'in_progress') AS in_progress,
+        count(*) FILTER (WHERE status = 'completed') AS completed,
+        count(*) FILTER (WHERE status = 'dead_letter') AS dead_letter
+      FROM ${pipelineJobs}
+    `);
+    const row = rows[0];
+    return {
+      pending: Number(row?.pending ?? 0),
+      inProgress: Number(row?.in_progress ?? 0),
+      completed: Number(row?.completed ?? 0),
+      deadLetter: Number(row?.dead_letter ?? 0),
+    };
   }
 
   /**

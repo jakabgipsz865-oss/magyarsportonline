@@ -9,6 +9,7 @@ import {
 import {
   KNOWLEDGE_REDACTION_MARKER,
   normalizePortableSourceIdentity,
+  portableEditorialCorrectionKey,
   type KnowledgeImportCounts,
   type KnowledgeImportInput,
   type PortableReviewPatternInput,
@@ -265,7 +266,7 @@ export async function buildAdminKnowledgePackage(): Promise<AdminKnowledgePackag
         correctedSentenceHu: row.correctedSentenceHu,
         note: row.note,
       };
-      const key = row.portableKey ?? digestValue(portable);
+      const key = row.portableKey ?? portableEditorialCorrectionKey(portable);
       correctionKeyById.set(row.id, key);
       return { key, ...portable, learnedAt: row.createdAt.toISOString() };
     })

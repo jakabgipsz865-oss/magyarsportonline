@@ -35,7 +35,7 @@ permissions: {}
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - name: Dispatch ingest (RSS poll + enqueue)
         env:
@@ -76,25 +76,21 @@ jobs:
           # backlog needs several calls in the same workflow run to fully
           # catch up rather than waiting for the next 5-minute tick.
           #
-          # A client-side curl timeout on this endpoint is an EXPECTED
-          # steady-state event under a real backlog, not a failure: the
-          # worker's own DB state (pipeline_jobs) is durable regardless of
-          # whether this script ever sees the HTTP response, and any job
-          # left `in_progress` by a request that got cut off is reclaimed
-          # via the stale-lock path (STALE_LOCK_MS) by the very next call
-          # -- in this run or the next scheduled tick. So: stop the loop
-          # and exit 0 rather than failing the whole workflow run.
-          for i in $(seq 1 10); do
+          # A zöld workflow csak megfigyelt, szabályos worker-választ jelent.
+          # A korábbi 90s kliens-timeout elrejtette a beragadt LLM-jobokat és
+          # hamis sikert mutatott. A Vercel route 300s maximummal fut; a
+          # kliens 290s-ig vár, és válasz nélküli timeoutnál a run piros.
+          for i in $(seq 1 4); do
             set +e
             http_code=$(curl -sS -o /tmp/jobs-body.json -w '%{http_code}' \
-              --max-time 90 \
+              --max-time 290 \
               -X POST "$BASE/api/internal/jobs/process" \
               -H "Authorization: Bearer $CRON_SECRET")
             curl_exit=$?
             set -e
             if [ "$curl_exit" -ne 0 ]; then
-              echo "jobs/process attempt $i: curl exit $curl_exit (timeout or connection issue) -- more work likely remains, will be picked up on the next call/tick. Not treating as a failure."
-              break
+              echo "jobs/process attempt $i: curl exit $curl_exit (timeout or connection issue)."
+              exit 1
             fi
             echo "jobs/process attempt $i: HTTP $http_code"
             cat /tmp/jobs-body.json
@@ -104,6 +100,11 @@ jobs:
             fi
             processed=$(python3 -c "import json;print(json.load(open('/tmp/jobs-body.json'))['processed'])" 2>/dev/null || echo 0)
             quota_deferred=$(python3 -c "import json;print(str(json.load(open('/tmp/jobs-body.json')).get('quotaDeferred', False)).lower())" 2>/dev/null || echo false)
+            dead_letter=$(python3 -c "import json;print(json.load(open('/tmp/jobs-body.json')).get('queue', {}).get('deadLetter', 0))" 2>/dev/null || echo 0)
+            if [ "$dead_letter" -gt "0" ]; then
+              echo "Pipeline dead-letter queue is not empty: $dead_letter"
+              exit 1
+            fi
             if [ "$quota_deferred" = "true" ]; then
               echo "Cloudflare daily neuron quota deferred until the reported retryAt; stopping this drain loop."
               break

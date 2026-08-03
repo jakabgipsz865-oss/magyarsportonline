@@ -3,6 +3,7 @@ import {
   containsKnowledgeRedaction,
   KNOWLEDGE_REDACTION_MARKER,
   normalizePortableSourceIdentity,
+  portableEditorialCorrectionKey,
   restoreKnowledgeRedactions,
 } from "./knowledge-portability-repository";
 
@@ -38,5 +39,22 @@ describe("knowledge portability secret handling", () => {
     expect(normalizePortableSourceIdentity(" Football feed ", "https://EXAMPLE.com/")).toBe(
       normalizePortableSourceIdentity("football FEED", "https://example.com"),
     );
+  });
+
+  it("builds a deterministic portable key for an editorial correction", () => {
+    const correction = {
+      category: "terminology" as const,
+      termEn: "super-sub",
+      originalSentenceEn: "The super-sub scored.",
+      currentSentenceHu: "A szuper csere betalált.",
+      correctedSentenceHu: "A csereember betalált.",
+      note: null,
+    };
+    expect(portableEditorialCorrectionKey(correction)).toBe(
+      portableEditorialCorrectionKey({ ...correction }),
+    );
+    expect(
+      portableEditorialCorrectionKey({ ...correction, correctedSentenceHu: "A joker betalált." }),
+    ).not.toBe(portableEditorialCorrectionKey(correction));
   });
 });

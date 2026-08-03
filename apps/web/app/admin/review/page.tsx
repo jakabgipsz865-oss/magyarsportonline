@@ -10,6 +10,7 @@ import {
   snoozeReviewItem,
 } from "../../../lib/review";
 import { listTriagedReviewItems, type TriagedReviewItem } from "../../../lib/review-triage";
+import { isEditorialCorrectionCategory } from "../../../lib/editorial-corrections";
 
 // DB-driven admin nézet — sosem prerendelt, mindig friss (a betöltéskor
 // újrafuttatja a triage-osztályozást is, lásd listTriagedReviewItems).
@@ -81,14 +82,24 @@ async function editAction(formData: FormData): Promise<void> {
   const titleHu = formData.get("titleHu");
   const leadHu = formData.get("leadHu");
   const bodyHu = formData.get("bodyHu");
+  const teachChanges = formData.get("teachChanges") === "on";
+  const correctionCategory = formData.get("correctionCategory");
+  const originalContextEn = formData.get("originalContextEn");
   if (
     typeof itemId === "string" &&
     itemId.length > 0 &&
     typeof titleHu === "string" &&
     typeof leadHu === "string" &&
-    typeof bodyHu === "string"
+    typeof bodyHu === "string" &&
+    typeof correctionCategory === "string" &&
+    isEditorialCorrectionCategory(correctionCategory) &&
+    typeof originalContextEn === "string"
   ) {
-    await editReviewItemContent(itemId, { titleHu, leadHu, bodyHu });
+    await editReviewItemContent(itemId, { titleHu, leadHu, bodyHu }, undefined, {
+      enabled: teachChanges,
+      category: correctionCategory,
+      originalContextEn,
+    });
   }
   revalidatePath("/admin/review");
 }
@@ -218,8 +229,39 @@ function ReviewCard({
                 style={{ width: "100%", padding: 6, fontFamily: "inherit" }}
               />
             </label>
+            <fieldset style={{ border: "1px solid #7aa37a", borderRadius: 6, padding: 10 }}>
+              <legend style={{ fontWeight: 600 }}>🧠 Tanítás ebből a szerkesztésből</legend>
+              <label style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <input type="checkbox" name="teachChanges" defaultChecked />
+                <span>
+                  A megváltoztatott mondatok mentése hordozható tanítóanyagként. Azonos javítás
+                  újramentése nem készít duplikációt.
+                </span>
+              </label>
+              <label style={{ display: "block", marginTop: 8 }}>
+                Javítás típusa
+                <select name="correctionCategory" defaultValue="style" style={{ marginLeft: 8 }}>
+                  <option value="slang">Szleng</option>
+                  <option value="terminology">Terminológia</option>
+                  <option value="literal_translation">Tükörfordítás</option>
+                  <option value="style">Stílus</option>
+                  <option value="grammar">Nyelvhelyesség</option>
+                  <option value="fact">Tény</option>
+                </select>
+              </label>
+              <details style={{ marginTop: 8 }}>
+                <summary style={{ cursor: "pointer" }}>Angol forráskontextus ellenőrzése</summary>
+                <textarea
+                  name="originalContextEn"
+                  defaultValue={item.trainingContextEn}
+                  rows={5}
+                  placeholder="Ha nincs automatikusan betöltött forrásszöveg, a cikk menthető, de ebből a szerkesztésből nem készül tanítóanyag."
+                  style={{ width: "100%", padding: 6, fontFamily: "inherit", marginTop: 6 }}
+                />
+              </details>
+            </fieldset>
             <button type="submit" style={{ alignSelf: "flex-start" }}>
-              💾 Mentés
+              💾 Mentés és tanítás
             </button>
           </form>
         </details>

@@ -1,4 +1,5 @@
 import { hungarianWriter, publishGate, readModelProjector } from "@magyarsportonline/agents";
+import type { EditorialCorrectionCategory, EditorialCorrectionInput } from "@magyarsportonline/db";
 import { createEventEnvelope } from "@magyarsportonline/events";
 import { createRepositories, type Repositories } from "./db";
 import { getLogger } from "./logger";
@@ -137,8 +138,126 @@ export async function snoozeReviewItem(
 }
 
 export type EditContentResult =
-  | { ok: true }
+  | { ok: true; correctionsCreated: number }
   | { ok: false; error: "not_found" | "already_resolved" | "already_published" };
+
+export interface TeachableEditOptions {
+  enabled: boolean;
+  category: EditorialCorrectionCategory;
+  originalContextEn: string;
+}
+
+interface EditableContent {
+  titleHu: string;
+  leadHu: string;
+  bodyHu: string;
+}
+
+const MAX_AUTOMATIC_CORRECTIONS_PER_EDIT = 12;
+const MAX_TRAINING_SENTENCE_CHARS = 1_500;
+const MAX_ORIGINAL_CONTEXT_CHARS = 4_000;
+
+function splitTrainingSentences(value: string): string[] {
+  return value
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function normalizedSentence(value: string): string {
+  return value.toLocaleLowerCase("hu-HU").replace(/\s+/g, " ").trim();
+}
+
+/** LCS-alapú mondatdiff: csak tényleges rossz→jó párokat tanít, puszta beszúrást/törlést nem. */
+function changedSentencePairs(before: string, after: string): Array<[string, string]> {
+  const oldSentences = splitTrainingSentences(before);
+  const newSentences = splitTrainingSentences(after);
+  const rows = oldSentences.length + 1;
+  const columns = newSentences.length + 1;
+  const lcs = Array.from({ length: rows }, () => Array<number>(columns).fill(0));
+  for (let oldIndex = oldSentences.length - 1; oldIndex >= 0; oldIndex -= 1) {
+    for (let newIndex = newSentences.length - 1; newIndex >= 0; newIndex -= 1) {
+      lcs[oldIndex]![newIndex] =
+        normalizedSentence(oldSentences[oldIndex]!) === normalizedSentence(newSentences[newIndex]!)
+          ? 1 + lcs[oldIndex + 1]![newIndex + 1]!
+          : Math.max(lcs[oldIndex + 1]![newIndex]!, lcs[oldIndex]![newIndex + 1]!);
+    }
+  }
+
+  const pairs: Array<[string, string]> = [];
+  let oldIndex = 0;
+  let newIndex = 0;
+  while (oldIndex < oldSentences.length || newIndex < newSentences.length) {
+    if (
+      oldIndex < oldSentences.length &&
+      newIndex < newSentences.length &&
+      normalizedSentence(oldSentences[oldIndex]!) === normalizedSentence(newSentences[newIndex]!)
+    ) {
+      oldIndex += 1;
+      newIndex += 1;
+      continue;
+    }
+
+    const oldChunk: string[] = [];
+    const newChunk: string[] = [];
+    while (oldIndex < oldSentences.length || newIndex < newSentences.length) {
+      if (
+        oldIndex < oldSentences.length &&
+        newIndex < newSentences.length &&
+        normalizedSentence(oldSentences[oldIndex]!) === normalizedSentence(newSentences[newIndex]!)
+      ) {
+        break;
+      }
+      if (
+        newIndex >= newSentences.length ||
+        (oldIndex < oldSentences.length &&
+          lcs[oldIndex + 1]![newIndex]! >= lcs[oldIndex]![newIndex + 1]!)
+      ) {
+        oldChunk.push(oldSentences[oldIndex]!);
+        oldIndex += 1;
+      } else {
+        newChunk.push(newSentences[newIndex]!);
+        newIndex += 1;
+      }
+    }
+    if (oldChunk.length > 0 && newChunk.length > 0) {
+      const pairCount = Math.max(oldChunk.length, newChunk.length);
+      for (let index = 0; index < pairCount; index += 1) {
+        const oldSentence = oldChunk[Math.min(index, oldChunk.length - 1)]!;
+        const newSentence = newChunk[Math.min(index, newChunk.length - 1)]!;
+        if (normalizedSentence(oldSentence) !== normalizedSentence(newSentence)) {
+          pairs.push([oldSentence, newSentence]);
+        }
+      }
+    }
+  }
+  return pairs;
+}
+
+export function buildTeachableCorrectionsFromEdit(input: {
+  storyId: string;
+  before: EditableContent;
+  after: EditableContent;
+  category: EditorialCorrectionCategory;
+  originalContextEn: string;
+}): EditorialCorrectionInput[] {
+  const originalSentenceEn = input.originalContextEn.trim().slice(0, MAX_ORIGINAL_CONTEXT_CHARS);
+  if (!originalSentenceEn) return [];
+  const pairs = [
+    ...changedSentencePairs(input.before.titleHu, input.after.titleHu),
+    ...changedSentencePairs(input.before.leadHu, input.after.leadHu),
+    ...changedSentencePairs(input.before.bodyHu, input.after.bodyHu),
+  ];
+  return pairs.slice(0, MAX_AUTOMATIC_CORRECTIONS_PER_EDIT).map(([current, corrected]) => ({
+    storyId: input.storyId,
+    category: input.category,
+    termEn: null,
+    originalSentenceEn,
+    currentSentenceHu: current.slice(0, MAX_TRAINING_SENTENCE_CHARS),
+    correctedSentenceHu: corrected.slice(0, MAX_TRAINING_SENTENCE_CHARS),
+    note: "Normál admin review során automatikusan mentett szerkesztői javítás.",
+  }));
+}
 
 /**
  * Emberi szerkesztés jóváhagyás előtt (2026-07-29, "kézzelfogható admin
@@ -150,8 +269,13 @@ export type EditContentResult =
  */
 export async function editReviewItemContent(
   itemId: string,
-  content: { titleHu: string; leadHu: string; bodyHu: string },
+  content: EditableContent,
   repos: Repositories = createRepositories(),
+  teach: TeachableEditOptions = {
+    enabled: false,
+    category: "style",
+    originalContextEn: "",
+  },
 ): Promise<EditContentResult> {
   const item = await repos.reviewQueueRepository.getById(itemId);
   if (!item) {
@@ -180,6 +304,28 @@ export async function editReviewItemContent(
     return { ok: false, error: "already_published" };
   }
 
-  getLogger().info({ itemId, storyId: item.storyId }, "review queue item content edited by human");
-  return { ok: true };
+  let correctionsCreated = 0;
+  if (teach.enabled && version) {
+    const corrections = buildTeachableCorrectionsFromEdit({
+      storyId: item.storyId,
+      before: {
+        titleHu: version.titleHu,
+        leadHu: version.leadHu,
+        bodyHu: version.bodyHu,
+      },
+      after: content,
+      category: teach.category,
+      originalContextEn: teach.originalContextEn,
+    });
+    for (const correction of corrections) {
+      await repos.editorialCorrectionRepository.create(correction);
+      correctionsCreated += 1;
+    }
+  }
+
+  getLogger().info(
+    { itemId, storyId: item.storyId, correctionsCreated },
+    "review queue item content edited by human",
+  );
+  return { ok: true, correctionsCreated };
 }

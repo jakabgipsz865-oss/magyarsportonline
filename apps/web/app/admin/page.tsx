@@ -111,6 +111,25 @@ export default async function AdminDashboardPage(): Promise<ReactNode> {
       </Link>
 
       <Link
+        href="/internal/editorial-ab-review"
+        style={{
+          display: "block",
+          border: "1px solid #1e7e34",
+          borderRadius: 8,
+          padding: 16,
+          textDecoration: "none",
+          color: "inherit",
+          maxWidth: 320,
+          marginTop: 12,
+        }}
+      >
+        <p style={{ margin: 0, fontSize: "1.25em", fontWeight: 700 }}>Magyar nyelvi tanítás</p>
+        <p style={{ margin: "4px 0 0" }}>
+          Rossz→jó mondatpárok, futballszleng és szerkesztői memória
+        </p>
+      </Link>
+
+      <Link
         href="/admin/knowledge"
         style={{
           display: "block",

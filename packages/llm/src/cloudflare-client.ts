@@ -43,6 +43,8 @@ export interface CloudflareWorkersAiClientOptions {
    * instance more often.
    */
   sessionAffinity?: string;
+  /** Egyetlen provider-hívás felső időkorlátja; megakadályozza, hogy egy job a teljes serverless requestet fogva tartsa. */
+  requestTimeoutMs?: number;
 }
 
 export type CloudflareErrorKind =
@@ -180,6 +182,7 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
   private readonly sessionAffinity: string;
+  private readonly requestTimeoutMs: number;
 
   constructor(options: CloudflareWorkersAiClientOptions) {
     this.accountId = options.accountId;
@@ -195,6 +198,7 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
     this.baseUrl = options.baseUrl ?? API_BASE;
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.sessionAffinity = options.sessionAffinity ?? "magyarsportonline-production-v1";
+    this.requestTimeoutMs = options.requestTimeoutMs ?? 45_000;
   }
 
   get modelLabel(): string {
@@ -265,12 +269,17 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
           "x-session-affinity": this.sessionAffinity,
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(this.requestTimeoutMs),
       });
     } catch (error) {
+      const timedOut =
+        error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
       throw new CloudflareApiError(
         "network",
         0,
-        `Cloudflare Workers AI network error: ${error instanceof Error ? error.message : String(error)}`,
+        timedOut
+          ? `Cloudflare Workers AI request timed out after ${this.requestTimeoutMs} ms`
+          : `Cloudflare Workers AI network error: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
 

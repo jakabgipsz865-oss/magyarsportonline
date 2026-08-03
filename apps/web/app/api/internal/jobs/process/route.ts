@@ -18,28 +18,22 @@ import { buildQueueingEmitter, dispatchJobToHandler } from "../../../../../lib/p
  * exists so the WORKER always returns cleanly before Vercel would kill it,
  * not because any individual job is expected to need it.
  *
- * `maxDuration = 300` is set optimistically, but a real production test
- * (docs/open-decisions.md #12) confirmed this project's actual enforced
- * ceiling is ~60s regardless (Vercel Fluid Compute not actually active) —
- * `BUDGET_MS` is deliberately set well under that CONFIRMED real limit, not
- * the aspirational one, so this route behaves correctly today; it drains
- * the queue faster per invocation for free if Fluid Compute is enabled
- * later, no code change needed.
+ * `maxDuration = 300` is the production request ceiling. The worker admits
+ * new jobs only during a short window, so an invocation normally executes
+ * one LLM-heavy stage and then returns. Individual Cloudflare calls are
+ * independently bounded by the provider client; even the Writer's longest
+ * generate/check/fix/check path remains below the route ceiling.
  *
- * The deadline is only checked BETWEEN jobs (not during one), so worst-case
- * wall time is BUDGET_MS plus however long the single job claimed right
- * before the deadline tripped takes to finish. A real production run
- * (docs/open-decisions.md #12, 2026-07-29) processed 34 jobs successfully
- * with BUDGET_MS=50_000 but the response itself took ~52s -- close enough
- * to the confirmed ~60.18s real ceiling that a slightly slower job could
- * have pushed the request past it. Lowered to leave a wider real margin.
+ * The deadline is checked BETWEEN jobs. It deliberately limits admission,
+ * not an already-running durable stage: a timeout becomes an explicit job
+ * failure/retry, never a green workflow with an unobserved result.
  *
  * Auth: same `Bearer CRON_SECRET` convention as every other `/api/internal/*`
  * route.
  */
 export const maxDuration = 300;
 
-const BUDGET_MS = 35_000; // wide margin under the CONFIRMED real ~60.18s ceiling
+const BUDGET_MS = 35_000; // short admission window: one slow LLM stage per worker request
 const STALE_LOCK_MS = 10 * 60_000; // an in_progress job locked longer than this is presumed abandoned
 const BASE_BACKOFF_MS = 30_000;
 const MAX_BACKOFF_MS = 30 * 60_000;
@@ -64,6 +58,7 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
     CLOUDFLARE_QUOTA_ERROR_PREFIX,
   );
   if (activeQuotaDeferral) {
+    const queue = await repos.pipelineJobRepository.getStatusCounts();
     return NextResponse.json({
       processed: 0,
       succeeded: 0,
@@ -72,6 +67,7 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
       quotaDeferred: true,
       retryAt: activeQuotaDeferral.toISOString(),
       errors: [],
+      queue,
     });
   }
 
@@ -140,6 +136,7 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
     }
   }
 
+  const queue = await repos.pipelineJobRepository.getStatusCounts();
   return NextResponse.json({
     processed,
     succeeded,
@@ -148,6 +145,7 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
     quotaDeferred,
     retryAt: quotaRetryAt,
     errors,
+    queue,
   });
 }
 
