@@ -120,6 +120,22 @@ describe("CloudflareWorkersAiLlmClient", () => {
     expect(result.data).toEqual({ title_hu: "Cím", lead_hu: "Lead" });
   });
 
+  it("accepts JSON Mode content returned by Cloudflare as an object", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        choices: [{ message: { content: { title_hu: "Cím", lead_hu: "Lead" } } }],
+        usage: { prompt_tokens: 3, completion_tokens: 2 },
+      }),
+    );
+    const client = new CloudflareWorkersAiLlmClient({
+      accountId: "acc",
+      apiToken: "tok",
+      fetchImpl,
+    });
+    const result = await client.completeJson({ ...textRequest, jsonSchema: JSON_SCHEMA });
+    expect(result.data).toEqual({ title_hu: "Cím", lead_hu: "Lead" });
+  });
+
   it("throws a schema_error when a required field is missing from the response", async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({

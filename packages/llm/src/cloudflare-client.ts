@@ -109,14 +109,23 @@ export function describeCloudflareError(error: unknown): string {
 }
 
 interface CloudflareChatCompletionResponse {
-  choices?: Array<{ message?: { content?: string } }>;
+  // JSON Mode esetén a Cloudflare OpenAI-kompatibilis végpontja a contentet
+  // kész objektumként is visszaadhatja, nem kizárólag JSON stringként.
+  choices?: Array<{ message?: { content?: unknown } }>;
   usage?: { prompt_tokens?: number; completion_tokens?: number };
   /** A Workers AI REST wrapper néha ezen az OpenAI-kompatibilis úton is felteszi a saját hibaborítékát 2xx HTTP-státusz mellett. */
   errors?: Array<{ code?: number; message?: string }>;
 }
 
 function extractText(response: CloudflareChatCompletionResponse): string {
-  return response.choices?.[0]?.message?.content ?? "";
+  const content = response.choices?.[0]?.message?.content;
+  if (typeof content === "string") {
+    return content;
+  }
+  if (content === undefined || content === null) {
+    return "";
+  }
+  return JSON.stringify(content);
 }
 
 /** A modell kimenete néha ```json fence-be csomagolva érkezik — ezt levágjuk parse előtt. */
