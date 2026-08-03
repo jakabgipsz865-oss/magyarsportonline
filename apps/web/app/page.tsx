@@ -48,8 +48,8 @@ export default async function HomePage(): Promise<ReactNode> {
           <span className="home-empty__eyebrow">Automatikus szerkesztőség</span>
           <h2 id="home-empty-title">Friss sporthírek készülnek</h2>
           <p>
-            Csak a forrásellenőrzésen, magyar nyelvi ellenőrzésen és quality gate-en átment
-            cikkek jelennek meg. A következő hírcsomag feldolgozása folyamatban van.
+            Csak a forrásellenőrzésen, magyar nyelvi ellenőrzésen és quality gate-en átment cikkek
+            jelennek meg. A következő hírcsomag feldolgozása folyamatban van.
           </p>
         </section>
       </main>
