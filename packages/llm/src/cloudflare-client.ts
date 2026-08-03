@@ -198,7 +198,7 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
     this.baseUrl = options.baseUrl ?? API_BASE;
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.sessionAffinity = options.sessionAffinity ?? "magyarsportonline-production-v1";
-    this.requestTimeoutMs = options.requestTimeoutMs ?? 45_000;
+    this.requestTimeoutMs = options.requestTimeoutMs ?? 90_000;
   }
 
   get modelLabel(): string {
