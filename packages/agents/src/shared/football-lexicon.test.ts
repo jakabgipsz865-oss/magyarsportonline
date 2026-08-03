@@ -44,6 +44,39 @@ describe("FOOTBALL_LEXICON", () => {
       expect(counts.get(category) ?? 0).toBeGreaterThanOrEqual(20);
     }
   });
+
+  it("contains the reviewed Hungarian terminology corrections and missing core terms", () => {
+    const byEnglishTerm = new Map(FOOTBALL_LEXICON.map((entry) => [entry.en, entry]));
+
+    expect(byEnglishTerm.get("through ball")).toMatchObject({
+      naturalHu: "kiugrató passz / mélységi passz",
+      avoidLiteralHu: "bedobó labda",
+    });
+    expect(byEnglishTerm.get("Golden Boot")).toMatchObject({
+      naturalHu: "Aranycipő",
+      avoidLiteralHu: "Aranycsizma",
+    });
+    expect(byEnglishTerm.get("snatch a point")?.naturalHu).not.toBe(
+      byEnglishTerm.get("rescue a point")?.naturalHu,
+    );
+
+    for (const term of [
+      "red card",
+      "yellow card",
+      "second yellow card",
+      "penalty",
+      "free kick",
+      "handball",
+      "offside",
+      "assist",
+      "captain",
+      "substitution",
+      "promotion",
+      "control the game",
+    ]) {
+      expect(byEnglishTerm.has(term), `missing reviewed lexicon term: ${term}`).toBe(true);
+    }
+  });
 });
 
 describe("findRelevantLexiconEntries", () => {
