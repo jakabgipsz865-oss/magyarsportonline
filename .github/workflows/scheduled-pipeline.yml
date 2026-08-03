@@ -1,23 +1,8 @@
-# Gyakori (5 percenkénti) automatikus ingest + pipeline-job feldolgozás a
-# production ellen (2026-07-29, aszinkron pipeline sprint,
-# docs/open-decisions.md #12) — ez a workflow VÁLTJA FEL a korábbi
-# `scheduled-ingest.yml` szerepét: az ingest lépés (`dispatch-ingest`) most
-# már csak RSS-pollozást + job enqueue-t végez (gyors, nem LLM-igényes),
-# utána pedig ugyanebben a futásban meghívja a worker végpontot
-# (`/api/internal/jobs/process`), ami a felgyülemlett job-queue-t üríti,
-# szakaszonként (dedup, story-merge, fact-verification, Hungarian Writer,
-# Editorial Rewrite, SEO, publish-gate, read-model-projector), egyenként
-# külön, retry/resume-képes lépésként — így egyetlen HTTP-timeout sem tud
-# egy teljes Story-feldolgozást megszakítani.
+# Free-tier production follow-up cycles.
 #
-# Miért 5 perc, nem 30, mint a régi `scheduled-ingest.yml`-nél: a GitHub
-# Actions ütemezett cron gyakorlati minimuma kb. 5 perc; gyakoribb
-# feldolgozás = a Story-k gyorsabban végigfutnak a láncon.
-#
-# Vercel-oldali cron (apps/web/vercel.json) változatlanul csak napi egy
-# futásra van állítva (Hobby csomag korlátja) — ez a workflow adja a valódi
-# gyakoriságot, Vercel-csomagtól függetlenül, ugyanúgy, ahogy a korábbi
-# `scheduled-ingest.yml` is tette.
+# The automatic production rollout receives first access to the daily Cloudflare
+# Workers AI free quota at 00:10 UTC. These later cycles poll new RSS sources and
+# resume the durable queue without competing for the freshly reset quota.
 #
 # Előfeltétel (repo Settings → Secrets and variables → Actions):
 #   PRODUCTION_URL  — pl. https://magyarsportonline-web.vercel.app (opcionális)
@@ -27,7 +12,7 @@ name: Scheduled pipeline (ingest + job processing)
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "15 3,9,15,21 * * *"
   workflow_dispatch:
 
 permissions: {}
@@ -74,7 +59,7 @@ jobs:
           # only drains what fits in its own ~40s budget (see
           # apps/web/app/api/internal/jobs/process/route.ts), so a real
           # backlog needs several calls in the same workflow run to fully
-          # catch up rather than waiting for the next 5-minute tick.
+          # catch up rather than waiting for the next scheduled cycle.
           #
           # A zöld workflow csak megfigyelt, szabályos worker-választ jelent.
           # A korábbi 90s kliens-timeout elrejtette a beragadt LLM-jobokat és
