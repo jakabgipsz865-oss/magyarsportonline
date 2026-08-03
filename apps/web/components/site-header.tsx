@@ -18,10 +18,18 @@ export function SiteHeader(): ReactNode {
   return (
     <header className="site-header">
       <div className="site-header__inner">
-        <Link href="/" className="site-header__brand" onClick={() => setMobileOpen(false)}>
+        <Link
+          href="/"
+          className="site-header__brand"
+          aria-label="MagyarSportOnline"
+          onClick={() => setMobileOpen(false)}
+        >
           <span className="site-header__mark" aria-hidden="true" />
-          <span className="site-header__name">
+          <span className="site-header__name site-header__name--full" aria-hidden="true">
             Magyar<b>Sport</b>Online
+          </span>
+          <span className="site-header__name site-header__name--short" aria-hidden="true">
+            MSO
           </span>
         </Link>
         <nav className="site-nav">
