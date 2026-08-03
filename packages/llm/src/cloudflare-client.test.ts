@@ -169,6 +169,27 @@ describe("CloudflareWorkersAiLlmClient", () => {
     });
     await expect(client.completeText(textRequest)).rejects.toMatchObject({ kind: "network" });
   });
+
+  it("aborts a provider call at the configured request deadline", async () => {
+    const fetchImpl = vi.fn(
+      async (_url: string | URL | Request, init?: RequestInit): Promise<Response> =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("timed out", "TimeoutError")),
+          );
+        }),
+    );
+    const client = new CloudflareWorkersAiLlmClient({
+      accountId: "acc",
+      apiToken: "tok",
+      fetchImpl,
+      requestTimeoutMs: 5,
+    });
+    await expect(client.completeText(textRequest)).rejects.toMatchObject({
+      kind: "network",
+      message: "Cloudflare Workers AI request timed out after 5 ms",
+    });
+  });
 });
 
 describe("describeCloudflareError", () => {

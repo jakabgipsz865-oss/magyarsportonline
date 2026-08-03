@@ -40,6 +40,72 @@ export interface EditorialCorrection {
   note: string | null;
 }
 
+const SEARCH_STOPWORDS = new Set([
+  "hogy",
+  "mint",
+  "majd",
+  "volt",
+  "egy",
+  "the",
+  "and",
+  "with",
+  "from",
+  "this",
+  "that",
+]);
+
+function searchableTokens(value: string): Set<string> {
+  return new Set(
+    value
+      .toLocaleLowerCase("hu-HU")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length >= 3 && !SEARCH_STOPWORDS.has(token)),
+  );
+}
+
+/**
+ * A teljes hordozható memóriából az adott cikkhez leginkább kapcsolódó
+ * javításokat választja ki. A bemeneti sorrend legfrissebb-elöl, ezért
+ * azonos relevanciánál a frissebb szerkesztői döntés nyer.
+ */
+export function selectRelevantCorrections(
+  corrections: EditorialCorrection[],
+  context: string,
+  limit = 20,
+): EditorialCorrection[] {
+  const normalizedContext = context.toLocaleLowerCase("hu-HU");
+  const contextTokens = searchableTokens(context);
+  return corrections
+    .map((correction, index) => {
+      const term = correction.termEn?.trim().toLocaleLowerCase("en-US") ?? "";
+      const flaggedHu = correction.currentSentenceHu.trim().toLocaleLowerCase("hu-HU");
+      const preferredHu = correction.correctedSentenceHu.trim().toLocaleLowerCase("hu-HU");
+      const candidateTokens = searchableTokens(
+        [
+          correction.termEn ?? "",
+          correction.originalSentenceEn,
+          correction.currentSentenceHu,
+          correction.correctedSentenceHu,
+          correction.note ?? "",
+        ].join(" "),
+      );
+      let score = 0;
+      if (term && normalizedContext.includes(term)) score += 30;
+      if (flaggedHu && normalizedContext.includes(flaggedHu)) score += 24;
+      if (preferredHu && normalizedContext.includes(preferredHu)) score += 12;
+      for (const token of candidateTokens) {
+        if (contextTokens.has(token)) score += 2;
+      }
+      if (correction.category === "slang" || correction.category === "terminology") score += 1;
+      return { correction, score, index };
+    })
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, limit)
+    .map(({ correction }) => correction);
+}
+
 /**
  * "slang"/"terminology" kategóriájú javításokból ugyanolyan alakú
  * `LexiconEntry`-ket épít, mint a kézzel írt football-lexicon.ts —

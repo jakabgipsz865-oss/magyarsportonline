@@ -12,12 +12,16 @@ import { toWriterFact } from "../hungarian-writer/facts";
 import { assessContentQuality } from "../hungarian-writer/quality-gate";
 import { selfCheckContent } from "../hungarian-writer/self-check";
 import { evaluateCorrectionApplication } from "../shared/correction-effectiveness";
-import type { EditorialCorrection } from "../shared/editorial-corrections";
+import {
+  selectRelevantCorrections,
+  type EditorialCorrection,
+} from "../shared/editorial-corrections";
 import type { AgentRunRecorder } from "../shared/with-agent-run";
 import { withAgentRun } from "../shared/with-agent-run";
 import { rewriteForStyle } from "./rewrite";
 
-/** Elég keresési alap a releváns, promptonként legfeljebb hat javítás kiválasztásához. */
+/** A teljes szerkesztői memóriából ennyi jelöltet olvasunk, majd lokálisan relevancia szerint rangsorolunk. */
+const LEARNED_CORRECTION_CANDIDATE_LIMIT = 2_000;
 const LEARNED_CORRECTIONS_LIMIT = 20;
 
 export * from "./ab-test";
@@ -108,8 +112,8 @@ export async function handleStoryContentDrafted(
         );
       } else {
         const facts = (await deps.factRepository.listByStoryId(story.id)).map(toWriterFact);
-        const learnedCorrections: EditorialCorrection[] = await deps.editorialCorrectionRepository
-          .listRecent(LEARNED_CORRECTIONS_LIMIT)
+        const correctionCandidates: EditorialCorrection[] = await deps.editorialCorrectionRepository
+          .listRecent(LEARNED_CORRECTION_CANDIDATE_LIMIT)
           .then((rows) =>
             rows.map((row) => ({
               id: row.id,
@@ -121,6 +125,18 @@ export async function handleStoryContentDrafted(
               note: row.note,
             })),
           );
+        const learnedCorrections = selectRelevantCorrections(
+          correctionCandidates,
+          [
+            ...facts.flatMap((fact) => [fact.detailHu, fact.quoteOriginal]),
+            version.titleHu,
+            version.leadHu,
+            version.bodyHu,
+          ]
+            .filter((value): value is string => Boolean(value))
+            .join("\n"),
+          LEARNED_CORRECTIONS_LIMIT,
+        );
         const rewritten = await rewriteForStyle(deps.llm, {
           facts,
           titleHu: version.titleHu,

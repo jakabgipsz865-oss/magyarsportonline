@@ -23,6 +23,8 @@ export interface PendingReviewDetail extends PendingReviewItem {
   fullArticleSourceCount: number;
   contradictions: ContradictionDetail[];
   image: ReviewImageInfo | null;
+  /** Az admin szerkesztésből automatikusan képzett rossz→jó párok angol forráskontextusa. */
+  trainingContextEn: string;
 }
 
 async function enrich(item: PendingReviewItem, repos: Repositories): Promise<PendingReviewDetail> {
@@ -62,6 +64,17 @@ async function enrich(item: PendingReviewItem, repos: Repositories): Promise<Pen
     ).length,
     contradictions,
     image,
+    trainingContextEn: [...rawArticles]
+      .sort((a, b) => {
+        if (a.contentOrigin !== b.contentOrigin) {
+          return a.contentOrigin === "full_article" ? -1 : 1;
+        }
+        return a.ingestedAt.getTime() - b.ingestedAt.getTime();
+      })
+      .slice(0, 2)
+      .map((article) => `${article.titleOriginal}\n${article.bodyOriginal}`)
+      .join("\n\n")
+      .slice(0, 4_000),
   };
 }
 

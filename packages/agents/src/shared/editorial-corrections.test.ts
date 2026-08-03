@@ -8,6 +8,7 @@ import {
   formatForbiddenTranslationsBlock,
   formatPromptExamplesBlock,
   formatRecommendedPhrasingsBlock,
+  selectRelevantCorrections,
 } from "./editorial-corrections";
 
 function correction(overrides: Partial<EditorialCorrection> = {}): EditorialCorrection {
@@ -172,5 +173,35 @@ describe("formatPromptExamplesBlock", () => {
     const block = formatPromptExamplesBlock(corrections, 3);
     expect(block).toContain("current-0");
     expect(block).not.toContain("current-3");
+  });
+});
+
+describe("selectRelevantCorrections", () => {
+  it("prefers a football term relevant to the current article over newer unrelated memory", () => {
+    const unrelated = correction({
+      id: "newer",
+      termEn: "clean sheet",
+      originalSentenceEn: "The goalkeeper kept a clean sheet.",
+      currentSentenceHu: "tiszta lap",
+      correctedSentenceHu: "nem kapott gólt",
+    });
+    const relevant = correction({ id: "older", termEn: "super-sub" });
+
+    expect(
+      selectRelevantCorrections(
+        [unrelated, relevant],
+        "The super-sub came off the bench and scored the winner.",
+        1,
+      )[0]?.id,
+    ).toBe("older");
+  });
+
+  it("keeps recent order as a deterministic fallback when nothing matches", () => {
+    const first = correction({ id: "first" });
+    const second = correction({ id: "second" });
+    expect(selectRelevantCorrections([first, second], "teljesen más sporttéma", 2)).toEqual([
+      first,
+      second,
+    ]);
   });
 });

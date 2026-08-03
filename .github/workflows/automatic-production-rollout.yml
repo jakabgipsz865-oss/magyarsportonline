@@ -14,7 +14,7 @@ permissions: {}
 jobs:
   rollout:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 90
     steps:
       - name: Enqueue full automatic regeneration
         env:
@@ -44,26 +44,26 @@ jobs:
           set -euo pipefail
           BASE="https://magyarsportonline-web.vercel.app"
           empty_passes=0
-          for i in $(seq 1 60); do
+          for i in $(seq 1 18); do
             set +e
-            code=$(curl -sS -o /tmp/jobs.json -w '%{http_code}' --max-time 90 \
+            code=$(curl -sS -o /tmp/jobs.json -w '%{http_code}' --max-time 290 \
               -X POST "$BASE/api/internal/jobs/process" \
               -H "Authorization: Bearer $CRON_SECRET")
             curl_exit=$?
             set -e
             if [ "$curl_exit" -ne 0 ]; then
-              echo "jobs/process attempt $i: curl exit $curl_exit; durable work continues server-side"
-              empty_passes=0
-              sleep 10
-              continue
+              echo "jobs/process attempt $i: curl exit $curl_exit; rollout proof cannot continue without an observed worker result"
+              exit 1
             fi
             test "$code" = "200"
             jq . /tmp/jobs.json
             processed=$(jq -r '.processed' /tmp/jobs.json)
             failed=$(jq -r '.failed' /tmp/jobs.json)
             dead_lettered=$(jq -r '.deadLettered' /tmp/jobs.json)
+            dead_letter_total=$(jq -r '.queue.deadLetter // 0' /tmp/jobs.json)
             quota_deferred=$(jq -r '.quotaDeferred // false' /tmp/jobs.json)
             test "$dead_lettered" = "0"
+            test "$dead_letter_total" = "0"
             if [ "$quota_deferred" = "true" ]; then
               echo "Cloudflare daily neuron quota deferred; stopping this rollout drain loop."
               break

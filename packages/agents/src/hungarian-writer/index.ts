@@ -22,11 +22,15 @@ import {
 import { assessContentQuality } from "./quality-gate";
 import { selfCheckContent } from "./self-check";
 import { evaluateCorrectionApplication } from "../shared/correction-effectiveness";
-import type { EditorialCorrection } from "../shared/editorial-corrections";
+import {
+  selectRelevantCorrections,
+  type EditorialCorrection,
+} from "../shared/editorial-corrections";
 import type { AgentRunRecorder } from "../shared/with-agent-run";
 import { withAgentRun } from "../shared/with-agent-run";
 
-/** Elég keresési alap a releváns, promptonként legfeljebb hat javítás kiválasztásához. */
+/** A teljes szerkesztői memóriából ennyi jelöltet olvasunk, majd lokálisan relevancia szerint rangsorolunk. */
+const LEARNED_CORRECTION_CANDIDATE_LIMIT = 2_000;
 const LEARNED_CORRECTIONS_LIMIT = 20;
 
 export * from "./facts";
@@ -94,8 +98,8 @@ export async function handleStoryFactsVerified(
             bodyHu: previousVersionRow.bodyHu,
           }
         : null;
-      const learnedCorrections: EditorialCorrection[] = await deps.editorialCorrectionRepository
-        .listRecent(LEARNED_CORRECTIONS_LIMIT)
+      const correctionCandidates: EditorialCorrection[] = await deps.editorialCorrectionRepository
+        .listRecent(LEARNED_CORRECTION_CANDIDATE_LIMIT)
         .then((rows) =>
           rows.map((row) => ({
             id: row.id,
@@ -107,6 +111,15 @@ export async function handleStoryFactsVerified(
             note: row.note,
           })),
         );
+      const correctionContext = facts
+        .flatMap((fact) => [fact.detailHu, fact.quoteOriginal])
+        .filter((value): value is string => Boolean(value))
+        .join("\n");
+      const learnedCorrections = selectRelevantCorrections(
+        correctionCandidates,
+        correctionContext,
+        LEARNED_CORRECTIONS_LIMIT,
+      );
 
       let generated = await generateStoryVersion(deps.llm, {
         facts,

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { eq, isNotNull, ne, sql } from "drizzle-orm";
 import type { Database } from "../client";
 import {
@@ -26,6 +27,17 @@ export interface PortableCorrectionInput {
   correctedSentenceHu: string;
   note: string | null;
   learnedAt: Date;
+}
+
+export type PortableCorrectionContent = Omit<PortableCorrectionInput, "key" | "learnedAt">;
+
+/**
+ * Egyetlen, környezetfüggetlen kulcs ugyanahhoz a szerkesztői javításhoz.
+ * A normál admin mentés és a tudás-import ugyanazt használja, ezért egy
+ * többször elmentett vagy visszaimportált rossz→jó pár sem duplikálódhat.
+ */
+export function portableEditorialCorrectionKey(value: PortableCorrectionContent): string {
+  return createHash("sha256").update(stableStringify(value), "utf8").digest("hex");
 }
 
 export interface PortableSourceInput {
@@ -365,7 +377,7 @@ function stableStringify(value: unknown): string {
       .map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`)
       .join(",")}}`;
   }
-  return JSON.stringify(value);
+  return JSON.stringify(value) ?? "undefined";
 }
 
 export function containsKnowledgeRedaction(value: unknown): boolean {

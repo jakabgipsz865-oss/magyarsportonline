@@ -104,9 +104,17 @@ export async function handleFactVerificationTrigger(
       });
       const articlesToExtract = sortedArticles.slice(0, EXTRACTION_LIMIT);
 
+      // A források egymástól függetlenek. A korábbi szekvenciális hívások
+      // háromszorozták a serverless faliórát; párhuzamosan a szakasz ideje a
+      // leglassabb egyetlen Cloudflare-híváshoz igazodik.
+      const extractedByArticle = await Promise.all(
+        articlesToExtract.map(async (article) => ({
+          article,
+          facts: await extractFacts(deps.llm, article),
+        })),
+      );
       const newFacts = [];
-      for (const article of articlesToExtract) {
-        const extracted = await extractFacts(deps.llm, article);
+      for (const { article, facts: extracted } of extractedByArticle) {
         for (const fact of extracted) {
           newFacts.push({
             storyId: story.id,

@@ -1,6 +1,7 @@
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import type { Database } from "../client";
 import { editorialCorrections } from "../schema/index";
+import { portableEditorialCorrectionKey } from "./knowledge-portability-repository";
 
 export type EditorialCorrectionRow = typeof editorialCorrections.$inferSelect;
 export type EditorialCorrectionCategory = EditorialCorrectionRow["category"];
@@ -25,11 +26,28 @@ export class EditorialCorrectionRepository {
   constructor(private readonly db: Database) {}
 
   async create(input: EditorialCorrectionInput): Promise<EditorialCorrectionRow> {
-    const [row] = await this.db.insert(editorialCorrections).values(input).returning();
-    if (!row) {
-      throw new Error("EditorialCorrection insert returned no row");
-    }
-    return row;
+    const portableKey = portableEditorialCorrectionKey({
+      category: input.category,
+      termEn: input.termEn,
+      originalSentenceEn: input.originalSentenceEn,
+      currentSentenceHu: input.currentSentenceHu,
+      correctedSentenceHu: input.correctedSentenceHu,
+      note: input.note,
+    });
+    const [created] = await this.db
+      .insert(editorialCorrections)
+      .values({ ...input, portableKey })
+      .onConflictDoNothing({ target: editorialCorrections.portableKey })
+      .returning();
+    if (created) return created;
+
+    const [existing] = await this.db
+      .select()
+      .from(editorialCorrections)
+      .where(eq(editorialCorrections.portableKey, portableKey))
+      .limit(1);
+    if (!existing) throw new Error("EditorialCorrection upsert returned no row");
+    return existing;
   }
 
   /** Legfrissebb elöl — a review oldal és a jövőbeli generálás egyaránt ezt a sorrendet várja. */
