@@ -34,6 +34,7 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           cat response.json
           [ "$code" = "200" ]
+          jq -e '.rawCloudflareCall.ok == true and .wrappedProductionClientCall.isFallback == false and (.wrappedProductionClientCall.errorMessage == null)' response.json > /dev/null
 
       - name: Upload result
         uses: actions/upload-artifact@v4
