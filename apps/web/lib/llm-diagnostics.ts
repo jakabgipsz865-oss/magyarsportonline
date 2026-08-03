@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import {
   CloudflareApiError,
   CloudflareWorkersAiLlmClient,
+  MODEL_TIERS,
   startOfCurrentMonthUtc,
   type JsonCompletionRequest,
 } from "@magyarsportonline/llm";
@@ -11,12 +12,12 @@ import { getLlmClient } from "./llm";
 
 /** Same shape as hungarian-writer/self-check.ts's SELF_CHECK_JSON_SCHEMA — reused here (not imported, to keep this diagnostic tool independent of that module) as a minimal, cheap, real production-matching call shape. */
 const DIAGNOSTIC_REQUEST: JsonCompletionRequest = {
-  model: env.CLOUDFLARE_AI_MODEL,
+  model: MODEL_TIERS.selfCheck,
   system:
     'Válaszolj KIZÁRÓLAG ezzel a JSON-nal, más szöveg nélkül: {"consistent": true, "fact_consistency_score": 1, "issues": []}',
   messages: [{ role: "user", content: "diagnosztikai teszthívás" }],
-  // Három rövid mezős diagnosztikai JSON; a production Llama 3.3 modellnek
-  // nincs szüksége a korábbi Qwen reasoninghez fenntartott tokenkeretre.
+  // Három rövid mezős diagnosztikai JSON; ugyanazon a free-tier 8B útvonalon fut,
+  // mint a production pipeline, így a diagnosztika sem égeti el a napi neuronkeretet.
   maxTokens: 256,
   jsonSchema: {
     type: "object",

@@ -18,7 +18,7 @@ export const DEFAULT_CLOUDFLARE_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fas
 export const FAST_CLOUDFLARE_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 
 /** A logikai gyors/olcsó tier Cloudflare-only production modellje. */
-const FAST_LOGICAL_MODEL_TIERS = new Set(["claude-haiku-4-5"]);
+const FAST_LOGICAL_MODEL_TIERS = new Set(["claude-haiku-4-5", "claude-sonnet-5"]);
 
 /** Cloudflare által dokumentált JSON Mode modellazonosítók. */
 const JSON_MODE_SUPPORTED_MODELS = new Set([
@@ -215,7 +215,7 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
   }
 
   get modelLabel(): string {
-    return this.model;
+    return FAST_CLOUDFLARE_MODEL;
   }
 
   async completeText(request: TextCompletionRequest): Promise<TextCompletionResult> {

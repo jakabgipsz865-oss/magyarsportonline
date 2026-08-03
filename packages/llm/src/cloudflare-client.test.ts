@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import {
   CloudflareApiError,
   CloudflareWorkersAiLlmClient,
-  DEFAULT_CLOUDFLARE_MODEL,
   FAST_CLOUDFLARE_MODEL,
   describeCloudflareError,
   isCloudflareDailyNeuronQuotaError,
@@ -30,12 +29,12 @@ const JSON_SCHEMA = {
 } as const;
 
 describe("CloudflareWorkersAiLlmClient", () => {
-  it("uses the default model when none is configured", () => {
+  it("reports the free-tier production model when none is configured", () => {
     const client = new CloudflareWorkersAiLlmClient({ accountId: "acc", apiToken: "tok" });
-    expect(client.modelLabel).toBe(DEFAULT_CLOUDFLARE_MODEL);
+    expect(client.modelLabel).toBe(FAST_CLOUDFLARE_MODEL);
   });
 
-  it("calls the OpenAI-compatible endpoint with Bearer auth and a supported configured model", async () => {
+  it("routes the writing tier to the free-tier model even when a larger model is configured", async () => {
     const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       expect(String(url)).toBe(
         "https://api.cloudflare.com/client/v4/accounts/acc-123/ai/v1/chat/completions",
@@ -51,7 +50,7 @@ describe("CloudflareWorkersAiLlmClient", () => {
         frequency_penalty: number;
       };
       expect(body).toMatchObject({
-        model: "@cf/meta/llama-3.1-70b-instruct",
+        model: FAST_CLOUDFLARE_MODEL,
         temperature: 0.2,
         repetition_penalty: 1.1,
         frequency_penalty: 0.2,
@@ -92,16 +91,16 @@ describe("CloudflareWorkersAiLlmClient", () => {
       jsonSchema: JSON_SCHEMA,
     });
 
-    expect(client.modelLabel).toBe(DEFAULT_CLOUDFLARE_MODEL);
+    expect(client.modelLabel).toBe(FAST_CLOUDFLARE_MODEL);
   });
 
-  it("replaces a configured model without JSON Mode support with the production-safe default", () => {
+  it("reports the free-tier model when an unsupported model is configured", () => {
     const client = new CloudflareWorkersAiLlmClient({
       accountId: "acc",
       apiToken: "tok",
       model: "@cf/qwen/qwen3-30b-a3b-fp8",
     });
-    expect(client.modelLabel).toBe(DEFAULT_CLOUDFLARE_MODEL);
+    expect(client.modelLabel).toBe(FAST_CLOUDFLARE_MODEL);
   });
 
   it("parses JSON completions, including markdown-fenced output", async () => {
