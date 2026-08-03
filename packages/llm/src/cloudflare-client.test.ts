@@ -3,6 +3,7 @@ import {
   CloudflareApiError,
   CloudflareWorkersAiLlmClient,
   DEFAULT_CLOUDFLARE_MODEL,
+  FAST_CLOUDFLARE_MODEL,
   describeCloudflareError,
   isCloudflareDailyNeuronQuotaError,
 } from "./cloudflare-client";
@@ -15,7 +16,7 @@ function jsonResponse(body: unknown, init?: { status?: number }): Response {
 }
 
 const textRequest = {
-  model: "claude-sonnet-5", // MODEL_TIERS-style logikai név — ezt a kliens nem használja fel közvetlenül
+  model: "claude-sonnet-5", // MODEL_TIERS-style logikai név — a kliens Cloudflare production modellre route-olja
   system: "system prompt",
   messages: [{ role: "user" as const, content: "hello" }],
   maxTokens: 100,
@@ -68,6 +69,30 @@ describe("CloudflareWorkersAiLlmClient", () => {
     });
     const result = await client.completeText(textRequest);
     expect(result).toEqual({ text: "válasz", inputTokens: 10, outputTokens: 5 });
+  });
+
+  it("routes the logical extraction tier to the fast Cloudflare model", async () => {
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { model: string };
+      expect(body.model).toBe(FAST_CLOUDFLARE_MODEL);
+      return jsonResponse({
+        choices: [{ message: { content: '{"title_hu":"Cím","lead_hu":"Lead"}' } }],
+        usage: { prompt_tokens: 4, completion_tokens: 3 },
+      });
+    });
+    const client = new CloudflareWorkersAiLlmClient({
+      accountId: "acc",
+      apiToken: "tok",
+      fetchImpl,
+    });
+
+    await client.completeJson({
+      ...textRequest,
+      model: "claude-haiku-4-5",
+      jsonSchema: JSON_SCHEMA,
+    });
+
+    expect(client.modelLabel).toBe(DEFAULT_CLOUDFLARE_MODEL);
   });
 
   it("replaces a configured model without JSON Mode support with the production-safe default", () => {

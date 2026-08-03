@@ -15,10 +15,14 @@ const API_BASE = "https://api.cloudflare.com/client/v4";
  * hibás JSON, majd ismétlődő cikkek készültek.
  */
 export const DEFAULT_CLOUDFLARE_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+export const FAST_CLOUDFLARE_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
+
+/** A logikai gyors/olcsó tier Cloudflare-only production modellje. */
+const FAST_LOGICAL_MODEL_TIERS = new Set(["claude-haiku-4-5"]);
 
 /** Cloudflare által dokumentált JSON Mode modellazonosítók. */
 const JSON_MODE_SUPPORTED_MODELS = new Set([
-  "@cf/meta/llama-3.1-8b-instruct-fast",
+  FAST_CLOUDFLARE_MODEL,
   "@cf/meta/llama-3.1-70b-instruct",
   "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
   "@cf/meta/llama-3-8b-instruct",
@@ -237,13 +241,23 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
     };
   }
 
+  private modelForRequest(requestedModel: string): string {
+    if (FAST_LOGICAL_MODEL_TIERS.has(requestedModel)) {
+      return FAST_CLOUDFLARE_MODEL;
+    }
+    if (JSON_MODE_SUPPORTED_MODELS.has(requestedModel)) {
+      return requestedModel;
+    }
+    return this.model;
+  }
+
   private async chatCompletion(
     request: TextCompletionRequest,
     jsonSchema: Record<string, unknown> | undefined,
   ): Promise<CloudflareChatCompletionResponse> {
     const url = `${this.baseUrl}/accounts/${encodeURIComponent(this.accountId)}/ai/v1/chat/completions`;
     const body: Record<string, unknown> = {
-      model: this.model,
+      model: this.modelForRequest(request.model),
       messages: [
         { role: "system", content: request.system },
         ...request.messages.map((message) => ({ role: message.role, content: message.content })),
