@@ -10,6 +10,12 @@ export interface PipelineQueueStatusCounts {
   deadLetter: number;
 }
 
+export interface DeadLetterSummary {
+  eventType: string;
+  lastError: string | null;
+  count: number;
+}
+
 /**
  * Bounded-context repository for the async pipeline sprint's durable job
  * queue (2026-07-29, docs/open-decisions.md #12) — see
@@ -48,6 +54,63 @@ export class PipelineJobRepository {
       completed: Number(row?.completed ?? 0),
       deadLetter: Number(row?.dead_letter ?? 0),
     };
+  }
+
+  /**
+   * Returns aggregate diagnostics only: event payloads and article content
+   * never leave the database through the recovery endpoint.
+   */
+  async getDeadLetterSummary(limit = 20): Promise<DeadLetterSummary[]> {
+    const rows = await this.db.execute<{
+      event_type: string | null;
+      last_error: string | null;
+      count: number | string;
+    }>(sql`
+      SELECT
+        COALESCE(event ->> 'type', 'unknown') AS event_type,
+        last_error,
+        count(*) AS count
+      FROM ${pipelineJobs}
+      WHERE status = 'dead_letter'
+      GROUP BY event ->> 'type', last_error
+      ORDER BY count(*) DESC, event ->> 'type'
+      LIMIT ${Math.max(1, Math.min(limit, 100))}
+    `);
+    return rows.map((row) => ({
+      eventType: row.event_type ?? "unknown",
+      lastError: row.last_error,
+      count: Number(row.count),
+    }));
+  }
+
+  /**
+   * Explicitly requeues a bounded batch after the underlying code/provider
+   * problem has been fixed. Attempts are reset because the old retry budget
+   * belongs to the previous failure condition; the previous error remains in
+   * `last_error` with an audit marker. Older jobs are recovered first.
+   */
+  async requeueDeadLetters(limit: number): Promise<number> {
+    const boundedLimit = Math.max(1, Math.min(limit, 500));
+    const rows = await this.db.execute<{ id: string }>(sql`
+      WITH selected AS (
+        SELECT id
+        FROM ${pipelineJobs}
+        WHERE status = 'dead_letter'
+        ORDER BY created_at ASC
+        LIMIT ${boundedLimit}
+        FOR UPDATE SKIP LOCKED
+      )
+      UPDATE ${pipelineJobs}
+      SET status = 'pending',
+          attempts = 0,
+          available_at = now(),
+          locked_at = NULL,
+          last_error = concat('[manual_requeue] ', COALESCE(last_error, 'no previous error')),
+          updated_at = now()
+      WHERE id IN (SELECT id FROM selected)
+      RETURNING id
+    `);
+    return rows.length;
   }
 
   /**

@@ -11,3 +11,23 @@ describe("PipelineJobRepository.findActiveDeferral", () => {
     );
   });
 });
+
+describe("PipelineJobRepository dead-letter recovery", () => {
+  it("normalizes grouped diagnostics without exposing event payloads", async () => {
+    const execute = vi.fn(async () => [
+      { event_type: "story/facts.verified", last_error: "provider timeout", count: "3" },
+    ]);
+    const repository = new PipelineJobRepository({ execute } as never);
+
+    await expect(repository.getDeadLetterSummary()).resolves.toEqual([
+      { eventType: "story/facts.verified", lastError: "provider timeout", count: 3 },
+    ]);
+  });
+
+  it("returns the exact number of jobs moved back to pending", async () => {
+    const execute = vi.fn(async () => [{ id: "job-1" }, { id: "job-2" }]);
+    const repository = new PipelineJobRepository({ execute } as never);
+
+    await expect(repository.requeueDeadLetters(100)).resolves.toBe(2);
+  });
+});
