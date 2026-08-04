@@ -85,10 +85,14 @@ jobs:
             fi
             processed=$(python3 -c "import json;print(json.load(open('/tmp/jobs-body.json'))['processed'])" 2>/dev/null || echo 0)
             quota_deferred=$(python3 -c "import json;print(str(json.load(open('/tmp/jobs-body.json')).get('quotaDeferred', False)).lower())" 2>/dev/null || echo false)
+            dead_lettered=$(python3 -c "import json;print(json.load(open('/tmp/jobs-body.json')).get('deadLettered', 0))" 2>/dev/null || echo 0)
             dead_letter=$(python3 -c "import json;print(json.load(open('/tmp/jobs-body.json')).get('queue', {}).get('deadLetter', 0))" 2>/dev/null || echo 0)
-            if [ "$dead_letter" -gt "0" ]; then
-              echo "Pipeline dead-letter queue is not empty: $dead_letter"
+            if [ "$dead_lettered" -gt "0" ]; then
+              echo "Pipeline created new dead-letter jobs in this run: $dead_lettered"
               exit 1
+            fi
+            if [ "$dead_letter" -gt "0" ]; then
+              echo "Historical dead-letter jobs awaiting controlled recovery: $dead_letter"
             fi
             if [ "$quota_deferred" = "true" ]; then
               echo "Cloudflare daily neuron quota deferred until the reported retryAt; stopping this drain loop."

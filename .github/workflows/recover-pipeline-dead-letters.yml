@@ -1,0 +1,66 @@
+name: Recover pipeline dead-letter jobs
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Maximum dead-letter jobs to requeue (1-500)"
+        required: false
+        default: "100"
+        type: string
+
+permissions: {}
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Preview dead-letter diagnostics
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          BASE="https://magyarsportonline-web.vercel.app"
+          mkdir -p evidence
+          curl -fsS --max-time 60 \
+            "$BASE/api/internal/jobs/requeue-dead-letter" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -o evidence/before.json
+          jq . evidence/before.json
+
+      - name: Requeue the bounded batch
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          LIMIT: ${{ inputs.limit }}
+        run: |
+          set -euo pipefail
+          BASE="https://magyarsportonline-web.vercel.app"
+          curl -fsS --max-time 60 -X POST \
+            "$BASE/api/internal/jobs/requeue-dead-letter?limit=$LIMIT" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "X-MSO-Requeue-Dead-Letter: 1" \
+            -o evidence/requeue.json
+          jq -e '.ok == true' evidence/requeue.json
+          jq . evidence/requeue.json
+
+      - name: Capture post-recovery diagnostics
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          BASE="https://magyarsportonline-web.vercel.app"
+          curl -fsS --max-time 60 \
+            "$BASE/api/internal/jobs/requeue-dead-letter" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -o evidence/after.json
+          jq . evidence/after.json
+
+      - name: Upload masked recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-dead-letter-recovery-${{ github.run_id }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 30
