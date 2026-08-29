@@ -52,7 +52,7 @@ describe("extractFacts", () => {
     await expect(extractFacts(llm, { titleOriginal: "T", bodyOriginal: "B" })).rejects.toThrow();
   });
 
-  it("rejects an under-extracted full article so the durable job can retry", async () => {
+  it("rejects a severely under-extracted full article so the durable job can retry", async () => {
     const llm = new FakeLlmClient();
     llm.queueJson({
       data: {
@@ -74,14 +74,14 @@ describe("extractFacts", () => {
         titleOriginal: "Full article",
         bodyOriginal: "A".repeat(2_500),
       }),
-    ).rejects.toThrow("expected at least 8");
+    ).rejects.toThrow("expected at least 6");
   });
 
-  it("accepts eight distinct facts for a full article without an expensive retry", async () => {
+  it("accepts six distinct facts for a full article without an expensive retry", async () => {
     const llm = new FakeLlmClient();
     llm.queueJson({
       data: {
-        facts: Array.from({ length: 8 }, (_, index) => ({
+        facts: Array.from({ length: 6 }, (_, index) => ({
           fact_type: "other",
           detail_hu: `Ellenőrzött tény ${index + 1}.`,
           quote_original: null,
@@ -97,6 +97,6 @@ describe("extractFacts", () => {
       bodyOriginal: "A".repeat(2_500),
     });
 
-    expect(facts).toHaveLength(8);
+    expect(facts).toHaveLength(6);
   });
 });

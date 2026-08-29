@@ -131,7 +131,9 @@ describe("runSourceIngest", () => {
 
     const results = await runSourceIngest(deps);
 
-    expect(results).toEqual([{ sourceId: SOURCE.id, ingestedCount: 1, status: "ok" }]);
+    expect(results).toEqual([
+      { sourceId: SOURCE.id, sourceName: SOURCE.name, ingestedCount: 1, status: "ok" },
+    ]);
     expect(deps.inserted).toEqual([{ sourceUrl: "https://example.com/1" }]);
     expect(deps.emitted).toHaveLength(1);
     const [event] = deps.emitted as Array<{ type: string; payload: Record<string, unknown> }>;
@@ -145,7 +147,9 @@ describe("runSourceIngest", () => {
 
     const results = await runSourceIngest(deps);
 
-    expect(results).toEqual([{ sourceId: SOURCE.id, ingestedCount: 0, status: "ok" }]);
+    expect(results).toEqual([
+      { sourceId: SOURCE.id, sourceName: SOURCE.name, ingestedCount: 0, status: "ok" },
+    ]);
     expect(deps.inserted).toEqual([]);
     expect(deps.emitted).toEqual([]);
     expect(deps.upgraded).toEqual([]);
@@ -159,7 +163,9 @@ describe("runSourceIngest", () => {
 
     const results = await runSourceIngest(deps);
 
-    expect(results).toEqual([{ sourceId: SOURCE.id, ingestedCount: 0, status: "ok" }]);
+    expect(results).toEqual([
+      { sourceId: SOURCE.id, sourceName: SOURCE.name, ingestedCount: 0, status: "ok" },
+    ]);
     expect(deps.inserted).toEqual([]);
     expect(deps.emitted).toEqual([]);
     expect(deps.upgraded).toEqual([{ id: "existing", bodyOriginal: "Body" }]);
@@ -198,8 +204,8 @@ describe("runSourceIngest", () => {
     expect(deps.inserted).toHaveLength(1);
     expect(deps.emitted).toHaveLength(1);
     expect(results).toEqual([
-      { sourceId: SOURCE.id, ingestedCount: 1, status: "ok" },
-      { sourceId: SOURCE_2.id, ingestedCount: 0, status: "ok" },
+      { sourceId: SOURCE.id, sourceName: SOURCE.name, ingestedCount: 1, status: "ok" },
+      { sourceId: SOURCE_2.id, sourceName: SOURCE_2.name, ingestedCount: 0, status: "ok" },
     ]);
     // The skipped second source was never actually fetched this run — its
     // fetch result (and therefore lastFetchedAt) must be left untouched, so
@@ -218,7 +224,9 @@ describe("runSourceIngest", () => {
 
     const results = await runSourceIngest(deps);
 
-    expect(results).toEqual([{ sourceId: SOURCE.id, ingestedCount: 0, status: "error" }]);
+    expect(results).toEqual([
+      { sourceId: SOURCE.id, sourceName: SOURCE.name, ingestedCount: 0, status: "error" },
+    ]);
     expect(deps.fetchResults).toEqual([{ sourceId: SOURCE.id, status: "error" }]);
   });
 });

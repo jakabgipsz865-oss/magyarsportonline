@@ -1,5 +1,28 @@
 import { describe, expect, it, vi } from "vitest";
-import { PipelineJobRepository } from "./pipeline-job-repository";
+import { PipelineJobRepository, queueEventIdentity } from "./pipeline-job-repository";
+
+describe("queueEventIdentity", () => {
+  it("ignores envelope churn for the same business event", () => {
+    const first = {
+      id: "first",
+      occurred_at: "2026-08-29T00:00:00.000Z",
+      type: "story/created",
+      payload: { story_id: "story-1" },
+    };
+    const second = {
+      ...first,
+      id: "second",
+      occurred_at: "2026-08-29T00:01:00.000Z",
+    };
+    expect(queueEventIdentity(first)).toBe(queueEventIdentity(second));
+  });
+
+  it("keeps materially different payloads distinct", () => {
+    expect(
+      queueEventIdentity({ type: "story/created", payload: { story_id: "story-1" } }),
+    ).not.toBe(queueEventIdentity({ type: "story/created", payload: { story_id: "story-2" } }));
+  });
+});
 
 describe("PipelineJobRepository.findActiveDeferral", () => {
   it("normalizes a raw timestamptz string to Date for the API response", async () => {
