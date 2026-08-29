@@ -88,19 +88,12 @@ export default async function AdminDashboardPage(): Promise<ReactNode> {
             <strong>Összevonási döntésre vár</strong>
             <span>Ellenőrizd, hogy két hír ugyanarról az eseményről szól-e.</span>
           </Link>
-          <Link href="/internal/editorial-ab-review" className="admin-action-card">
-            <span className="admin-action-card__icon" aria-hidden="true">
-              Aa
-            </span>
-            <strong>Nyelvi tanítás</strong>
-            <span>Javítások, futballkifejezések és szerkesztői minták kezelése.</span>
-          </Link>
           <Link href="/admin/knowledge" className="admin-action-card">
             <span className="admin-action-card__icon" aria-hidden="true">
               ↕
             </span>
-            <strong>Tudás mentése és visszaállítása</strong>
-            <span>Exportáld vagy validáltan importáld a szerkesztői tudást.</span>
+            <strong>Szerkesztői tudás</strong>
+            <span>Keresd, exportáld vagy validáltan importáld a V2 tudásbázist.</span>
           </Link>
         </div>
       </section>

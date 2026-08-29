@@ -1,3 +1,7 @@
+import {
+  EDITORIAL_KNOWLEDGE_SCHEMA_VERSION,
+  type EditorialKnowledgeRecord,
+} from "@magyarsportonline/db";
 import { FakeLlmClient, MODEL_TIERS } from "@magyarsportonline/llm";
 import { describe, expect, it } from "vitest";
 import { generateStoryVersion } from "./generation";
@@ -70,108 +74,7 @@ describe("generateStoryVersion", () => {
     expect(content).toContain("Old title");
   });
 
-  it("adds a lexicon glossary block to the system prompt when a quote contains a known football term", async () => {
-    const llm = new FakeLlmClient();
-    llm.queueJson({
-      data: { title_hu: "T", lead_hu: "L", body_hu: "B", change_summary_hu: null },
-      inputTokens: 1,
-      outputTokens: 1,
-    });
-
-    await generateStoryVersion(llm, {
-      facts: [
-        {
-          factType: "quote",
-          detailHu: "",
-          quoteOriginal: "The goalkeeper kept a clean sheet tonight.",
-          quoteSpeaker: "Manager",
-        },
-      ],
-      previousVersion: null,
-    });
-
-    expect(llm.jsonRequests[0]?.system).toContain("clean sheet");
-    expect(llm.jsonRequests[0]?.system).toContain("→");
-  });
-
-  it("adds a lexicon correction when a fact already contains a known Hungarian literal translation", async () => {
-    const llm = new FakeLlmClient();
-    llm.queueJson({
-      data: { title_hu: "T", lead_hu: "L", body_hu: "B", change_summary_hu: null },
-      inputTokens: 1,
-      outputTokens: 1,
-    });
-
-    await generateStoryVersion(llm, {
-      facts: [
-        {
-          factType: "contract",
-          detailHu: "A klub folytatja a szerződéskézbesítési tárgyalásokat.",
-          quoteOriginal: null,
-          quoteSpeaker: null,
-        },
-      ],
-      previousVersion: null,
-    });
-
-    const system = llm.jsonRequests[0]?.system ?? "";
-    expect(system).toContain("contract talks");
-    expect(system).toContain("szerződéses tárgyalások");
-  });
-
-  it("omits the lexicon block when no quote contains a known term", async () => {
-    const llm = new FakeLlmClient();
-    llm.queueJson({
-      data: { title_hu: "T", lead_hu: "L", body_hu: "B", change_summary_hu: null },
-      inputTokens: 1,
-      outputTokens: 1,
-    });
-
-    await generateStoryVersion(llm, {
-      facts: [{ factType: "score", detailHu: "3-1", quoteOriginal: null, quoteSpeaker: null }],
-      previousVersion: null,
-    });
-
-    expect(llm.jsonRequests[0]?.system).not.toContain("→");
-  });
-
-  it("adds a learned lexicon entry from a slang/terminology correction to the system prompt", async () => {
-    const llm = new FakeLlmClient();
-    llm.queueJson({
-      data: { title_hu: "T", lead_hu: "L", body_hu: "B", change_summary_hu: null },
-      inputTokens: 1,
-      outputTokens: 1,
-    });
-
-    await generateStoryVersion(llm, {
-      facts: [
-        {
-          factType: "quote",
-          detailHu: "",
-          quoteOriginal: "He is a real super-sub for this team.",
-          quoteSpeaker: "Manager",
-        },
-      ],
-      previousVersion: null,
-      learnedCorrections: [
-        {
-          id: "correction-1",
-          category: "terminology",
-          termEn: "super-sub",
-          originalSentenceEn: "He is a real super-sub for this team.",
-          currentSentenceHu: "szuper csere",
-          correctedSentenceHu: "ütőkártya a cserepadról",
-          note: "bevált csereember, aki rendszeresen eldönti a meccseket",
-        },
-      ],
-    });
-
-    const system = llm.jsonRequests[0]?.system ?? "";
-    expect(system).toContain("super-sub");
-    expect(system).toContain("ütőkártya a cserepadról");
-  });
-
-  it("adds a recommended phrasing and prompt example block from learned corrections", async () => {
+  it("adds only the supplied V2 knowledge to the system prompt", async () => {
     const llm = new FakeLlmClient();
     llm.queueJson({
       data: { title_hu: "T", lead_hu: "L", body_hu: "B", change_summary_hu: null },
@@ -182,56 +85,17 @@ describe("generateStoryVersion", () => {
     await generateStoryVersion(llm, {
       facts: [],
       previousVersion: null,
-      learnedCorrections: [
-        {
-          id: "correction-2",
-          category: "style",
-          termEn: null,
-          originalSentenceEn: "The manager praised the team's effort.",
-          currentSentenceHu: "A menedzser dicsérte a csapat erőfeszítését.",
-          correctedSentenceHu: "A vezetőedző elismerően nyilatkozott a csapat teljesítményéről.",
-          note: null,
-        },
-      ],
+      knowledge: [KNOWLEDGE],
     });
 
     const system = llm.jsonRequests[0]?.system ?? "";
-    expect(system).toContain("AJÁNLOTT MAGYAR SPORTÚJSÁGÍRÓI MEGFOGALMAZÁSOK");
-    expect(system).toContain("PROMPT PÉLDATÁR");
-    expect(system).toContain("A vezetőedző elismerően nyilatkozott a csapat teljesítményéről.");
+    expect(system).toContain("SZERKESZTŐI TUDÁS V2:");
+    expect(system).toContain("held to a draw");
+    expect(system).toContain("döntetlenre kényszerítették");
+    expect(system).toContain("döntetlenhez tartották");
   });
 
-  it("adds learned forbidden literal translations before generating a new draft", async () => {
-    const llm = new FakeLlmClient();
-    llm.queueJson({
-      data: { title_hu: "T", lead_hu: "L", body_hu: "B", change_summary_hu: null },
-      inputTokens: 1,
-      outputTokens: 1,
-    });
-
-    await generateStoryVersion(llm, {
-      facts: [],
-      previousVersion: null,
-      learnedCorrections: [
-        {
-          id: "correction-3",
-          category: "literal_translation",
-          termEn: null,
-          originalSentenceEn: "Contract talks resumed on Monday.",
-          currentSentenceHu: "szerződéskézbesítési tárgyalások",
-          correctedSentenceHu: "szerződéses tárgyalások",
-          note: null,
-        },
-      ],
-    });
-
-    const system = llm.jsonRequests[0]?.system ?? "";
-    expect(system).toContain("TILTOTT TÜKÖRFORDÍTÁSOK");
-    expect(system).toContain('NE: "szerződéskézbesítési tárgyalások"');
-    expect(system).toContain('HELYETTE: "szerződéses tárgyalások"');
-  });
-
-  it("omits learned guidance blocks when no corrections are given", async () => {
+  it("keeps an empty V2 knowledge store out of the generated prompt", async () => {
     const llm = new FakeLlmClient();
     llm.queueJson({
       data: { title_hu: "T", lead_hu: "L", body_hu: "B", change_summary_hu: null },
@@ -241,12 +105,30 @@ describe("generateStoryVersion", () => {
 
     await generateStoryVersion(llm, { facts: [], previousVersion: null });
 
-    // A SYSTEM_PROMPT egy instrukciós mondata mindig szó szerint tartalmazza
-    // mindkét blokkcímet (lásd football-lexicon.test.ts hasonló mintáját a
-    // "FUTBALLNYELVI SZÓTÁR"-ra) — ezért a tényleges, formázott blokk saját
-    // jelölőit (a felsorolásjel utáni kötőjel + idézőjel párokat) ellenőrizzük.
     const system = llm.jsonRequests[0]?.system ?? "";
-    expect(system).not.toContain("→");
-    expect(system).not.toContain('" helyett: "');
+    expect(system).not.toContain("\n\nSZERKESZTŐI TUDÁS V2:\n-");
   });
 });
+
+const KNOWLEDGE: EditorialKnowledgeRecord = {
+  schema_version: EDITORIAL_KNOWLEDGE_SCHEMA_VERSION,
+  stable_key: "football.mwe.held-to-a-draw",
+  revision: 1,
+  knowledge_type: "multi_word_expression",
+  language: { source: "en", target: "hu" },
+  sport: "football",
+  contexts: ["match_report"],
+  source_phrase: "held to a draw",
+  canonical_hu: "döntetlenre kényszerítették",
+  alternative_hu: [],
+  avoid_hu: ["döntetlenhez tartották"],
+  instruction_hu: null,
+  match_terms: ["held to a draw"],
+  confidence: 1,
+  status: "active",
+  provenance: { source: "test fixture", source_url: null, license: "editorial-original" },
+  editorial_note: null,
+  positive_examples: [],
+  negative_examples: [],
+  replaced_by: null,
+};

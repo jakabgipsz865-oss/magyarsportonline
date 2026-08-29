@@ -1,20 +1,6 @@
+import type { EditorialKnowledgeRecord } from "@magyarsportonline/db";
 import { MODEL_TIERS, type LlmClient } from "@magyarsportonline/llm";
 import { z } from "zod";
-import {
-  correctionsToForbiddenLiteralTranslations,
-  correctionsToLexiconEntries,
-  correctionsToRecommendedPhrasings,
-  formatForbiddenTranslationsBlock,
-  formatPromptExamplesBlock,
-  formatRecommendedPhrasingsBlock,
-  type EditorialCorrection,
-} from "../shared/editorial-corrections";
-import {
-  FOOTBALL_LEXICON,
-  findLexiconMatchesInHungarianText,
-  findRelevantLexiconEntries,
-  formatLexiconBlock,
-} from "../shared/football-lexicon";
 import type { WriterFact } from "./facts";
 import { removeGeneratedRepetition, type QualityIssue } from "./quality-gate";
 
@@ -46,8 +32,8 @@ export interface PreviousVersionContent {
 export interface GenerationInput {
   facts: WriterFact[];
   previousVersion: PreviousVersionContent | null;
-  /** Szerkesztő által elfogadott, korábbi javítások (legfrissebb elöl) — lásd editorial-corrections.ts. Alapértelmezés: üres lista, ha a hívó nem ad meg semmit. */
-  learnedCorrections?: EditorialCorrection[];
+  /** Az adott Storyhoz determinisztikusan kiválasztott, aktív V2 tudás. */
+  knowledge?: EditorialKnowledgeRecord[];
 }
 
 export interface GeneratedContent {
@@ -69,8 +55,7 @@ Szabályok:
 - A hangnem legyen magabiztos és tényközlő, de ne száraz. A dráma a tényekből fakadjon, ne szenzációhajhász jelzőkből.
 - Ügyelj a magyar nyelvtanra: helyes névelőhasználat (a/az), ékezetek, ragozás és mondatszerkezet.
 - Szó szerinti idézetet KIZÁRÓLAG akkor használj, ha egy tény "factType" mezője "quote", és akkor is csak a megadott "quoteOriginal"/"quoteSpeaker" alapján, forrás-hivatkozással.
-- Ha a rendszerüzenet végén egy "FUTBALLNYELVI SZÓTÁR" blokk szerepel, az a tényekben vagy idézetekben felismert angol futballkifejezések, szleng és hibás magyar tükörfordítások természetes magyar megfelelőit adja meg — ezeket használd, NE a megadott tükörfordítást.
-- Ha a rendszerüzenet végén "TILTOTT TÜKÖRFORDÍTÁSOK", "AJÁNLOTT MAGYAR SPORTÚJSÁGÍRÓI MEGFOGALMAZÁSOK" vagy "PROMPT PÉLDATÁR" blokk szerepel, azok korábbi, emberi szerkesztő által ténylegesen elfogadott javítások — a tiltott alakot SOSEM használhatod, a többi mintát pedig kövesd; ezek nálad megbízhatóbb forrásból származnak, mint egy általános stílusszabály.
+- Ha a rendszerüzenet végén "SZERKESZTŐI TUDÁS V2" blokk szerepel, kizárólag az ott megadott releváns, aktív és ellenőrzött magyar alakokat/szabályokat használd; a "KERÜLD" alakokat ne írd le.
 - Ha a felhasználói üzenet "previousVersion" mezője nem null, a "change_summary_hu" mezőben egy rövid, magyar nyelvű összefoglalót adj arról, mi változott az előző verzióhoz képest. Ha "previousVersion" null (ez az első verzió), a "change_summary_hu" legyen null.`;
 
 const QUALITY_FIX_SYSTEM_PROMPT = `Magyar sportújságíró vagy. Az előző tervezeted NEM felelt meg a minőségi elvárásoknak — a felhasználói üzenet "previousAttempt" mezője mutatja a hibás tervezetet, "issues" mezője pedig a talált problémákat (pl. "title: looks_english" = a cím angolul maradt; "lead: empty" = a lead üres; "body: matches_source_verbatim" = a törzs szó szerint megegyezik egy ténnyel; "body: repeated_paragraph" = két bekezdés ugyanazt mondja el, csak átfogalmazva; "lead: duplicates_body" = a lead szó szerint megismétlődik egy bekezdésben).
@@ -84,62 +69,37 @@ const QUALITY_FIX_SYSTEM_PROMPT = `Magyar sportújságíró vagy. Az előző ter
 - ügyelj a helyes névelőkre, ékezetekre és mondatszerkezetre;
 - kizárólag a "facts" tömbben szereplő tényekre támaszkodj, ne találj ki semmit.`;
 
-/**
- * A Hungarian Writer Agent sosem látja a nyers angol forráscikket (lásd a
- * `generateStoryVersion` docstringjét) — a facts.detailHu mezőket a Fact
- * Verification Agent már lefordítja, de productionben ezekben is
- * előfordult angolul maradt szakkifejezés és hibás magyar tükörfordítás.
- * Ezért a lexikont a detailHu mezők és a szó szerint megőrzött idézetek
- * (`quoteOriginal`) együttese ellen illesztjük.
- */
-function buildLexiconBlock(facts: WriterFact[], learnedCorrections: EditorialCorrection[]): string {
-  const sourceText = facts
-    .flatMap((fact) => [fact.detailHu, fact.quoteOriginal])
-    .filter((text): text is string => Boolean(text))
-    .join("\n");
-  if (!sourceText) {
-    return "";
+/** A determinisztikusan kiválasztott V2 rekordok korlátos promptblokkja. */
+export function formatEditorialKnowledgeBlock(records: EditorialKnowledgeRecord[]): string {
+  const lines: string[] = [];
+  for (const record of records.slice(0, 20)) {
+    const guidance = [
+      record.source_phrase ? `EN: "${record.source_phrase}"` : null,
+      record.canonical_hu ? `HASZNÁLD: "${record.canonical_hu}"` : null,
+      record.alternative_hu.length > 0 ? `ALTERNATÍVA: ${record.alternative_hu.join("; ")}` : null,
+      record.avoid_hu.length > 0 ? `KERÜLD: ${record.avoid_hu.join("; ")}` : null,
+      record.instruction_hu ? `SZABÁLY: ${record.instruction_hu}` : null,
+      record.positive_examples[0]
+        ? `PÉLDA: "${record.positive_examples[0].source_text}" → "${record.positive_examples[0].output_hu}"`
+        : null,
+    ].filter(Boolean);
+    const candidate = `- [${record.stable_key}] ${guidance.join(" | ")}`;
+    const next = `\n\nSZERKESZTŐI TUDÁS V2:\n${[...lines, candidate].join("\n")}`;
+    if (next.length > 6_000) break;
+    lines.push(candidate);
   }
-  const combinedLexicon = [...FOOTBALL_LEXICON, ...correctionsToLexiconEntries(learnedCorrections)];
-  const entries = [
-    ...findRelevantLexiconEntries(sourceText, 12, combinedLexicon),
-    ...findLexiconMatchesInHungarianText(sourceText, combinedLexicon),
-  ]
-    .filter(
-      (entry, index, all) => all.findIndex((candidate) => candidate.en === entry.en) === index,
-    )
-    .slice(0, 12);
-  const block = formatLexiconBlock(entries);
-  return block ? `\n\n${block}` : "";
-}
-
-/** A statikus lexikonon túl a szerkesztő eddig elfogadott javításaiból is épít egy blokkot — lásd editorial-corrections.ts. */
-function buildLearnedGuidanceBlock(learnedCorrections: EditorialCorrection[]): string {
-  const forbiddenBlock = formatForbiddenTranslationsBlock(
-    correctionsToForbiddenLiteralTranslations(learnedCorrections).slice(0, 6),
-  );
-  const phrasingsBlock = formatRecommendedPhrasingsBlock(
-    correctionsToRecommendedPhrasings(learnedCorrections),
-    6,
-  );
-  const examplesBlock = formatPromptExamplesBlock(learnedCorrections, 6);
-  const blocks = [forbiddenBlock, phrasingsBlock, examplesBlock].filter(Boolean);
-  return blocks.length > 0 ? `\n\n${blocks.join("\n\n")}` : "";
+  return lines.length > 0 ? `\n\nSZERKESZTŐI TUDÁS V2:\n${lines.join("\n")}` : "";
 }
 
 async function runGenerationCall(
   llm: LlmClient,
   system: string,
   userContent: unknown,
-  facts: WriterFact[],
-  learnedCorrections: EditorialCorrection[],
+  knowledge: EditorialKnowledgeRecord[],
 ): Promise<GeneratedContent> {
   const result = await llm.completeJson({
     model: MODEL_TIERS.writing,
-    system:
-      system +
-      buildLexiconBlock(facts, learnedCorrections) +
-      buildLearnedGuidanceBlock(learnedCorrections),
+    system: system + formatEditorialKnowledgeBlock(knowledge),
     messages: [{ role: "user", content: JSON.stringify(userContent) }],
     // A kimenet 900-1500 karakteres cikk és négy rövid JSON-mező. A
     // production Llama 3.3 nem használ rejtett Qwen reasoning tokent, ezért
@@ -174,8 +134,7 @@ export async function generateStoryVersion(
       facts: input.facts,
       previousVersion: input.previousVersion,
     },
-    input.facts,
-    input.learnedCorrections ?? [],
+    input.knowledge ?? [],
   );
 }
 
@@ -203,7 +162,6 @@ export async function regenerateWithQualityFix(
       previousAttempt: input.previousAttempt,
       issues: input.issues.map((issue) => `${issue.field}: ${issue.kind}`),
     },
-    input.facts,
-    input.learnedCorrections ?? [],
+    input.knowledge ?? [],
   );
 }

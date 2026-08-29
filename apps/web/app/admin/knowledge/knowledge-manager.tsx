@@ -1,82 +1,85 @@
 "use client";
 
-import { useState, type ChangeEvent, type ReactNode } from "react";
-
-interface ImportCounts {
-  corrections: { create: number; unchanged: number };
-  sources: { create: number; update: number; unchanged: number; activationChanges: number };
-  reviewPatterns: { create: number; update: number; unchanged: number };
-}
+import type { EditorialKnowledgeRecord } from "@magyarsportonline/db";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, type ChangeEvent, type ReactNode } from "react";
 
 interface ImportPreview {
   digest: string;
-  exportedAt: string;
-  applicationCommit: string;
-  staticKnowledgeCompatible: boolean;
-  counts: ImportCounts;
-  warnings: string[];
-  sourceActivationRequested: boolean;
+  counts: { new: number; update: number; duplicate: number; conflict: number; invalid: number };
+  decisions: Array<{
+    index: number | null;
+    stableKey: string | null;
+    classification: "new" | "update" | "duplicate" | "conflict" | "invalid";
+    reason: string | null;
+  }>;
+  applied?: boolean;
+  importStatus?: "applied" | "blocked" | "duplicate";
 }
 
 interface ApiResponse {
   ok: boolean;
   error?: string;
-  mode?: "preview" | "apply";
   result?: ImportPreview;
 }
 
 const MAX_BYTES = 10 * 1024 * 1024;
+const resultLabels = {
+  new: "Új",
+  update: "Frissül",
+  duplicate: "Duplikált",
+  conflict: "Konfliktus",
+  invalid: "Hibás",
+} as const;
 
-export function KnowledgeManager(): ReactNode {
+export function KnowledgeManager({
+  initialCounts,
+  initialRecords,
+}: {
+  initialCounts: Record<"active" | "draft" | "deprecated", number>;
+  initialRecords: EditorialKnowledgeRecord[];
+}): ReactNode {
+  const router = useRouter();
   const [rawPackage, setRawPackage] = useState("");
   const [fileName, setFileName] = useState("");
   const [preview, setPreview] = useState<ImportPreview | null>(null);
-  const [previewActivation, setPreviewActivation] = useState(false);
-  const [applySourceActivation, setApplySourceActivation] = useState(false);
   const [status, setStatus] = useState<"idle" | "previewing" | "applying" | "applied">("idle");
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const visibleRecords = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase("hu-HU");
+    if (!needle) return initialRecords;
+    return initialRecords.filter((record) =>
+      [record.stable_key, record.source_phrase, record.canonical_hu, record.knowledge_type]
+        .filter(Boolean)
+        .some((value) => value!.toLocaleLowerCase("hu-HU").includes(needle)),
+    );
+  }, [initialRecords, query]);
 
   async function onFileChange(event: ChangeEvent<HTMLInputElement>): Promise<void> {
     setError("");
     setPreview(null);
     setStatus("idle");
     const file = event.target.files?.[0];
-    if (!file) {
-      setRawPackage("");
-      setFileName("");
-      return;
-    }
+    if (!file) return;
+    setFileName(file.name);
     if (file.size > MAX_BYTES) {
-      setError("A fájl mérete legfeljebb 10 MB lehet.");
       setRawPackage("");
-      setFileName(file.name);
+      setError("A fájl mérete legfeljebb 10 MB lehet.");
       return;
     }
     setRawPackage(await file.text());
-    setFileName(file.name);
   }
 
   async function requestImport(mode: "preview" | "apply"): Promise<void> {
-    if (!rawPackage) {
-      setError("Előbb válassz ki egy JSON tudáscsomagot.");
-      return;
-    }
+    if (!rawPackage) return setError("Előbb válassz ki egy JSON tudáscsomagot.");
+    if (mode === "apply" && !preview) return setError("Előbb készíts ellenőrzést.");
     setError("");
     setStatus(mode === "preview" ? "previewing" : "applying");
-    const params = new URLSearchParams({
-      mode,
-      applySourceActivation: String(applySourceActivation),
-    });
-    if (mode === "apply") {
-      if (!preview || previewActivation !== applySourceActivation) {
-        setError("Az aktuális aktiválási beállítással előbb új előnézetet kell készíteni.");
-        setStatus("idle");
-        return;
-      }
-      params.set("expectedDigest", preview.digest);
-    }
+    const params = new URLSearchParams({ mode });
+    if (mode === "apply") params.set("expectedDigest", preview!.digest);
     try {
-      const response = await fetch(`/api/admin/knowledge/import?${params.toString()}`, {
+      const response = await fetch(`/api/admin/knowledge/import?${params}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json; charset=utf-8",
@@ -90,168 +93,138 @@ export function KnowledgeManager(): ReactNode {
         throw new Error(payload.error ?? "Az import ellenőrzése sikertelen.");
       }
       setPreview(payload.result);
-      setPreviewActivation(applySourceActivation);
-      setStatus(mode === "apply" ? "applied" : "idle");
+      setStatus(mode === "apply" && payload.result.applied ? "applied" : "idle");
+      if (mode === "apply" && payload.result.applied) router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Ismeretlen import hiba.");
       setStatus("idle");
     }
   }
 
+  const blocked = Boolean(preview && (preview.counts.conflict > 0 || preview.counts.invalid > 0));
+
   return (
     <div>
       <section style={cardStyle}>
-        <h2 style={{ marginTop: 0 }}>Export</h2>
-        <p>
-          Egyetlen, verziózott és ember által olvasható JSON-fájlba menti a futballlexikont,
-          szerkesztői szabályokat, tanult korrekciókat, Source Registryt, hitelességi/publikálási
-          szabályokat és review-mintákat.
-        </p>
-        <a
-          href="/api/admin/knowledge/export"
-          download
-          style={{ ...buttonStyle, display: "inline-block", textDecoration: "none" }}
-        >
-          Tudáscsomag letöltése
-        </a>
-        <p style={mutedStyle}>
-          Biztonság: API-kulcs, token, jelszó és más titok nem kerül az exportba.
-        </p>
+        <h2 style={{ marginTop: 0 }}>Tudásbázis</h2>
+        <div className="admin-metric-grid">
+          <StatusCard label="Aktív" value={initialCounts.active} />
+          <StatusCard label="Tervezet" value={initialCounts.draft} />
+          <StatusCard label="Kivezetett" value={initialCounts.deprecated} />
+        </div>
+        <label>
+          <strong>Keresés az utolsó 100 rekordban</strong>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Kulcs, angol kifejezés vagy magyar alak"
+            style={searchStyle}
+          />
+        </label>
+        <ul style={{ paddingLeft: 20 }}>
+          {visibleRecords.slice(0, 30).map((record) => (
+            <li key={record.stable_key} style={{ marginBottom: 8 }}>
+              <code>{record.stable_key}</code> · {record.status} ·{" "}
+              {record.source_phrase ?? "szabály"}
+              {record.canonical_hu ? ` → ${record.canonical_hu}` : ""}
+            </li>
+          ))}
+        </ul>
+        {initialRecords.length === 0 ? <p style={mutedStyle}>A V2 tudásbázis még üres.</p> : null}
       </section>
 
       <section style={cardStyle}>
-        <h2 style={{ marginTop: 0 }}>Import</h2>
-        <p>
-          Az előnézet nem ír adatot. Az alkalmazás tranzakciós és idempotens; meglévő tudást nem
-          töröl.
-        </p>
-        <label style={{ display: "block", marginBottom: 12 }}>
-          <strong>JSON tudáscsomag</strong>
-          <br />
-          <input type="file" accept="application/json,.json" onChange={onFileChange} />
-        </label>
+        <h2 style={{ marginTop: 0 }}>Tudás importálása</h2>
+        <p>JSON kiválasztása → ellenőrzés → eredmények áttekintése → alkalmazás.</p>
+        <input type="file" accept="application/json,.json" onChange={onFileChange} />
         {fileName ? <p style={mutedStyle}>Kiválasztva: {fileName}</p> : null}
-        <label
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 8,
-            padding: 10,
-            border: "1px solid #d8b25c",
-            background: "#fffbe6",
-            borderRadius: 6,
-            marginBottom: 12,
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={applySourceActivation}
-            onChange={(event) => setApplySourceActivation(event.target.checked)}
-          />
-          <span>
-            <strong>Source Registry aktív/inaktív állapotainak alkalmazása</strong>
-            <br />
-            <small>
-              Bekapcsolva egy importált forrás production ingestet indíthat. Maszkolt titkot
-              tartalmazó új forrás ettől függetlenül inaktív marad.
-            </small>
-          </span>
-        </label>
         <button
           type="button"
           onClick={() => void requestImport("preview")}
           disabled={!rawPackage || status === "previewing" || status === "applying"}
           style={buttonStyle}
         >
-          {status === "previewing" ? "Ellenőrzés…" : "Import előnézet"}
+          {status === "previewing" ? "Ellenőrzés…" : "Ellenőrzés / dry-run"}
         </button>
       </section>
 
-      {error ? (
-        <p role="alert" style={{ ...messageStyle, borderColor: "#cf222e", background: "#fff0f0" }}>
-          <strong>Hiba:</strong> {error}
-        </p>
-      ) : null}
-
+      {error ? <p style={errorStyle}>Hiba: {error}</p> : null}
       {preview ? (
         <section style={cardStyle}>
-          <h2 style={{ marginTop: 0 }}>{status === "applied" ? "Import kész" : "Előnézet"}</h2>
-          <p>
-            Export: {new Date(preview.exportedAt).toLocaleString("hu-HU")} · commit:{" "}
-            <code>{preview.applicationCommit.slice(0, 12)}</code>
-          </p>
-          <p>
-            Kódszabály-kompatibilitás:{" "}
-            <strong style={{ color: preview.staticKnowledgeCompatible ? "#1a7f37" : "#9a6700" }}>
-              {preview.staticKnowledgeCompatible ? "azonos" : "eltérő verzió"}
-            </strong>
-          </p>
-          <table style={{ borderCollapse: "collapse", width: "100%", marginBottom: 16 }}>
-            <thead>
-              <tr>
-                <th style={cellStyle}>Adatkör</th>
-                <th style={cellStyle}>Új</th>
-                <th style={cellStyle}>Frissül</th>
-                <th style={cellStyle}>Változatlan</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td style={cellStyle}>Szerkesztői korrekciók</td>
-                <td style={cellStyle}>{preview.counts.corrections.create}</td>
-                <td style={cellStyle}>0</td>
-                <td style={cellStyle}>{preview.counts.corrections.unchanged}</td>
-              </tr>
-              <tr>
-                <td style={cellStyle}>Source Registry</td>
-                <td style={cellStyle}>{preview.counts.sources.create}</td>
-                <td style={cellStyle}>{preview.counts.sources.update}</td>
-                <td style={cellStyle}>{preview.counts.sources.unchanged}</td>
-              </tr>
-              <tr>
-                <td style={cellStyle}>Review tanulási minták</td>
-                <td style={cellStyle}>{preview.counts.reviewPatterns.create}</td>
-                <td style={cellStyle}>{preview.counts.reviewPatterns.update}</td>
-                <td style={cellStyle}>{preview.counts.reviewPatterns.unchanged}</td>
-              </tr>
-            </tbody>
-          </table>
-          <ul>
-            {preview.warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
+          <h2 style={{ marginTop: 0 }}>{status === "applied" ? "Import kész" : "Eredmény"}</h2>
+          <div className="admin-metric-grid">
+            {Object.entries(resultLabels).map(([key, label]) => (
+              <StatusCard
+                key={key}
+                label={label}
+                value={preview.counts[key as keyof ImportPreview["counts"]]}
+              />
             ))}
-          </ul>
-          {status !== "applied" ? (
+          </div>
+          {preview.decisions.some(
+            (item) => item.classification === "conflict" || item.classification === "invalid",
+          ) ? (
+            <ul style={{ color: "#9a1c1c" }}>
+              {preview.decisions
+                .filter(
+                  (item) => item.classification === "conflict" || item.classification === "invalid",
+                )
+                .map((item, index) => (
+                  <li key={`${item.stableKey ?? "package"}-${index}`}>
+                    <strong>{resultLabels[item.classification]}</strong>:{" "}
+                    {item.stableKey ?? "csomag"}
+                    {item.reason ? ` — ${item.reason}` : ""}
+                  </li>
+                ))}
+            </ul>
+          ) : null}
+          {status === "applied" ? (
+            <p style={successStyle}>
+              {preview.importStatus === "duplicate"
+                ? "A csomag már teljesen megtalálható; nem jött létre duplikáció."
+                : "A V2 tudáscsomag tranzakciósan alkalmazva."}
+            </p>
+          ) : (
             <button
               type="button"
               onClick={() => void requestImport("apply")}
-              disabled={status === "applying" || previewActivation !== applySourceActivation}
-              style={{ ...buttonStyle, background: "#1a7f37" }}
+              disabled={blocked || status === "applying"}
+              style={{ ...buttonStyle, background: blocked ? "#777" : "#1a7f37" }}
             >
-              {status === "applying" ? "Importálás…" : "Ellenőrzött import alkalmazása"}
+              {status === "applying" ? "Importálás…" : "Import alkalmazása"}
             </button>
-          ) : (
-            <p
-              role="status"
-              style={{ ...messageStyle, borderColor: "#1a7f37", background: "#effbef" }}
-            >
-              A tudáscsomag tranzakciósan importálva. Ugyanez a fájl újra alkalmazható duplikáció
-              nélkül.
-            </p>
           )}
+          {blocked ? (
+            <p style={errorStyle}>Konfliktus vagy hibás rekord miatt az import blokkolva van.</p>
+          ) : null}
         </section>
       ) : null}
+
+      <section style={cardStyle}>
+        <h2 style={{ marginTop: 0 }}>Export / backup</h2>
+        <p>Csak az Editorial Knowledge V2 rekordjai kerülnek a verziózott JSON-csomagba.</p>
+        <a
+          href="/api/admin/knowledge/export"
+          download
+          style={{ ...buttonStyle, textDecoration: "none" }}
+        >
+          V2 tudáscsomag letöltése
+        </a>
+      </section>
     </div>
   );
 }
 
-const cardStyle = {
-  border: "1px solid #ccc",
-  borderRadius: 8,
-  padding: 16,
-  marginBottom: 16,
-} as const;
+function StatusCard({ label, value }: { label: string; value: number }): ReactNode {
+  return (
+    <div className="admin-metric-card">
+      <span className="admin-metric-card__count mono">{value}</span>
+      <strong className="admin-metric-card__label">{label}</strong>
+    </div>
+  );
+}
 
+const cardStyle = { border: "1px solid #ccc", borderRadius: 8, padding: 16, marginBottom: 16 };
 const buttonStyle = {
   border: 0,
   borderRadius: 6,
@@ -261,7 +234,7 @@ const buttonStyle = {
   cursor: "pointer",
   fontWeight: 600,
 } as const;
-
-const mutedStyle = { color: "#666", fontSize: "0.9em" } as const;
-const messageStyle = { border: "1px solid", borderRadius: 6, padding: 12 } as const;
-const cellStyle = { border: "1px solid #ccc", padding: 8, textAlign: "left" } as const;
+const searchStyle = { display: "block", width: "100%", margin: "8px 0 16px", padding: 10 };
+const mutedStyle = { color: "#666", fontSize: "0.9em" };
+const errorStyle = { border: "1px solid #cf222e", background: "#fff0f0", padding: 12 };
+const successStyle = { border: "1px solid #1a7f37", background: "#effbef", padding: 12 };

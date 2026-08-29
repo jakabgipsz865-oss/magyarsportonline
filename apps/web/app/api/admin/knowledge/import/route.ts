@@ -32,17 +32,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (mode !== "preview" && mode !== "apply") {
       return NextResponse.json({ ok: false, error: "Ismeretlen import mód." }, { status: 400 });
     }
-    const applySourceActivation =
-      request.nextUrl.searchParams.get("applySourceActivation") === "true";
     const raw = await request.text();
     const knowledgePackage = parseAdminKnowledgePackage(raw);
     const result =
       mode === "preview"
-        ? await previewAdminKnowledgeImport(knowledgePackage, applySourceActivation)
+        ? await previewAdminKnowledgeImport(knowledgePackage)
         : await applyAdminKnowledgeImport(
             knowledgePackage,
             request.nextUrl.searchParams.get("expectedDigest") ?? "",
-            applySourceActivation,
           );
     return NextResponse.json(
       { ok: true, mode, result },

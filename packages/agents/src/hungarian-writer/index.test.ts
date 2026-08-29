@@ -1,4 +1,10 @@
-import type { Fact, NewStoryVersionInput, StoryVersion } from "@magyarsportonline/db";
+import {
+  EDITORIAL_KNOWLEDGE_SCHEMA_VERSION,
+  type EditorialKnowledgeRecord,
+  type Fact,
+  type NewStoryVersionInput,
+  type StoryVersion,
+} from "@magyarsportonline/db";
 import { createEventEnvelope } from "@magyarsportonline/events";
 import {
   FakeLlmClient,
@@ -49,31 +55,39 @@ const FACT: Fact = {
   extractedAt: new Date(),
 };
 
-const LEARNED_CORRECTION = {
-  id: "correction-1",
-  storyId: "some-other-story",
-  portableKey: null,
-  category: "terminology" as const,
-  termEn: "super-sub",
-  originalSentenceEn: "He is a real super-sub for this team.",
-  currentSentenceHu: "szuper csere",
-  correctedSentenceHu: "ütőkártya a cserepadról",
-  note: null,
-  createdAt: new Date(),
+const V2_KNOWLEDGE: EditorialKnowledgeRecord = {
+  schema_version: EDITORIAL_KNOWLEDGE_SCHEMA_VERSION,
+  stable_key: "football.mwe.super-sub",
+  revision: 1,
+  knowledge_type: "multi_word_expression",
+  language: { source: "en", target: "hu" },
+  sport: "football",
+  contexts: ["quote"],
+  source_phrase: "super-sub",
+  canonical_hu: "eredményes csereember",
+  alternative_hu: [],
+  avoid_hu: ["szuper csere"],
+  instruction_hu: null,
+  match_terms: ["super-sub"],
+  confidence: 1,
+  status: "active",
+  provenance: { source: "test fixture", source_url: null, license: "editorial-original" },
+  editorial_note: null,
+  positive_examples: [],
+  negative_examples: [],
+  replaced_by: null,
 };
 
 function buildDeps(overrides?: {
   previousVersion?: { titleHu: string; leadHu: string; bodyHu: string } | null;
-  learnedCorrections?: (typeof LEARNED_CORRECTION)[];
+  knowledge?: EditorialKnowledgeRecord[];
 }): HungarianWriterDeps & {
   emitted: unknown[];
   createNextVersionCalls: unknown[];
-  applicationCreateCalls: unknown[];
   llm: FakeLlmClient;
 } {
   const emitted: unknown[] = [];
   const createNextVersionCalls: unknown[] = [];
-  const applicationCreateCalls: unknown[] = [];
   const llm = new FakeLlmClient();
 
   const previousVersion =
@@ -135,22 +149,8 @@ function buildDeps(overrides?: {
       ),
     },
     factRepository: { listByStoryId: vi.fn(async () => [FACT]) },
-    editorialCorrectionRepository: {
-      listRecent: vi.fn(async () => overrides?.learnedCorrections ?? []),
-    },
-    editorialCorrectionApplicationRepository: {
-      create: vi.fn(async (input: unknown) => {
-        applicationCreateCalls.push(input);
-        return {
-          id: "application-1",
-          correctionId: "correction-1",
-          storyId: STORY.id,
-          stage: "hungarian_writer" as const,
-          verdict: "applied" as const,
-          evidence: null,
-          detectedAt: new Date(),
-        };
-      }),
+    editorialKnowledgeRepository: {
+      findRelevant: vi.fn(async () => overrides?.knowledge ?? []),
     },
     llm,
     agentRunRepository: { record: vi.fn(async () => undefined) },
@@ -164,7 +164,6 @@ function buildDeps(overrides?: {
     }),
     emitted,
     createNextVersionCalls,
-    applicationCreateCalls,
   };
 }
 
@@ -398,11 +397,12 @@ describe("handleStoryFactsVerified", () => {
     await expect(handleStoryFactsVerified(deps, triggerEvent())).rejects.toThrow("not found");
   });
 
-  it("records an 'applied' correction-application event when the generated body uses the corrected phrasing", async () => {
-    const deps = buildDeps({ learnedCorrections: [LEARNED_CORRECTION] });
+  it("passes relevant active V2 knowledge to the Writer without a legacy correction dependency", async () => {
+    const deps = buildDeps({ knowledge: [V2_KNOWLEDGE] });
     deps.factRepository.listByStoryId = vi.fn(async () => [
       {
         ...FACT,
+        factType: "quote",
         payload: {
           detail_hu: "",
           quote_original: "He is a real super-sub for this team.",
@@ -410,62 +410,14 @@ describe("handleStoryFactsVerified", () => {
         },
       },
     ]);
-    queueGeneration(deps.llm, { body_hu: "A csapat ütőkártya a cserepadról embere döntött." });
-    queueSelfCheck(deps.llm, true, 1);
-
-    await handleStoryFactsVerified(deps, triggerEvent());
-
-    expect(deps.applicationCreateCalls).toEqual([
-      expect.objectContaining({
-        correctionId: "correction-1",
-        storyId: STORY.id,
-        stage: "hungarian_writer",
-        verdict: "applied",
-      }),
-    ]);
-  });
-
-  it("records a 'not_applied' correction-application event when the old, flagged phrasing recurs", async () => {
-    const deps = buildDeps({ learnedCorrections: [LEARNED_CORRECTION] });
-    deps.factRepository.listByStoryId = vi.fn(async () => [
-      {
-        ...FACT,
-        payload: {
-          detail_hu: "",
-          quote_original: "He is a real super-sub for this team.",
-          quote_speaker: "Manager",
-        },
-      },
-    ]);
-    queueGeneration(deps.llm, { body_hu: "A csapat szuper csere embere döntött." });
-    queueSelfCheck(deps.llm, true, 1);
-
-    await handleStoryFactsVerified(deps, triggerEvent());
-
-    expect(deps.applicationCreateCalls).toEqual([
-      expect.objectContaining({
-        correctionId: "correction-1",
-        verdict: "not_applied",
-      }),
-    ]);
-  });
-
-  it("records no correction-application event when the correction's topic never comes up", async () => {
-    const deps = buildDeps({ learnedCorrections: [LEARNED_CORRECTION] });
     queueGeneration(deps.llm);
     queueSelfCheck(deps.llm, true, 1);
 
     await handleStoryFactsVerified(deps, triggerEvent());
 
-    expect(deps.applicationCreateCalls).toHaveLength(0);
-  });
-
-  it("never measures correction application for a No-LLM passthrough", async () => {
-    const deps = buildDeps({ learnedCorrections: [LEARNED_CORRECTION] });
-    deps.llm = new NoLlmClient() as unknown as FakeLlmClient;
-
-    await handleStoryFactsVerified(deps, triggerEvent());
-
-    expect(deps.applicationCreateCalls).toHaveLength(0);
+    expect(deps.llm.jsonRequests[0]?.system).toContain("football.mwe.super-sub");
+    expect(deps.editorialKnowledgeRepository.findRelevant).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 20, contexts: expect.arrayContaining(["quote"]) }),
+    );
   });
 });

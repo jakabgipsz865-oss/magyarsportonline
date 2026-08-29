@@ -7,7 +7,10 @@ import {
   type EditorialKnowledgeRecord,
 } from "../editorial-knowledge-contract";
 import { editorialKnowledgeEntries, editorialKnowledgeImportRuns } from "../schema/index";
-import { EditorialKnowledgeRepository } from "./editorial-knowledge-repository";
+import {
+  EditorialKnowledgeRepository,
+  editorialKnowledgeRelevanceScore,
+} from "./editorial-knowledge-repository";
 
 function record(overrides: Partial<EditorialKnowledgeRecord> = {}): EditorialKnowledgeRecord {
   return {
@@ -274,5 +277,35 @@ describe("EditorialKnowledgeRepository apply", () => {
     expect(second.importStatus).toBe("duplicate");
     expect(second.counts.duplicate).toBe(1);
     expect(memory.state().entries).toHaveLength(1);
+  });
+});
+
+describe("EditorialKnowledgeRepository relevance", () => {
+  const input = {
+    sport: "football",
+    sourceLanguage: "en",
+    targetLanguage: "hu" as const,
+    contexts: ["match_report"],
+    contextText: "The goalkeeper kept a clean sheet.",
+  };
+
+  it("includes an active matching record", () => {
+    expect(editorialKnowledgeRelevanceScore(record(), input)).toBeGreaterThan(0);
+  });
+
+  it("excludes zero-relevance and non-active records", () => {
+    expect(
+      editorialKnowledgeRelevanceScore(
+        record({
+          source_phrase: "came from behind",
+          match_terms: ["came from behind"],
+          contexts: ["match_report"],
+          avoid_hu: [],
+          canonical_hu: "hátrányból fordított",
+        }),
+        input,
+      ),
+    ).toBe(0);
+    expect(editorialKnowledgeRelevanceScore(record({ status: "draft" }), input)).toBe(0);
   });
 });

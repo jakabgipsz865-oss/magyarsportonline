@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 import type { Database } from "../client";
 import {
   EDITORIAL_KNOWLEDGE_SCHEMA_VERSION,
@@ -42,6 +42,15 @@ export interface EditorialKnowledgeApplyResult extends EditorialKnowledgeImportP
   importStatus: "applied" | "blocked" | "duplicate";
 }
 
+export interface EditorialKnowledgeRetrievalInput {
+  sport: string;
+  sourceLanguage: string;
+  targetLanguage: "hu";
+  contexts: string[];
+  contextText: string;
+  limit?: number;
+}
+
 type EditorialKnowledgeEntryRow = typeof editorialKnowledgeEntries.$inferSelect;
 type EditorialKnowledgeExecutor = Pick<Database, "select" | "insert" | "execute">;
 
@@ -56,6 +65,71 @@ export class EditorialKnowledgeRepository {
 
   async previewImport(input: unknown): Promise<EditorialKnowledgeImportPreview> {
     return previewWithExecutor(this.db, input);
+  }
+
+  async countByStatus(): Promise<Record<"active" | "draft" | "deprecated", number>> {
+    const rows = await this.db
+      .select({ status: editorialKnowledgeEntries.status, value: count() })
+      .from(editorialKnowledgeEntries)
+      .groupBy(editorialKnowledgeEntries.status);
+    const result = { active: 0, draft: 0, deprecated: 0 };
+    for (const row of rows) result[row.status] = Number(row.value);
+    return result;
+  }
+
+  async listRecords(limit = 100): Promise<EditorialKnowledgeRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(editorialKnowledgeEntries)
+      .orderBy(desc(editorialKnowledgeEntries.updatedAt))
+      .limit(Math.max(1, Math.min(limit, 500)));
+    return rows.map(entryRowToRecord);
+  }
+
+  async listAllRecords(): Promise<EditorialKnowledgeRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(editorialKnowledgeEntries)
+      .orderBy(editorialKnowledgeEntries.stableKey);
+    return rows.map(entryRowToRecord);
+  }
+
+  async findRelevant(input: EditorialKnowledgeRetrievalInput): Promise<EditorialKnowledgeRecord[]> {
+    const limit = Math.max(1, Math.min(input.limit ?? 20, 20));
+    const contextText = input.contextText.slice(0, 30_000);
+    if (contextText.trim().length === 0 && input.contexts.length === 0) return [];
+
+    const phraseMatch = sql<boolean>`(
+      (${editorialKnowledgeEntries.knowledgeType} in ('headline_rule', 'grammar_style_rule', 'learned_failure_pattern') AND ${editorialKnowledgeEntries.contexts} && ${input.contexts}::text[])
+      OR (coalesce(${editorialKnowledgeEntries.sourcePhrase}, '') <> '' AND position(lower(${editorialKnowledgeEntries.sourcePhrase}) in lower(${contextText})) > 0)
+      OR (coalesce(${editorialKnowledgeEntries.canonicalHu}, '') <> '' AND position(lower(${editorialKnowledgeEntries.canonicalHu}) in lower(${contextText})) > 0)
+      OR EXISTS (SELECT 1 FROM unnest(${editorialKnowledgeEntries.matchTerms}) AS term WHERE length(term) > 1 AND position(lower(term) in lower(${contextText})) > 0)
+      OR EXISTS (SELECT 1 FROM unnest(${editorialKnowledgeEntries.avoidHu}) AS term WHERE length(term) > 1 AND position(lower(term) in lower(${contextText})) > 0)
+    )`;
+    const score = sql<number>`(
+      CASE WHEN coalesce(${editorialKnowledgeEntries.sourcePhrase}, '') <> '' AND position(lower(${editorialKnowledgeEntries.sourcePhrase}) in lower(${contextText})) > 0 THEN 100 ELSE 0 END
+      + CASE WHEN EXISTS (SELECT 1 FROM unnest(${editorialKnowledgeEntries.matchTerms}) AS term WHERE length(term) > 1 AND position(lower(term) in lower(${contextText})) > 0) THEN 80 ELSE 0 END
+      + CASE WHEN EXISTS (SELECT 1 FROM unnest(${editorialKnowledgeEntries.avoidHu}) AS term WHERE length(term) > 1 AND position(lower(term) in lower(${contextText})) > 0) THEN 60 ELSE 0 END
+      + CASE WHEN ${editorialKnowledgeEntries.contexts} && ${input.contexts}::text[] THEN 20 ELSE 0 END
+    )`;
+    const rows = await this.db
+      .select()
+      .from(editorialKnowledgeEntries)
+      .where(
+        and(
+          eq(editorialKnowledgeEntries.status, "active"),
+          eq(editorialKnowledgeEntries.sport, input.sport),
+          eq(editorialKnowledgeEntries.sourceLanguage, input.sourceLanguage),
+          eq(editorialKnowledgeEntries.targetLanguage, input.targetLanguage),
+          phraseMatch,
+        ),
+      )
+      .orderBy(sql`${score} desc`, desc(editorialKnowledgeEntries.updatedAt))
+      .limit(limit);
+    return rows
+      .map(entryRowToRecord)
+      .filter((record) => editorialKnowledgeRelevanceScore(record, input) > 0)
+      .slice(0, limit);
   }
 
   async applyImport(
@@ -99,6 +173,35 @@ export class EditorialKnowledgeRepository {
       return { ...preview, applied: true, importStatus };
     });
   }
+}
+
+export function editorialKnowledgeRelevanceScore(
+  record: EditorialKnowledgeRecord,
+  input: EditorialKnowledgeRetrievalInput,
+): number {
+  if (
+    record.status !== "active" ||
+    record.sport !== input.sport ||
+    record.language.source !== input.sourceLanguage ||
+    record.language.target !== input.targetLanguage
+  ) {
+    return 0;
+  }
+  const text = input.contextText.toLocaleLowerCase("hu-HU");
+  const includes = (value: string | null): boolean =>
+    Boolean(value && value.length > 1 && text.includes(value.toLocaleLowerCase("hu-HU")));
+  let score = includes(record.source_phrase) ? 100 : 0;
+  if (record.match_terms.some(includes)) score += 80;
+  if (record.avoid_hu.some(includes)) score += 60;
+  if (includes(record.canonical_hu)) score += 40;
+  const contextMatches = record.contexts.some((context) => input.contexts.includes(context));
+  const isContextualRule = [
+    "headline_rule",
+    "grammar_style_rule",
+    "learned_failure_pattern",
+  ].includes(record.knowledge_type);
+  if (contextMatches && (score > 0 || isContextualRule)) score += 20;
+  return score;
 }
 
 export function classifyEditorialKnowledgeRecords(
@@ -190,6 +293,31 @@ function recordToValues(
     contentHash: hashEditorialKnowledgeRecord(record),
     packageId: metadata.packageId,
     packageVersion: metadata.packageVersion,
+  };
+}
+
+function entryRowToRecord(row: EditorialKnowledgeEntryRow): EditorialKnowledgeRecord {
+  return {
+    schema_version: EDITORIAL_KNOWLEDGE_SCHEMA_VERSION,
+    stable_key: row.stableKey,
+    revision: row.revision,
+    knowledge_type: row.knowledgeType,
+    language: { source: row.sourceLanguage, target: "hu" },
+    sport: row.sport,
+    contexts: row.contexts,
+    source_phrase: row.sourcePhrase,
+    canonical_hu: row.canonicalHu,
+    alternative_hu: row.alternativeHu,
+    avoid_hu: row.avoidHu,
+    instruction_hu: row.instructionHu,
+    match_terms: row.matchTerms,
+    confidence: row.confidence,
+    status: row.status,
+    provenance: row.provenance,
+    editorial_note: row.editorialNote,
+    positive_examples: row.positiveExamples,
+    negative_examples: row.negativeExamples,
+    replaced_by: row.replacedBy,
   };
 }
 
