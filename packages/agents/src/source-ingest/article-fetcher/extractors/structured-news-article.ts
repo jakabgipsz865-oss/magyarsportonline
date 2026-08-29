@@ -30,7 +30,7 @@ function supportsDomain(url: string): boolean {
 function articleType(value: unknown): boolean {
   const types = Array.isArray(value) ? value : [value];
   return types.some((type) => {
-    const name = typeof type === "string" ? type.split(/[\/#]/).at(-1) : null;
+    const name = typeof type === "string" ? type.split(/[/#]/).at(-1) : null;
     return name === "NewsArticle" || name === "Article";
   });
 }
