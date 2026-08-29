@@ -27,6 +27,7 @@ import { createRepositories, type Repositories } from "./db";
 import { env } from "./env";
 import { getLlmClient } from "./llm";
 import { getLogger } from "./logger";
+import { calculateIngestBudget } from "./ingest-control";
 
 /**
  * MVP-only coarse category input for the Deduplication Agent's fingerprint
@@ -381,8 +382,6 @@ export async function dispatchJobToHandler(
  * (e.g. a feed's very first activation), raised well above the old
  * per-request-safety value now that it isn't gating timeout risk anymore.
  */
-const DEFAULT_MAX_NEW_ARTICLES_PER_RUN = 20;
-
 /**
  * Entry point for `/api/internal/cron/dispatch-ingest` (docs/architecture/06-deployment.md
  * §6.5): fetches every active Source and, for each new RawArticle, ENQUEUES
@@ -391,14 +390,25 @@ const DEFAULT_MAX_NEW_ARTICLES_PER_RUN = 20;
  * `buildQueueingEmitter`'s doc comment). A separate worker
  * (`/api/internal/jobs/process`) drains the queue on its own schedule.
  */
-export async function runIngestPipeline(): Promise<
-  Awaited<ReturnType<typeof sourceIngest.runSourceIngest>>
-> {
+export async function runIngestPipeline(): Promise<{
+  results: Awaited<ReturnType<typeof sourceIngest.runSourceIngest>>;
+  queueBefore: Awaited<ReturnType<Repositories["pipelineJobRepository"]["getStatusCounts"]>>;
+  ingestBudget: number;
+  ingestDeferred: boolean;
+}> {
   const repos = createRepositories();
   const dispatcher = buildQueueingEmitter(repos.pipelineJobRepository);
+  const queueBefore = await repos.pipelineJobRepository.getStatusCounts();
+  const ingestBudget = calculateIngestBudget(queueBefore);
 
   const logger = getLogger();
-  return sourceIngest.runSourceIngest({
+  if (ingestBudget === 0) {
+    logger.warn(
+      { queue: queueBefore },
+      "ingest deferred because the durable pipeline queue is above its pressure limit",
+    );
+  }
+  const results = await sourceIngest.runSourceIngest({
     sourceRepository: repos.sourceRepository,
     rawArticleRepository: repos.rawArticleRepository,
     agentRunRepository: repos.agentRunRepository,
@@ -417,8 +427,9 @@ export async function runIngestPipeline(): Promise<
       ),
     },
     logger,
-    maxNewArticlesPerRun: DEFAULT_MAX_NEW_ARTICLES_PER_RUN,
+    maxNewArticlesPerRun: ingestBudget,
   });
+  return { results, queueBefore, ingestBudget, ingestDeferred: ingestBudget === 0 };
 }
 
 /**
@@ -466,9 +477,6 @@ export async function reprocessNoLlmStories(options: {
       facts,
     });
     needsRegeneration ||= !quality.passed;
-    if (options.includePublished && statusByStoryId.get(summary.storyId) === "published") {
-      needsRegeneration = true;
-    }
     if (!needsRegeneration) {
       continue;
     }

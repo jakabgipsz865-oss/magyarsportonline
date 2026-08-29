@@ -92,8 +92,11 @@ export async function extractFacts(
   });
 
   const parsed = extractionResponseSchema.parse(result.data);
-  const minimumFacts =
-    article.bodyOriginal.length >= 2500 ? 8 : article.bodyOriginal.length >= 1000 ? 6 : 1;
+  // Six atomic facts are sufficient for the downstream writer and its
+  // fail-closed publication readiness check. Retrying an otherwise valid
+  // 6-7 fact response from the small production extraction model repeatedly
+  // produced the same result, consuming quota without adding information.
+  const minimumFacts = article.bodyOriginal.length >= 1000 ? 6 : 1;
   if (parsed.facts.length < minimumFacts) {
     throw new Error(
       `Fact extraction returned ${parsed.facts.length} facts; expected at least ${minimumFacts} for a ${article.bodyOriginal.length}-character source`,

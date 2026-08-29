@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inferSportFromUrl } from "./sport";
+import { inferSportFromSource, inferSportFromUrl } from "./sport";
 
 describe("inferSportFromUrl", () => {
   it("infers the sport vertical from a Sky Sports URL's first path segment", () => {
@@ -30,5 +30,29 @@ describe("inferSportFromUrl", () => {
 
   it("returns null for a malformed URL instead of throwing", () => {
     expect(inferSportFromUrl("not a url")).toBeNull();
+  });
+});
+
+describe("inferSportFromSource", () => {
+  it("recognizes an explicitly football-only Source Registry entry", () => {
+    expect(
+      inferSportFromSource({
+        name: "BBC Sport - Football",
+        baseUrl: "https://www.bbc.co.uk/sport/football",
+        fetchConfig: { url: "https://feeds.bbci.co.uk/sport/football/rss.xml" },
+        leagueTags: { leagues: ["premier-league"] },
+      }),
+    ).toBe("football");
+  });
+
+  it("does not guess a sport for a generic source", () => {
+    expect(
+      inferSportFromSource({
+        name: "Example Sports",
+        baseUrl: "https://example.com/sport",
+        fetchConfig: { url: "https://example.com/rss" },
+        leagueTags: {},
+      }),
+    ).toBeNull();
   });
 });

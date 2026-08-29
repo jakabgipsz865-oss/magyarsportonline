@@ -51,3 +51,38 @@ export function inferSportFromUrl(url: string): string | null {
 
   return null;
 }
+
+export interface SportSourceHint {
+  name: string;
+  baseUrl: string;
+  fetchConfig: unknown;
+  leagueTags: unknown;
+}
+
+/**
+ * Some trusted feeds are explicitly football-only while their article URLs
+ * are generic (notably BBC `/sport/articles/...`). In that case the Source
+ * Registry is the authoritative vertical hint. A sport encoded in the URL
+ * still takes precedence at the call site, so a clearly non-football URL can
+ * never be made safe by a misconfigured source name.
+ */
+export function inferSportFromSource(source: SportSourceHint | null): string | null {
+  if (!source) return null;
+  const registryText = [
+    source.name,
+    source.baseUrl,
+    JSON.stringify(source.fetchConfig),
+    JSON.stringify(source.leagueTags),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  if (
+    /(^|[^a-z])(football|soccer)([^a-z]|$)/.test(registryText) ||
+    registryText.includes("premier-league") ||
+    registryText.includes("premier league")
+  ) {
+    return "football";
+  }
+  return null;
+}

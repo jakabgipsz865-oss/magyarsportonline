@@ -1,4 +1,4 @@
-import { deduplication } from "@magyarsportonline/agents";
+import { deduplication, publishGate } from "@magyarsportonline/agents";
 import { NextResponse, type NextRequest } from "next/server";
 import { createRepositories } from "../../../../../lib/db";
 import { env } from "../../../../../lib/env";
@@ -27,25 +27,39 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     limit: limit * 3,
   });
   const approved: Array<{ itemId: string; storyId: string; slug: string | null }> = [];
-  const blocked: Array<{ itemId: string; reason: string }> = [];
+  const blocked: Array<{
+    itemId: string;
+    reason: string;
+    blockers?: publishGate.PublicationBlocker[];
+  }> = [];
 
   for (const item of candidates) {
     if (approved.length >= limit) break;
     const rawArticles = await repos.rawArticleRepository.listByStoryId(item.storyId);
-    const detectedSports = rawArticles
-      .map((article) => deduplication.inferSportFromUrl(article.sourceUrl))
-      .filter((sport): sport is string => sport !== null);
-    if (
-      !detectedSports.includes("football") ||
-      detectedSports.some((sport) => sport !== "football")
-    ) {
+    const sourceIds = [...new Set(rawArticles.map((article) => article.sourceId))];
+    const sourceRows = await Promise.all(
+      sourceIds.map((sourceId) => repos.sourceRepository.getById(sourceId)),
+    );
+    const sourceById = new Map(
+      sourceRows.filter((source) => source !== null).map((source) => [source.id, source]),
+    );
+    const detectedSports = rawArticles.map(
+      (article) =>
+        deduplication.inferSportFromUrl(article.sourceUrl) ??
+        deduplication.inferSportFromSource(sourceById.get(article.sourceId) ?? null),
+    );
+    if (detectedSports.length === 0 || detectedSports.some((sport) => sport !== "football")) {
       blocked.push({ itemId: item.id, reason: "not_unambiguously_football" });
       continue;
     }
 
     const result = await approveReviewItem(item.id, repos);
     if (!result.ok) {
-      blocked.push({ itemId: item.id, reason: result.error });
+      blocked.push({
+        itemId: item.id,
+        reason: result.error,
+        ...(result.error === "publication_blocked" ? { blockers: result.blockers } : {}),
+      });
       continue;
     }
     const story = await repos.storyRepository.getById(item.storyId);

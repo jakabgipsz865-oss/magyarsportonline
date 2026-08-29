@@ -48,6 +48,7 @@ export interface SourceIngestDeps {
 
 export interface SourceIngestResult {
   sourceId: string;
+  sourceName: string;
   ingestedCount: number;
   status: "ok" | "error";
 }
@@ -79,7 +80,12 @@ export async function runSourceIngest(deps: SourceIngestDeps): Promise<SourceIng
         { sourceId: source.id },
         "run-wide maxNewArticlesPerRun budget already exhausted by an earlier source, skipping",
       );
-      results.push({ sourceId: source.id, ingestedCount: 0, status: "ok" });
+      results.push({
+        sourceId: source.id,
+        sourceName: source.name,
+        ingestedCount: 0,
+        status: "ok",
+      });
       continue;
     }
 
@@ -97,14 +103,19 @@ export async function runSourceIngest(deps: SourceIngestDeps): Promise<SourceIng
         remainingBudget -= ingestedCount;
       }
       await deps.sourceRepository.recordFetchResult(source.id, { status: "ok" });
-      results.push({ sourceId: source.id, ingestedCount, status: "ok" });
+      results.push({ sourceId: source.id, sourceName: source.name, ingestedCount, status: "ok" });
     } catch (error) {
       await deps.sourceRepository.recordFetchResult(source.id, { status: "error" });
       log.error(
         { error: error instanceof Error ? error.message : String(error) },
         "source ingest failed",
       );
-      results.push({ sourceId: source.id, ingestedCount: 0, status: "error" });
+      results.push({
+        sourceId: source.id,
+        sourceName: source.name,
+        ingestedCount: 0,
+        status: "error",
+      });
     }
   }
 

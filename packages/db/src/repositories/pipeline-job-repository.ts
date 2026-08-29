@@ -16,6 +16,29 @@ export interface DeadLetterSummary {
   count: number;
 }
 
+interface QueueEventShape {
+  type: string;
+  payload: Record<string, unknown>;
+}
+
+function queueEventShape(event: unknown): QueueEventShape | null {
+  if (typeof event !== "object" || event === null) return null;
+  const candidate = event as Record<string, unknown>;
+  if (typeof candidate["type"] !== "string") return null;
+  if (typeof candidate["payload"] !== "object" || candidate["payload"] === null) return null;
+  return {
+    type: candidate["type"],
+    payload: candidate["payload"] as Record<string, unknown>,
+  };
+}
+
+/** Envelope IDs and timestamps differ on retries/re-enqueues; the business
+ * event identity is its type plus validated payload. */
+export function queueEventIdentity(event: unknown): string | null {
+  const shape = queueEventShape(event);
+  return shape ? `${shape.type}:${JSON.stringify(shape.payload)}` : null;
+}
+
 /**
  * Bounded-context repository for the async pipeline sprint's durable job
  * queue (2026-07-29, docs/open-decisions.md #12) — see
@@ -30,7 +53,29 @@ export class PipelineJobRepository {
   constructor(private readonly db: Database) {}
 
   async enqueue(event: unknown): Promise<void> {
-    await this.db.insert(pipelineJobs).values({ event });
+    const shape = queueEventShape(event);
+    if (!shape) {
+      await this.db.insert(pipelineJobs).values({ event });
+      return;
+    }
+
+    const payloadJson = JSON.stringify(shape.payload);
+    const identity = `${shape.type}:${payloadJson}`;
+    await this.db.execute(sql`
+      WITH identity_lock AS (
+        SELECT pg_advisory_xact_lock(hashtextextended(${identity}, 0))
+      )
+      INSERT INTO ${pipelineJobs} (event)
+      SELECT ${JSON.stringify(event)}::jsonb
+      FROM identity_lock
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM ${pipelineJobs}
+        WHERE status IN ('pending', 'in_progress')
+          AND event ->> 'type' = ${shape.type}
+          AND event -> 'payload' = ${payloadJson}::jsonb
+      )
+    `);
   }
 
   async getStatusCounts(): Promise<PipelineQueueStatusCounts> {

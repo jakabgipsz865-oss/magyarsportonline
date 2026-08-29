@@ -34,8 +34,8 @@ async function handleDispatch(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const results = await runIngestPipeline();
-    return NextResponse.json({ results });
+    const result = await runIngestPipeline();
+    return NextResponse.json(result);
   } catch (error) {
     getLogger().error(
       { error: error instanceof Error ? error.message : String(error) },
