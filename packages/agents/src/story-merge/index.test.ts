@@ -180,13 +180,33 @@ describe("handleStoryCandidateIdentified", () => {
   });
 
   describe("match_type MATCH", () => {
-    it("locks the resolved story by id, links as new_info, and emits story/merge.completed", async () => {
+    it("locks the resolved story and emits corroboration for an unchanged headline", async () => {
       const deps = buildDeps(true);
 
       await handleStoryCandidateIdentified(deps, matchEvent(STORY.id));
 
       expect(deps.storyRepository.lockAndGetById).toHaveBeenCalledWith(STORY.id);
       expect(deps.storyRepository.createOrMatchByFingerprint).not.toHaveBeenCalled();
+      expect(deps.links).toEqual([
+        { storyId: STORY.id, rawArticleId: RAW_ARTICLE.id, contributionType: "corroboration" },
+      ]);
+      expect(deps.emitted).toEqual([
+        expect.objectContaining({
+          type: "story/merge.completed",
+          payload: { story_id: STORY.id, update_type: "corroboration" },
+        }),
+      ]);
+    });
+
+    it("emits new_info when the matched source adds a transfer amount", async () => {
+      const deps = buildDeps(true);
+      deps.rawArticleRepository.getById = vi.fn(async () => ({
+        ...RAW_ARTICLE,
+        titleOriginal: "Liverpool beat Arsenal 3-1 in £50m deal",
+      }));
+
+      await handleStoryCandidateIdentified(deps, matchEvent(STORY.id));
+
       expect(deps.links).toEqual([
         { storyId: STORY.id, rawArticleId: RAW_ARTICLE.id, contributionType: "new_info" },
       ]);

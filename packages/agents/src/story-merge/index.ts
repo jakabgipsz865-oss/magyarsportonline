@@ -11,6 +11,7 @@ import type { AgentRunRecorder } from "../shared/with-agent-run";
 import { withAgentRun } from "../shared/with-agent-run";
 import { extractEntityMentions } from "../deduplication/entity-mentions";
 import { isSpecificEntityType } from "../deduplication/story-match";
+import { classifyMatchContribution } from "./contribution-classifier";
 
 export const AGENT_VERSION = "story-merge@0.2.0";
 
@@ -109,12 +110,17 @@ export async function handleStoryCandidateIdentified(
         if (rawArticle.imageUrl) {
           await deps.storyRepository.setImageUrlIfMissing(story.id, rawArticle.imageUrl);
         }
+        const contributionType = classifyMatchContribution(
+          rawArticle.titleOriginal,
+          story.canonicalTitle,
+          entities,
+        );
         await linkStoryEntities(story.id);
-        await deps.storySourceRepository.link(story.id, rawArticle.id, "new_info");
+        await deps.storySourceRepository.link(story.id, rawArticle.id, contributionType);
         await deps.dispatcher.emit({
           ...createEventEnvelope({ correlationId: event.correlation_id }),
           type: "story/merge.completed",
-          payload: { story_id: story.id, update_type: "new_info" },
+          payload: { story_id: story.id, update_type: contributionType },
         });
         deps.logger.info(
           { correlationId: event.correlation_id, storyId: story.id, matchType: "MATCH" },
