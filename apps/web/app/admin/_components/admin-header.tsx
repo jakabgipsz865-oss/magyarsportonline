@@ -13,9 +13,8 @@ const NAV_LINKS: Array<{ href: string; labelHu: string }> = [
  * Egységes admin fejléc minden `/admin/*` oldalon (2026-07-29, "kézzelfogható
  * admin dashboard" sprint): jól látható admin mód + környezet jelzés (hogy
  * sose lehessen összekeverni egy preview/dev deploy-t az éles oldallal),
- * kijelentkezés és navigáció — a `/admin/logout` route egy szándékosan
- * hibás Basic-auth kihívást ad vissza, hogy a böngésző eldobja a mentett
- * jelszót (HTTP Basic auth-nak nincs valódi szerveroldali "logout"-ja).
+ * kijelentkezés és navigáció — a `/admin/logout` route törli az aláírt,
+ * HttpOnly admin session cookie-t.
  */
 export function AdminHeader({ activePath }: { activePath: string }): ReactNode {
   const vercelEnv = process.env["VERCEL_ENV"] ?? "development";

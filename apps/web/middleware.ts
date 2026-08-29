@@ -1,17 +1,23 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { ADMIN_SESSION_COOKIE, verifyAdminSessionToken } from "./lib/admin-auth";
 
 /**
- * HTTP Basic auth az admin/review felülethez (docs/architecture/04-api-spec.md
- * §4.2 admin API), és ugyanezzel a védelemmel a `/internal/editorial-ab-review`
- * belső A/B review oldalhoz (2026-07-28 sprint) — ugyanaz az ADMIN_SECRET,
- * mert mindkettő egyetlen emberi adminnak szóló, sosem publikus felület.
+ * Aláírt, HttpOnly session cookie védi az admin/review felületet és a
+ * `/internal/*` böngészős admin oldalakat. A login ugyanazt a szerveroldali
+ * ADMIN_SECRET-et használja, mint a korábbi HTTP Basic auth, külső provider
+ * és kliensoldali secret nélkül.
  * Edge middleware — szándékosan NEM importálja a lib/env.ts Zod-validált
  * env-et: az edge bundle-nek csak az ADMIN_SECRET-re van szüksége, és egy
  * másik (itt nem használt) env-változó hibája nem döntheti el az összes
  * admin request sorsát. Ha ADMIN_SECRET nincs beállítva, az admin felület
  * 503-mal le van tiltva — nincs "nyitva felejtett" állapot.
  */
-export function middleware(request: NextRequest): NextResponse {
+export async function middleware(request: NextRequest): Promise<NextResponse> {
+  const path = request.nextUrl.pathname;
+  if (path === "/admin/login" || path.startsWith("/admin/login/") || path === "/admin/logout") {
+    return NextResponse.next();
+  }
+
   const adminSecret = process.env["ADMIN_SECRET"];
   if (!adminSecret || adminSecret.length < 8) {
     return new NextResponse("Admin interface disabled (ADMIN_SECRET not configured)", {
@@ -19,38 +25,18 @@ export function middleware(request: NextRequest): NextResponse {
     });
   }
 
-  const header = request.headers.get("authorization") ?? "";
-  if (header.startsWith("Basic ")) {
-    try {
-      const decoded = atob(header.slice("Basic ".length));
-      const separator = decoded.indexOf(":");
-      const user = decoded.slice(0, separator);
-      const password = decoded.slice(separator + 1);
-      if (user === "admin" && timingSafeEqualString(password, adminSecret)) {
-        return NextResponse.next();
-      }
-    } catch {
-      // rosszul kódolt fejléc → 401 lent
-    }
+  const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
+  if (await verifyAdminSessionToken(token, adminSecret)) {
+    return NextResponse.next();
   }
 
-  return new NextResponse("Authentication required", {
-    status: 401,
-    headers: { "WWW-Authenticate": 'Basic realm="magyarsportonline admin"' },
-  });
-}
-
-/** Konstans idejű összehasonlítás — a hossz eltérése önmagában is bukás. */
-function timingSafeEqualString(a: string, b: string): boolean {
-  const encoder = new TextEncoder();
-  const aBytes = encoder.encode(a);
-  const bBytes = encoder.encode(b);
-  let diff = aBytes.length ^ bBytes.length;
-  const length = Math.max(aBytes.length, bBytes.length);
-  for (let i = 0; i < length; i += 1) {
-    diff |= (aBytes[i % aBytes.length || 0] ?? 0) ^ (bBytes[i % bBytes.length || 0] ?? 0);
+  if (path.startsWith("/api/admin/")) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  return diff === 0;
+
+  const loginUrl = new URL("/admin/login", request.url);
+  loginUrl.searchParams.set("next", `${path}${request.nextUrl.search}`);
+  return NextResponse.redirect(loginUrl);
 }
 
 export const config = {
