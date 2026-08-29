@@ -402,7 +402,7 @@ describe("handleStoryFactsVerified", () => {
     deps.factRepository.listByStoryId = vi.fn(async () => [
       {
         ...FACT,
-        factType: "quote",
+        factType: "quote" as const,
         payload: {
           detail_hu: "",
           quote_original: "He is a real super-sub for this team.",
