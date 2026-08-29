@@ -13,8 +13,9 @@ import { toStoryDetailView, toStorySummaryView } from "../../../lib/story-view";
 
 const { matchPrimaryEntity } = deduplication;
 
-// DB-driven, always-fresh — never statically prerendered at build time.
-export const dynamic = "force-dynamic";
+// Story updates stay near-real-time while repeat readers avoid rebuilding the
+// same read-model projection on every request.
+export const revalidate = 10;
 
 const RELATED_CANDIDATES_LIMIT = 20;
 
