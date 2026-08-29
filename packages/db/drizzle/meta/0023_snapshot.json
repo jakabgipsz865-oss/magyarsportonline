@@ -211,12 +211,8 @@
           "name": "categories_parent_id_categories_id_fk",
           "tableFrom": "categories",
           "tableTo": "categories",
-          "columnsFrom": [
-            "parent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["parent_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -226,9 +222,7 @@
         "categories_slug_unique": {
           "name": "categories_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -266,9 +260,7 @@
         "tags_slug_unique": {
           "name": "tags_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -485,12 +477,8 @@
           "name": "stories_category_id_categories_id_fk",
           "tableFrom": "stories",
           "tableTo": "categories",
-          "columnsFrom": [
-            "category_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["category_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -498,12 +486,8 @@
           "name": "stories_current_version_id_story_versions_id_fk",
           "tableFrom": "stories",
           "tableTo": "story_versions",
-          "columnsFrom": [
-            "current_version_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["current_version_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -513,9 +497,7 @@
         "stories_slug_unique": {
           "name": "stories_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -653,12 +635,8 @@
           "name": "story_versions_story_id_stories_id_fk",
           "tableFrom": "story_versions",
           "tableTo": "stories",
-          "columnsFrom": [
-            "story_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -668,10 +646,7 @@
         "story_versions_story_id_version_number_unique": {
           "name": "story_versions_story_id_version_number_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "story_id",
-            "version_number"
-          ]
+          "columns": ["story_id", "version_number"]
         }
       },
       "policies": {},
@@ -790,12 +765,8 @@
           "name": "raw_articles_source_id_sources_id_fk",
           "tableFrom": "raw_articles",
           "tableTo": "sources",
-          "columnsFrom": [
-            "source_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["source_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -803,12 +774,8 @@
           "name": "raw_articles_story_id_stories_id_fk",
           "tableFrom": "raw_articles",
           "tableTo": "stories",
-          "columnsFrom": [
-            "story_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -818,9 +785,7 @@
         "raw_articles_source_url_unique": {
           "name": "raw_articles_source_url_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "source_url"
-          ]
+          "columns": ["source_url"]
         }
       },
       "policies": {},
@@ -884,12 +849,8 @@
           "name": "story_sources_story_id_stories_id_fk",
           "tableFrom": "story_sources",
           "tableTo": "stories",
-          "columnsFrom": [
-            "story_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -897,12 +858,8 @@
           "name": "story_sources_raw_article_id_raw_articles_id_fk",
           "tableFrom": "story_sources",
           "tableTo": "raw_articles",
-          "columnsFrom": [
-            "raw_article_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["raw_article_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -912,10 +869,7 @@
         "story_sources_story_id_raw_article_id_unique": {
           "name": "story_sources_story_id_raw_article_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "story_id",
-            "raw_article_id"
-          ]
+          "columns": ["story_id", "raw_article_id"]
         }
       },
       "policies": {},
@@ -999,12 +953,8 @@
           "name": "facts_story_id_stories_id_fk",
           "tableFrom": "facts",
           "tableTo": "stories",
-          "columnsFrom": [
-            "story_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1012,12 +962,8 @@
           "name": "facts_raw_article_id_raw_articles_id_fk",
           "tableFrom": "facts",
           "tableTo": "raw_articles",
-          "columnsFrom": [
-            "raw_article_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["raw_article_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1065,12 +1011,8 @@
           "name": "story_entities_story_id_stories_id_fk",
           "tableFrom": "story_entities",
           "tableTo": "stories",
-          "columnsFrom": [
-            "story_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1078,12 +1020,8 @@
           "name": "story_entities_entity_id_entities_id_fk",
           "tableFrom": "story_entities",
           "tableTo": "entities",
-          "columnsFrom": [
-            "entity_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["entity_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1093,10 +1031,7 @@
         "story_entities_story_id_entity_id_unique": {
           "name": "story_entities_story_id_entity_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "story_id",
-            "entity_id"
-          ]
+          "columns": ["story_id", "entity_id"]
         }
       },
       "policies": {},
@@ -1126,12 +1061,8 @@
           "name": "story_tags_story_id_stories_id_fk",
           "tableFrom": "story_tags",
           "tableTo": "stories",
-          "columnsFrom": [
-            "story_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1139,12 +1070,8 @@
           "name": "story_tags_tag_id_tags_id_fk",
           "tableFrom": "story_tags",
           "tableTo": "tags",
-          "columnsFrom": [
-            "tag_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tag_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1152,10 +1079,7 @@
       "compositePrimaryKeys": {
         "story_tags_story_id_tag_id_pk": {
           "name": "story_tags_story_id_tag_id_pk",
-          "columns": [
-            "story_id",
-            "tag_id"
-          ]
+          "columns": ["story_id", "tag_id"]
         }
       },
       "uniqueConstraints": {},
@@ -1239,12 +1163,8 @@
           "name": "review_queue_items_story_id_stories_id_fk",
           "tableFrom": "review_queue_items",
           "tableTo": "stories",
-          "columnsFrom": [
-            "story_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1252,12 +1172,8 @@
           "name": "review_queue_items_story_version_id_story_versions_id_fk",
           "tableFrom": "review_queue_items",
           "tableTo": "story_versions",
-          "columnsFrom": [
-            "story_version_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_version_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1331,12 +1247,8 @@
           "name": "social_posts_story_id_stories_id_fk",
           "tableFrom": "social_posts",
           "tableTo": "stories",
-          "columnsFrom": [
-            "story_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1344,12 +1256,8 @@
           "name": "social_posts_story_version_id_story_versions_id_fk",
           "tableFrom": "social_posts",
           "tableTo": "story_versions",
-          "columnsFrom": [
-            "story_version_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_version_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1359,10 +1267,7 @@
         "social_posts_story_version_id_platform_unique": {
           "name": "social_posts_story_version_id_platform_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "story_version_id",
-            "platform"
-          ]
+          "columns": ["story_version_id", "platform"]
         }
       },
       "policies": {},
@@ -1437,12 +1342,8 @@
           "name": "agent_runs_story_id_stories_id_fk",
           "tableFrom": "agent_runs",
           "tableTo": "stories",
-          "columnsFrom": [
-            "story_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1483,12 +1384,8 @@
           "name": "story_fingerprints_story_id_stories_id_fk",
           "tableFrom": "story_fingerprints",
           "tableTo": "stories",
-          "columnsFrom": [
-            "story_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1579,12 +1476,8 @@
           "name": "story_credibility_history_story_id_stories_id_fk",
           "tableFrom": "story_credibility_history",
           "tableTo": "stories",
-          "columnsFrom": [
-            "story_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1720,12 +1613,8 @@
           "name": "story_read_model_story_id_stories_id_fk",
           "tableFrom": "story_read_model",
           "tableTo": "stories",
-          "columnsFrom": [
-            "story_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1735,9 +1624,7 @@
         "story_read_model_slug_unique": {
           "name": "story_read_model_slug_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
+          "columns": ["slug"]
         }
       },
       "policies": {},
@@ -1930,12 +1817,8 @@
           "name": "editorial_ab_snapshots_story_id_stories_id_fk",
           "tableFrom": "editorial_ab_snapshots",
           "tableTo": "stories",
-          "columnsFrom": [
-            "story_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2036,12 +1919,8 @@
           "name": "editorial_corrections_story_id_stories_id_fk",
           "tableFrom": "editorial_corrections",
           "tableTo": "stories",
-          "columnsFrom": [
-            "story_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2109,12 +1988,8 @@
           "name": "editorial_correction_applications_correction_id_editorial_corrections_id_fk",
           "tableFrom": "editorial_correction_applications",
           "tableTo": "editorial_corrections",
-          "columnsFrom": [
-            "correction_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["correction_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2122,12 +1997,8 @@
           "name": "editorial_correction_applications_story_id_stories_id_fk",
           "tableFrom": "editorial_correction_applications",
           "tableTo": "stories",
-          "columnsFrom": [
-            "story_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2392,12 +2263,8 @@
           "name": "story_match_decisions_raw_article_id_raw_articles_id_fk",
           "tableFrom": "story_match_decisions",
           "tableTo": "raw_articles",
-          "columnsFrom": [
-            "raw_article_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["raw_article_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2405,12 +2272,8 @@
           "name": "story_match_decisions_candidate_story_id_stories_id_fk",
           "tableFrom": "story_match_decisions",
           "tableTo": "stories",
-          "columnsFrom": [
-            "candidate_story_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["candidate_story_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2418,12 +2281,8 @@
           "name": "story_match_decisions_resulting_story_id_stories_id_fk",
           "tableFrom": "story_match_decisions",
           "tableTo": "stories",
-          "columnsFrom": [
-            "resulting_story_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["resulting_story_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2552,12 +2411,8 @@
           "name": "missed_merge_reviews_story_a_id_stories_id_fk",
           "tableFrom": "missed_merge_reviews",
           "tableTo": "stories",
-          "columnsFrom": [
-            "story_a_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_a_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2565,12 +2420,8 @@
           "name": "missed_merge_reviews_story_b_id_stories_id_fk",
           "tableFrom": "missed_merge_reviews",
           "tableTo": "stories",
-          "columnsFrom": [
-            "story_b_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["story_b_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3032,72 +2883,37 @@
     "public.agent_run_status": {
       "name": "agent_run_status",
       "schema": "public",
-      "values": [
-        "success",
-        "error",
-        "skipped"
-      ]
+      "values": ["success", "error", "skipped"]
     },
     "public.entity_type": {
       "name": "entity_type",
       "schema": "public",
-      "values": [
-        "player",
-        "coach",
-        "team",
-        "competition",
-        "league",
-        "venue"
-      ]
+      "values": ["player", "coach", "team", "competition", "league", "venue"]
     },
     "public.fact_type": {
       "name": "fact_type",
       "schema": "public",
-      "values": [
-        "score",
-        "quote",
-        "injury_status",
-        "transfer_status",
-        "event_time",
-        "other"
-      ]
+      "values": ["score", "quote", "injury_status", "transfer_status", "event_time", "other"]
     },
     "public.ingest_status": {
       "name": "ingest_status",
       "schema": "public",
-      "values": [
-        "ingested",
-        "deduped",
-        "merged",
-        "error"
-      ]
+      "values": ["ingested", "deduped", "merged", "error"]
     },
     "public.missed_merge_candidate_type": {
       "name": "missed_merge_candidate_type",
       "schema": "public",
-      "values": [
-        "exact",
-        "adjacent"
-      ]
+      "values": ["exact", "adjacent"]
     },
     "public.missed_merge_review_decision": {
       "name": "missed_merge_review_decision",
       "schema": "public",
-      "values": [
-        "merge",
-        "keep_separate",
-        "uncertain"
-      ]
+      "values": ["merge", "keep_separate", "uncertain"]
     },
     "public.pipeline_job_status": {
       "name": "pipeline_job_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "in_progress",
-        "completed",
-        "dead_letter"
-      ]
+      "values": ["pending", "in_progress", "completed", "dead_letter"]
     },
     "public.review_queue_reason": {
       "name": "review_queue_reason",
@@ -3116,131 +2932,67 @@
     "public.review_queue_status": {
       "name": "review_queue_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "approved",
-        "rejected",
-        "edited"
-      ]
+      "values": ["pending", "approved", "rejected", "edited"]
     },
     "public.risk_level": {
       "name": "risk_level",
       "schema": "public",
-      "values": [
-        "low",
-        "medium",
-        "high"
-      ]
+      "values": ["low", "medium", "high"]
     },
     "public.social_platform": {
       "name": "social_platform",
       "schema": "public",
-      "values": [
-        "facebook",
-        "threads",
-        "x"
-      ]
+      "values": ["facebook", "threads", "x"]
     },
     "public.social_post_status": {
       "name": "social_post_status",
       "schema": "public",
-      "values": [
-        "queued",
-        "posting",
-        "posted",
-        "failed",
-        "retracted"
-      ]
+      "values": ["queued", "posting", "posted", "failed", "retracted"]
     },
     "public.source_category": {
       "name": "source_category",
       "schema": "public",
-      "values": [
-        "official",
-        "league",
-        "club",
-        "trusted_media",
-        "tabloid",
-        "social",
-        "data_api"
-      ]
+      "values": ["official", "league", "club", "trusted_media", "tabloid", "social", "data_api"]
     },
     "public.source_content_mode": {
       "name": "source_content_mode",
       "schema": "public",
-      "values": [
-        "full_text",
-        "fact_only",
-        "discovery_only"
-      ]
+      "values": ["full_text", "fact_only", "discovery_only"]
     },
     "public.source_license_type": {
       "name": "source_license_type",
       "schema": "public",
-      "values": [
-        "public_rss",
-        "licensed_api",
-        "scrape_allowed",
-        "pending_review"
-      ]
+      "values": ["public_rss", "licensed_api", "scrape_allowed", "pending_review"]
     },
     "public.source_reliability_tier": {
       "name": "source_reliability_tier",
       "schema": "public",
-      "values": [
-        "A",
-        "B",
-        "C"
-      ]
+      "values": ["A", "B", "C"]
     },
     "public.source_type": {
       "name": "source_type",
       "schema": "public",
-      "values": [
-        "rss",
-        "api",
-        "scraper",
-        "html",
-        "social_embed"
-      ]
+      "values": ["rss", "api", "scraper", "html", "social_embed"]
     },
     "public.story_entity_role": {
       "name": "story_entity_role",
       "schema": "public",
-      "values": [
-        "subject",
-        "opponent",
-        "mentioned"
-      ]
+      "values": ["subject", "opponent", "mentioned"]
     },
     "public.story_match_decision": {
       "name": "story_match_decision",
       "schema": "public",
-      "values": [
-        "auto_merge",
-        "needs_review",
-        "auto_new_story"
-      ]
+      "values": ["auto_merge", "needs_review", "auto_new_story"]
     },
     "public.story_match_review_status": {
       "name": "story_match_review_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "approved_merge",
-        "approved_new_story"
-      ]
+      "values": ["pending", "approved_merge", "approved_new_story"]
     },
     "public.story_source_contribution_type": {
       "name": "story_source_contribution_type",
       "schema": "public",
-      "values": [
-        "initial",
-        "corroboration",
-        "new_info",
-        "contradiction",
-        "possible_duplicate"
-      ]
+      "values": ["initial", "corroboration", "new_info", "contradiction", "possible_duplicate"]
     },
     "public.story_status": {
       "name": "story_status",
@@ -3260,49 +3012,27 @@
     "public.editorial_correction_category": {
       "name": "editorial_correction_category",
       "schema": "public",
-      "values": [
-        "slang",
-        "terminology",
-        "literal_translation",
-        "style",
-        "grammar",
-        "fact"
-      ]
+      "values": ["slang", "terminology", "literal_translation", "style", "grammar", "fact"]
     },
     "public.editorial_correction_application_stage": {
       "name": "editorial_correction_application_stage",
       "schema": "public",
-      "values": [
-        "hungarian_writer",
-        "editorial_rewrite"
-      ]
+      "values": ["hungarian_writer", "editorial_rewrite"]
     },
     "public.editorial_correction_application_verdict": {
       "name": "editorial_correction_application_verdict",
       "schema": "public",
-      "values": [
-        "applied",
-        "partial",
-        "not_applied"
-      ]
+      "values": ["applied", "partial", "not_applied"]
     },
     "public.editorial_knowledge_import_status": {
       "name": "editorial_knowledge_import_status",
       "schema": "public",
-      "values": [
-        "applied",
-        "blocked",
-        "duplicate"
-      ]
+      "values": ["applied", "blocked", "duplicate"]
     },
     "public.editorial_knowledge_status": {
       "name": "editorial_knowledge_status",
       "schema": "public",
-      "values": [
-        "draft",
-        "active",
-        "deprecated"
-      ]
+      "values": ["draft", "active", "deprecated"]
     },
     "public.editorial_knowledge_type": {
       "name": "editorial_knowledge_type",

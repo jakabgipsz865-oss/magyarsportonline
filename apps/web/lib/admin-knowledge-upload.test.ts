@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  MAX_KNOWLEDGE_IMPORT_BYTES,
-  parseAdminKnowledgePackage,
-} from "./admin-knowledge-upload";
+import { MAX_KNOWLEDGE_IMPORT_BYTES, parseAdminKnowledgePackage } from "./admin-knowledge-upload";
 
 describe("admin V2 knowledge upload boundary", () => {
   it("parses JSON for repository-level contract validation", () => {

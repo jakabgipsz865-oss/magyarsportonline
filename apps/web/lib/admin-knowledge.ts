@@ -7,10 +7,7 @@ import {
   type EditorialKnowledgeImportPreview,
 } from "@magyarsportonline/db";
 import { createRepositories } from "./db";
-export {
-  MAX_KNOWLEDGE_IMPORT_BYTES,
-  parseAdminKnowledgePackage,
-} from "./admin-knowledge-upload";
+export { MAX_KNOWLEDGE_IMPORT_BYTES, parseAdminKnowledgePackage } from "./admin-knowledge-upload";
 
 export async function buildAdminKnowledgePackage() {
   const records = await createRepositories().editorialKnowledgeRepository.listAllRecords();
