@@ -3,5 +3,6 @@ export * from "./client";
 export * from "./errors";
 export * from "./fingerprint";
 export * from "./locking";
+export * from "./editorial-knowledge-contract";
 export * from "./repositories/index";
 export { seed, seedStatus } from "./seed";

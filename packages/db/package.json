@@ -22,7 +22,8 @@
   "dependencies": {
     "@magyarsportonline/shared": "workspace:*",
     "drizzle-orm": "0.38.3",
-    "postgres": "3.4.5"
+    "postgres": "3.4.5",
+    "zod": "3.24.1"
   },
   "devDependencies": {
     "@magyarsportonline/config": "workspace:*",

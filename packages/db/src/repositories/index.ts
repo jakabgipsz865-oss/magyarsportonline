@@ -3,6 +3,7 @@ export * from "./category-repository";
 export * from "./editorial-ab-snapshot-repository";
 export * from "./editorial-correction-application-repository";
 export * from "./editorial-correction-repository";
+export * from "./editorial-knowledge-repository";
 export * from "./entity-repository";
 export * from "./fact-repository";
 export * from "./llm-usage-repository";
