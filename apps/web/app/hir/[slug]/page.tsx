@@ -17,6 +17,11 @@ const { matchPrimaryEntity } = deduplication;
 // same read-model projection on every request.
 export const revalidate = 10;
 
+// No build-time DB scan: each slug is generated and cached on first request.
+export function generateStaticParams(): Array<{ slug: string }> {
+  return [];
+}
+
 const RELATED_CANDIDATES_LIMIT = 20;
 
 interface PageProps {
