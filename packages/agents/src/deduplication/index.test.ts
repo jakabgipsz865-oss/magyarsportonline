@@ -169,6 +169,10 @@ describe("handleSourceArticleIngested", () => {
       externalRef: null,
     };
     const deps = buildDeps({ entities: [competitionEntity] });
+    deps.rawArticleRepository.getById = vi.fn(async () => ({
+      ...RAW_ARTICLE,
+      titleOriginal: "Premier League fixture ends 3-1",
+    }));
 
     await handleSourceArticleIngested(deps, ingestedEvent());
 
