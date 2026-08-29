@@ -73,7 +73,9 @@ async function upsertSource(
     trustBaseline?: number;
     robotsStatus?: string;
     termsStatus?: string;
-    extractorName?: string;
+    attributionRule?: string;
+    pollingFrequencyMinutes?: number;
+    extractorName?: string | null;
   },
 ) {
   const [existing] = await db.select().from(sources).where(eq(sources.name, input.name)).limit(1);
@@ -86,6 +88,317 @@ async function upsertSource(
   }
   return row;
 }
+
+export const cleanStartSources = [
+  {
+    name: "BBC Sport - Premier League",
+    baseUrl: "https://www.bbc.com/sport/football/premier-league",
+    type: "rss",
+    language: "en",
+    licenseType: "pending_review",
+    reliabilityTier: "A",
+    fetchConfig: {
+      url: "https://feeds.bbci.co.uk/sport/football/premier-league/rss.xml",
+      priority: "P0",
+      relevanceProfile: "premier_league_core",
+      feedEvidence:
+        "Direct fetch reached XML endpoint in 2026-08; web tool rejected only because content-type is XML.",
+    },
+    isActive: false,
+    country: "GB",
+    leagueTags: { leagues: ["premier-league"] },
+    category: "trusted_media",
+    contentMode: "discovery_only",
+    trustBaseline: 85,
+    termsStatus:
+      "Reuse/automation terms must be confirmed before activation; keep independent Hungarian rewrite + explicit attribution.",
+    attributionRule: "Display BBC Sport as source and preserve source URL.",
+    pollingFrequencyMinutes: 2,
+    extractorName: "bbc-sport",
+  },
+  {
+    name: "Sky Sports - Football",
+    baseUrl: "https://www.skysports.com/football",
+    type: "rss",
+    language: "en",
+    licenseType: "pending_review",
+    reliabilityTier: "A",
+    fetchConfig: {
+      url: "https://www.skysports.com/rss/12040",
+      priority: "P0",
+      relevanceProfile: "uk_football_core",
+      feedEvidence: "Direct fetch reached application/xml RSS endpoint in 2026-08.",
+    },
+    isActive: false,
+    country: "GB",
+    leagueTags: { leagues: ["premier-league"] },
+    category: "trusted_media",
+    contentMode: "discovery_only",
+    trustBaseline: 82,
+    termsStatus:
+      "Reuse/automation terms must be confirmed before activation; independent Hungarian rewrite + attribution only.",
+    attributionRule: "Display Sky Sports as source and preserve source URL.",
+    pollingFrequencyMinutes: 2,
+    extractorName: "sky-sports",
+  },
+  {
+    name: "talkSPORT - Premier League",
+    baseUrl: "https://talksport.com/football/premier-league/",
+    type: "rss",
+    language: "en",
+    licenseType: "pending_review",
+    reliabilityTier: "B",
+    fetchConfig: {
+      url: "https://talksport.com/football/premier-league/feed/",
+      priority: "P0",
+      relevanceProfile: "premier_league_gossip",
+      feedEvidence:
+        "Current 2026 RSS directories list a dedicated talkSPORT Premier League feed; endpoint requires live onboarding verification.",
+    },
+    isActive: false,
+    country: "GB",
+    leagueTags: { leagues: ["premier-league"] },
+    category: "trusted_media",
+    contentMode: "discovery_only",
+    trustBaseline: 72,
+    termsStatus: "Pending live ToS/robots/extractor review.",
+    attributionRule:
+      "Attribute claims explicitly to talkSPORT when not independently confirmed.",
+    pollingFrequencyMinutes: 2,
+    extractorName: "structured-news-article",
+  },
+  {
+    name: "Daily Mail - Football",
+    baseUrl: "https://www.dailymail.co.uk/sport/football/",
+    type: "rss",
+    language: "en",
+    licenseType: "pending_review",
+    reliabilityTier: "C",
+    fetchConfig: {
+      url: "https://www.dailymail.co.uk/sport/football/index.rss",
+      priority: "P1",
+      relevanceProfile: "uk_tabloid_football",
+      feedEvidence:
+        "2026 feed directories and independent live-feed projects list the Daily Mail Football RSS endpoint.",
+    },
+    isActive: false,
+    country: "GB",
+    leagueTags: { leagues: ["premier-league"] },
+    category: "tabloid",
+    contentMode: "discovery_only",
+    trustBaseline: 55,
+    termsStatus: "Pending live ToS/robots/extractor review.",
+    attributionRule:
+      "Rumours/exclusives must be explicitly attributed to the Daily Mail unless corroborated.",
+    pollingFrequencyMinutes: 3,
+    extractorName: "structured-news-article",
+  },
+  {
+    name: "Daily Mirror - Football",
+    baseUrl: "https://www.mirror.co.uk/sport/football/",
+    type: "rss",
+    language: "en",
+    licenseType: "pending_review",
+    reliabilityTier: "C",
+    fetchConfig: {
+      url: "https://www.mirror.co.uk/sport/football/?service=rss",
+      priority: "P1",
+      relevanceProfile: "uk_tabloid_football",
+      feedEvidence:
+        "FeedSpot's Aug 2026 Daily Mirror directory exposes this Football RSS URL; direct crawler access redirects via Tollbit.",
+    },
+    isActive: false,
+    country: "GB",
+    leagueTags: { leagues: ["premier-league"] },
+    category: "tabloid",
+    contentMode: "discovery_only",
+    trustBaseline: 58,
+    termsStatus: "Pending live ToS/robots/Tollbit/extractor review.",
+    attributionRule:
+      "Rumours/exclusives must be explicitly attributed to Mirror Football unless corroborated.",
+    pollingFrequencyMinutes: 3,
+    extractorName: "structured-news-article",
+  },
+  {
+    name: "The Sun - Football",
+    baseUrl: "https://www.thesun.co.uk/sport/football/",
+    type: "rss",
+    language: "en",
+    licenseType: "pending_review",
+    reliabilityTier: "C",
+    fetchConfig: {
+      url: "https://www.thesun.co.uk/sport/football/feed/",
+      priority: "P1",
+      relevanceProfile: "uk_tabloid_football",
+      feedEvidence: "Direct 2026 fetch reached an application/rss+xml endpoint.",
+    },
+    isActive: false,
+    country: "GB",
+    leagueTags: { leagues: ["premier-league"] },
+    category: "tabloid",
+    contentMode: "discovery_only",
+    trustBaseline: 48,
+    termsStatus: "Pending live ToS/robots/extractor review.",
+    attributionRule:
+      "Single-source claims must be clearly framed as The Sun reporting/claiming; retain source link.",
+    pollingFrequencyMinutes: 3,
+    extractorName: "structured-news-article",
+  },
+  {
+    name: "Daily Star - Football",
+    baseUrl: "https://www.dailystar.co.uk/sport/football/",
+    type: "rss",
+    language: "en",
+    licenseType: "pending_review",
+    reliabilityTier: "C",
+    fetchConfig: {
+      url: "https://www.dailystar.co.uk/sport/football/?service=rss",
+      priority: "P1",
+      relevanceProfile: "uk_tabloid_football",
+      feedEvidence:
+        "FeedSpot's Aug 2026 Daily Star directory exposes this Football RSS URL; crawler is denied by robots.",
+    },
+    isActive: false,
+    country: "GB",
+    leagueTags: { leagues: ["premier-league"] },
+    category: "tabloid",
+    contentMode: "discovery_only",
+    trustBaseline: 45,
+    termsStatus: "Pending live ToS/robots/extractor review.",
+    attributionRule:
+      "Single-source claims must be explicitly attributed to Daily Star; never upgrade a rumour to fact.",
+    pollingFrequencyMinutes: 3,
+    extractorName: "structured-news-article",
+  },
+  {
+    name: "Daily Express - Football",
+    baseUrl: "https://www.express.co.uk/sport/football",
+    type: "rss",
+    language: "en",
+    licenseType: "pending_review",
+    reliabilityTier: "C",
+    fetchConfig: {
+      url: "https://feeds.feedburner.com/daily-express-football-news?format=xml",
+      priority: "P1",
+      relevanceProfile: "uk_tabloid_football",
+      feedEvidence:
+        "Current Aug 2026 directories still list a Daily Express Football feed via FeedBurner; exact endpoint requires onboarding verification.",
+    },
+    isActive: false,
+    country: "GB",
+    leagueTags: { leagues: ["premier-league"] },
+    category: "tabloid",
+    contentMode: "discovery_only",
+    trustBaseline: 52,
+    termsStatus: "Pending live ToS/robots/feed/extractor review.",
+    attributionRule: "Single-source rumours must be explicitly attributed to Express Sport.",
+    pollingFrequencyMinutes: 3,
+    extractorName: "structured-news-article",
+  },
+  {
+    name: "CaughtOffside",
+    baseUrl: "https://www.caughtoffside.com/",
+    type: "rss",
+    language: "en",
+    licenseType: "pending_review",
+    reliabilityTier: "C",
+    fetchConfig: {
+      url: "https://www.caughtoffside.com/feed/",
+      priority: "P1",
+      relevanceProfile: "transfer_gossip",
+      feedEvidence:
+        "Direct 2026 fetch reached an application/rss+xml endpoint; current football/transfer RSS directories list CaughtOffside.",
+    },
+    isActive: false,
+    country: "GB",
+    leagueTags: { leagues: ["premier-league"] },
+    category: "tabloid",
+    contentMode: "discovery_only",
+    trustBaseline: 45,
+    termsStatus: "Pending live ToS/robots/extractor review.",
+    attributionRule: "Treat exclusives/rumours as attributed claims until corroborated.",
+    pollingFrequencyMinutes: 3,
+    extractorName: "structured-news-article",
+  },
+  {
+    name: "Football365",
+    baseUrl: "https://www.football365.com/",
+    type: "rss",
+    language: "en",
+    licenseType: "pending_review",
+    reliabilityTier: "B",
+    fetchConfig: {
+      url: "https://www.football365.com/feed",
+      priority: "P1",
+      relevanceProfile: "uk_football_gossip",
+      feedEvidence:
+        "Current 2026 RSS directories list Football365 and its transfer-gossip coverage.",
+    },
+    isActive: false,
+    country: "GB",
+    leagueTags: { leagues: ["premier-league"] },
+    category: "trusted_media",
+    contentMode: "discovery_only",
+    trustBaseline: 62,
+    termsStatus: "Pending live ToS/robots/extractor review.",
+    attributionRule:
+      "Attribute rumours; distinguish reported facts from Football365 commentary/opinion.",
+    pollingFrequencyMinutes: 3,
+    extractorName: "structured-news-article",
+  },
+  {
+    name: "The Guardian - Football",
+    baseUrl: "https://www.theguardian.com/football",
+    type: "rss",
+    language: "en",
+    licenseType: "pending_review",
+    reliabilityTier: "A",
+    fetchConfig: {
+      url: "https://www.theguardian.com/football/rss",
+      priority: "P2",
+      relevanceProfile: "uk_football_core",
+      feedEvidence: "Guardian officially documents RSS feeds and /rss section feeds.",
+    },
+    isActive: false,
+    country: "GB",
+    leagueTags: { leagues: ["premier-league"] },
+    category: "trusted_media",
+    contentMode: "discovery_only",
+    trustBaseline: 88,
+    termsStatus:
+      "Guardian help states RSS use is for personal, non-commercial purposes; commercial production use requires separate legal/API review.",
+    attributionRule:
+      "Do not activate for commercial production without rights review; attribution + link required when used as discovery evidence.",
+    pollingFrequencyMinutes: 5,
+    extractorName: null,
+  },
+  {
+    name: "GOAL - English News",
+    baseUrl: "https://www.goal.com/",
+    type: "rss",
+    language: "en",
+    licenseType: "pending_review",
+    reliabilityTier: "B",
+    fetchConfig: {
+      url: "https://www.goal.com/feeds/en/news",
+      priority: "P2",
+      relevanceProfile: "global_football_filter_pl",
+      feedEvidence:
+        "Current RSS lists continue to identify the GOAL English news feed; requires live onboarding verification.",
+    },
+    isActive: false,
+    country: "GB",
+    leagueTags: { leagues: ["premier-league"] },
+    category: "trusted_media",
+    contentMode: "discovery_only",
+    trustBaseline: 68,
+    termsStatus: "Pending live ToS/robots/feed/extractor review.",
+    attributionRule:
+      "Preserve GOAL attribution and source URL; filter non-Premier-League content before AI.",
+    pollingFrequencyMinutes: 5,
+    extractorName: "structured-news-article",
+  },
+] satisfies Array<Parameters<typeof upsertSource>[1]>;
 
 export async function seed(db: Database): Promise<void> {
   await upsertCategory(db, { slug: "labdarugas", nameHu: "Labdarúgás" });
@@ -221,318 +534,8 @@ export async function seed(db: Database): Promise<void> {
     await upsertEntity(db, { type: "venue", ...venue });
   }
 
-  // Dev/demo source only — the actual, licensed source onboarding with legal
-  // review is roadmap Fázis 3, 32. lépés, a separate future task. The URL
-  // lives here (seed data), never in the Source Ingest Agent's code, so
-  // adding the next source is a data change, not a code change.
-  await upsertSource(db, {
-    name: "BBC Sport - Football",
-    baseUrl: "https://www.bbc.co.uk/sport/football",
-    type: "rss",
-    language: "en",
-    licenseType: "public_rss",
-    reliabilityTier: "B",
-    fetchConfig: { url: "https://feeds.bbci.co.uk/sport/football/rss.xml" },
-    isActive: true,
-    // Source Registry mezők — ez az egyetlen ténylegesen bekötött, teljes
-    // cikket kinyerő forrás (packages/agents/.../article-fetcher/), így
-    // ez a referencia-sor a docs/source-registry.md dokumentált
-    // forráscsomag számára.
-    country: "GB",
-    leagueTags: { leagues: ["premier-league"] },
-    category: "trusted_media",
-    contentMode: "full_text",
-    trustBaseline: 75,
-    robotsStatus: "robots.txt nem tiltja az RSS feedet vagy a cikkoldalakat crawler-számára",
-    termsStatus:
-      "BBC Terms of Use: publikus RSS feed, személyes/nem-kereskedelmi felhasználásra szánt; a teljes cikk átvétele helyett önálló, saját szöveget írunk belőle (Hungarian Writer), forrásmegjelöléssel",
-    extractorName: "bbc-sport",
-  });
-
-  // Sky Sports — a "Hitelességi mutató v1" sprint kivétele
-  // (docs/open-decisions.md), amit a felhasználó explicit engedélyezett:
-  // BBC + Sky Sports párost, hogy legyen valódi, két különböző
-  // hírportálról származó, ellenőrizhető két-forrásos Story a bizonyító
-  // riportban. Minden más médiaforrás egyelőre a lenti
-  // `documentedNotWiredSources`-ben marad.
-  await upsertSource(db, {
-    name: "Sky Sports - Football",
-    baseUrl: "https://www.skysports.com/football",
-    type: "rss",
-    language: "en",
-    licenseType: "public_rss",
-    reliabilityTier: "B",
-    fetchConfig: { url: "https://www.skysports.com/rss/12040" },
-    isActive: true,
-    country: "GB",
-    leagueTags: { leagues: ["premier-league"] },
-    category: "trusted_media",
-    contentMode: "full_text",
-    trustBaseline: 75,
-    robotsStatus: "robots.txt nem tiltja az RSS feedet vagy a cikkoldalakat crawler-számára",
-    termsStatus:
-      "Sky Sports Terms of Use: publikus RSS feed, személyes/nem-kereskedelmi felhasználásra szánt; a teljes cikk átvétele helyett önálló, saját szöveget írunk belőle (Hungarian Writer), forrásmegjelöléssel",
-    extractorName: "sky-sports",
-  });
-
-  // Dokumentált, de MÉG NEM BEKÖTÖTT Source Registry sorok (docs/source-registry.md) —
-  // a 2026-07-28-i többforrásos irány első forráscsomagja. Minden sor
-  // `isActive: false` és `licenseType: "pending_review"`, amíg az élő
-  // robots.txt/ToS-audit (docs/open-decisions.md 1. és 4. tétel) le nem
-  // zajlik, és amíg nincs hozzá megírt ArticleExtractor — a Source Ingest
-  // Agent csak `is_active=true` forrásokat kérdez le, tehát ezek a sorok
-  // önmagukban nem indítanak élő lekérdezést.
-  const documentedNotWiredSources: Array<{
-    name: string;
-    baseUrl: string;
-    type: "rss" | "api" | "scraper" | "html" | "social_embed";
-    language: string;
-    reliabilityTier: "A" | "B" | "C";
-    country: string;
-    category: "official" | "league" | "club" | "trusted_media" | "tabloid" | "social" | "data_api";
-    contentMode: "full_text" | "fact_only" | "discovery_only";
-    trustBaseline: number;
-    leagueTags?: Record<string, unknown>;
-  }> = [
-    // Öt liga hivatalos oldala
-    {
-      name: "Premier League - hivatalos",
-      baseUrl: "https://www.premierleague.com",
-      type: "html",
-      language: "en",
-      reliabilityTier: "A",
-      country: "GB",
-      category: "league",
-      contentMode: "discovery_only",
-      trustBaseline: 90,
-      leagueTags: { leagues: ["premier-league"] },
-    },
-    {
-      name: "LaLiga - hivatalos",
-      baseUrl: "https://www.laliga.com",
-      type: "html",
-      language: "es",
-      reliabilityTier: "A",
-      country: "ES",
-      category: "league",
-      contentMode: "discovery_only",
-      trustBaseline: 90,
-      leagueTags: { leagues: ["laliga"] },
-    },
-    {
-      name: "Serie A (Lega Serie A) - hivatalos",
-      baseUrl: "https://www.legaseriea.it",
-      type: "html",
-      language: "it",
-      reliabilityTier: "A",
-      country: "IT",
-      category: "league",
-      contentMode: "discovery_only",
-      trustBaseline: 90,
-      leagueTags: { leagues: ["serie-a"] },
-    },
-    {
-      name: "Bundesliga (DFL) - hivatalos",
-      baseUrl: "https://www.bundesliga.com",
-      type: "html",
-      language: "de",
-      reliabilityTier: "A",
-      country: "DE",
-      category: "league",
-      contentMode: "discovery_only",
-      trustBaseline: 90,
-      leagueTags: { leagues: ["bundesliga"] },
-    },
-    {
-      name: "Ligue 1 (LFP) - hivatalos",
-      baseUrl: "https://www.ligue1.com",
-      type: "html",
-      language: "fr",
-      reliabilityTier: "A",
-      country: "FR",
-      category: "league",
-      contentMode: "discovery_only",
-      trustBaseline: 90,
-      leagueTags: { leagues: ["ligue-1"] },
-    },
-    // Nemzetközi szövetségek
-    {
-      name: "UEFA - hivatalos",
-      baseUrl: "https://www.uefa.com",
-      type: "html",
-      language: "en",
-      reliabilityTier: "A",
-      country: "CH",
-      category: "official",
-      contentMode: "fact_only",
-      trustBaseline: 95,
-    },
-    {
-      name: "FIFA - hivatalos",
-      baseUrl: "https://www.fifa.com",
-      type: "html",
-      language: "en",
-      reliabilityTier: "A",
-      country: "CH",
-      category: "official",
-      contentMode: "fact_only",
-      trustBaseline: 95,
-    },
-    // Adat-API
-    {
-      name: "football-data.org",
-      baseUrl: "https://www.football-data.org",
-      type: "api",
-      language: "en",
-      reliabilityTier: "A",
-      country: "DE",
-      category: "data_api",
-      contentMode: "fact_only",
-      trustBaseline: 90,
-    },
-    // Média (a BBC Sporton és a Sky Sportson kívül — mindkettő fentebb, ténylegesen bekötve)
-    {
-      name: "The Guardian - Sport",
-      baseUrl: "https://www.theguardian.com/sport",
-      type: "api",
-      language: "en",
-      reliabilityTier: "A",
-      country: "GB",
-      category: "trusted_media",
-      contentMode: "full_text",
-      trustBaseline: 85,
-    },
-    {
-      name: "ESPN",
-      baseUrl: "https://www.espn.com",
-      type: "rss",
-      language: "en",
-      reliabilityTier: "B",
-      country: "US",
-      category: "trusted_media",
-      contentMode: "full_text",
-      trustBaseline: 75,
-    },
-    {
-      name: "Marca",
-      baseUrl: "https://www.marca.com",
-      type: "rss",
-      language: "es",
-      reliabilityTier: "B",
-      country: "ES",
-      category: "trusted_media",
-      contentMode: "full_text",
-      trustBaseline: 70,
-    },
-    {
-      name: "AS",
-      baseUrl: "https://as.com",
-      type: "rss",
-      language: "es",
-      reliabilityTier: "B",
-      country: "ES",
-      category: "trusted_media",
-      contentMode: "full_text",
-      trustBaseline: 70,
-    },
-    {
-      name: "Mundo Deportivo",
-      baseUrl: "https://www.mundodeportivo.com",
-      type: "rss",
-      language: "es",
-      reliabilityTier: "B",
-      country: "ES",
-      category: "trusted_media",
-      contentMode: "full_text",
-      trustBaseline: 70,
-    },
-    {
-      name: "Gazzetta dello Sport",
-      baseUrl: "https://www.gazzetta.it",
-      type: "rss",
-      language: "it",
-      reliabilityTier: "B",
-      country: "IT",
-      category: "trusted_media",
-      contentMode: "full_text",
-      trustBaseline: 75,
-    },
-    {
-      name: "Corriere dello Sport",
-      baseUrl: "https://www.corrieredellosport.it",
-      type: "rss",
-      language: "it",
-      reliabilityTier: "B",
-      country: "IT",
-      category: "trusted_media",
-      contentMode: "full_text",
-      trustBaseline: 70,
-    },
-    {
-      name: "Kicker",
-      baseUrl: "https://www.kicker.de",
-      type: "rss",
-      language: "de",
-      reliabilityTier: "A",
-      country: "DE",
-      category: "trusted_media",
-      contentMode: "full_text",
-      trustBaseline: 85,
-    },
-    {
-      name: "Sport1",
-      baseUrl: "https://www.sport1.de",
-      type: "rss",
-      language: "de",
-      reliabilityTier: "B",
-      country: "DE",
-      category: "trusted_media",
-      contentMode: "full_text",
-      trustBaseline: 75,
-    },
-    {
-      name: "L'Équipe",
-      baseUrl: "https://www.lequipe.fr",
-      type: "rss",
-      language: "fr",
-      reliabilityTier: "A",
-      country: "FR",
-      category: "trusted_media",
-      contentMode: "full_text",
-      trustBaseline: 85,
-    },
-    {
-      name: "RMC Sport",
-      baseUrl: "https://rmcsport.bfmtv.com",
-      type: "html",
-      language: "fr",
-      reliabilityTier: "B",
-      country: "FR",
-      category: "trusted_media",
-      contentMode: "full_text",
-      trustBaseline: 70,
-    },
-  ];
-  for (const source of documentedNotWiredSources) {
-    await upsertSource(db, {
-      name: source.name,
-      baseUrl: source.baseUrl,
-      type: source.type,
-      language: source.language,
-      licenseType: "pending_review",
-      reliabilityTier: source.reliabilityTier,
-      fetchConfig: {
-        note: "Dokumentálva docs/source-registry.md-ben, még nincs bekötve — élő robots.txt/ToS-audit és ArticleExtractor szükséges a bekötés előtt.",
-      },
-      isActive: false,
-      country: source.country,
-      leagueTags: source.leagueTags,
-      category: source.category,
-      contentMode: source.contentMode,
-      trustBaseline: source.trustBaseline,
-      robotsStatus: "ellenőrizendő élőben a bekötés előtt (lásd docs/open-decisions.md 1. tétel)",
-      termsStatus: "ellenőrizendő élőben a bekötés előtt (lásd docs/open-decisions.md 1. tétel)",
-    });
+  for (const source of cleanStartSources) {
+    await upsertSource(db, source);
   }
 }
 
