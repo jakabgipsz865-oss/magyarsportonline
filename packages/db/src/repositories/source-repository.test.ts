@@ -21,8 +21,12 @@ describe("isSourceDue", () => {
   });
 
   it("waits for a two-minute source's interval", () => {
-    expect(isSourceDue(source({ lastFetchedAt: new Date("2026-08-29T11:59:00Z") }), now)).toBe(false);
-    expect(isSourceDue(source({ lastFetchedAt: new Date("2026-08-29T11:57:59Z") }), now)).toBe(true);
+    expect(isSourceDue(source({ lastFetchedAt: new Date("2026-08-29T11:59:00Z") }), now)).toBe(
+      false,
+    );
+    expect(isSourceDue(source({ lastFetchedAt: new Date("2026-08-29T11:57:59Z") }), now)).toBe(
+      true,
+    );
   });
 
   it("respects a five-minute source's own interval", () => {
