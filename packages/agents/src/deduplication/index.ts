@@ -148,7 +148,10 @@ export async function handleSourceArticleIngested(
         roundLabel: extractRoundLabel(row.canonicalTitle),
       }));
 
-      const decision = decideStoryMatch({ mentions, sport, dateBucket, roundLabel }, candidates);
+      const decision = decideStoryMatch(
+        { mentions, sport, dateBucket, roundLabel, title: rawArticle.titleOriginal },
+        candidates,
+      );
 
       const bestSpecificEntityId =
         mentions.find((m) => isSpecificEntityType(m.entity.type))?.entity.entityId ??

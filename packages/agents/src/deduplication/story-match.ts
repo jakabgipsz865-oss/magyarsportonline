@@ -35,6 +35,7 @@ export interface ArticleMatchInput {
   mentions: EntityMention[];
   sport: string | null;
   dateBucket: string;
+  title?: string;
   /** Competition round/matchday label, if one could be extracted from the title/lead (e.g. "6. forduló", "Quarter-final") — see `extractRoundLabel`. Supplementary corroboration only, never a gate. */
   roundLabel?: string | null;
 }
@@ -50,6 +51,7 @@ export interface CandidateStoryMatchInput {
   entities: CandidateStoryEntity[];
   sport: string | null;
   dateBucket: string;
+  canonicalTitle?: string;
   roundLabel?: string | null;
 }
 
@@ -60,10 +62,73 @@ export interface StoryMatchScore {
   matchedEntities: MatchedEntity[];
   differingEntities: MatchedEntity[];
   sportMismatch: boolean;
+  headlineSimilarity: number;
 }
 
 /** Exported for the admin triage classifier (2026-07-29), which reuses this same bar to flag two ALREADY-CREATED Stories as confident duplicates. */
 export const AUTO_MERGE_THRESHOLD = 65;
+export const HEADLINE_SIMILARITY_THRESHOLD = 0.6;
+
+const HEADLINE_STOPWORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "are",
+  "as",
+  "at",
+  "be",
+  "by",
+  "for",
+  "from",
+  "has",
+  "have",
+  "in",
+  "is",
+  "it",
+  "of",
+  "on",
+  "that",
+  "the",
+  "to",
+  "with",
+]);
+
+const HEADLINE_TOKEN_ALIASES: Record<string, string> = {
+  manchester: "man",
+  united: "utd",
+  agree: "agreement",
+  agreed: "agreement",
+  agrees: "agreement",
+  reach: "agreement",
+  reached: "agreement",
+  reaches: "agreement",
+  deal: "transfer",
+  sign: "transfer",
+  signed: "transfer",
+  signing: "transfer",
+};
+
+function headlineTokens(headline: string): Set<string> {
+  const normalized = headline
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ");
+  return new Set(
+    normalized
+      .split(/\s+/)
+      .map((token) => HEADLINE_TOKEN_ALIASES[token] ?? token)
+      .filter((token) => token.length >= 3 && !HEADLINE_STOPWORDS.has(token)),
+  );
+}
+
+export function headlineSimilarity(a: string, b: string): number {
+  const left = headlineTokens(a);
+  const right = headlineTokens(b);
+  if (left.size === 0 || right.size === 0) return 0;
+  const intersection = [...left].filter((token) => right.has(token)).length;
+  return intersection / new Set([...left, ...right]).size;
+}
 
 /** Exported for `missed-merge-candidates.ts`, which needs the same day-distance test to classify a pair as "exact" (same day) vs "adjacent" (1 day apart). */
 export function daysBetweenBuckets(a: string, b: string): number {
@@ -200,6 +265,7 @@ export function scoreStoryMatch(
       matchedEntities: [],
       differingEntities: [],
       sportMismatch: true,
+      headlineSimilarity: 0,
     };
   }
 
@@ -216,6 +282,7 @@ export function scoreStoryMatch(
     ...articleEntities.filter((e) => isSpecific(e) && !candidateEntityIds.has(e.entityId)),
     ...candidateEntities.filter((e) => isSpecific(e) && !articleEntityIds.has(e.entityId)),
   ];
+  const titleSimilarity = headlineSimilarity(article.title ?? "", candidate.canonicalTitle ?? "");
 
   let score = 0;
   if (sharedSpecific.length >= 2) {
@@ -247,6 +314,7 @@ export function scoreStoryMatch(
     matchedEntities: shared,
     differingEntities: differing,
     sportMismatch: false,
+    headlineSimilarity: titleSimilarity,
   };
 }
 
@@ -279,7 +347,7 @@ export function decideStoryMatch(
 ): StoryMatchDecision {
   const allScores = candidates
     .map((candidate) => scoreStoryMatch(article, candidate))
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.score - a.score || b.headlineSimilarity - a.headlineSimilarity);
 
   const best = allScores[0];
 
@@ -302,12 +370,22 @@ export function decideStoryMatch(
 
   const matchCategory = classifyMatchCategory(best.matchedEntities);
   const strongEventIdentity = hasStrongEventIdentity(best.matchedEntities);
+  const strongAutoMerge = best.score >= AUTO_MERGE_THRESHOLD && strongEventIdentity;
+  const similarityAutoMerge =
+    !strongAutoMerge &&
+    !best.sportMismatch &&
+    daysBetweenBuckets(
+      article.dateBucket,
+      candidates.find((candidate) => candidate.storyId === best.candidateStoryId)?.dateBucket ?? "",
+    ) <= 1 &&
+    best.differingEntities.length === 0 &&
+    best.headlineSimilarity >= HEADLINE_SIMILARITY_THRESHOLD;
   const specificNames = best.matchedEntities
     .filter((e) => isSpecificEntityType(e.type))
     .map((e) => e.nameCanonical)
     .join(", ");
 
-  if (best.score >= AUTO_MERGE_THRESHOLD && strongEventIdentity) {
+  if (strongAutoMerge || similarityAutoMerge) {
     return {
       kind: "auto_merge",
       candidateStoryId: best.candidateStoryId,
@@ -317,7 +395,9 @@ export function decideStoryMatch(
       sportMismatch: false,
       allScores,
       matchCategory,
-      decisionReasonHu: `Erős eseményazonosság (${specificNames}) és elegendő megerősítő jel (${best.score}/100 pont, kategória: ${MATCH_CATEGORY_LABELS_HU[matchCategory]}) miatt automatikusan összevonva.`,
+      decisionReasonHu: similarityAutoMerge
+        ? `A közös specifikus entitás (${specificNames}) mellett a determinisztikus címsor-hasonlóság ${(best.headlineSimilarity * 100).toFixed(0)}% (küszöb: ${HEADLINE_SIMILARITY_THRESHOLD * 100}%), ezért automatikusan összevonva.`
+        : `Erős eseményazonosság (${specificNames}) és elegendő megerősítő jel (${best.score}/100 pont, kategória: ${MATCH_CATEGORY_LABELS_HU[matchCategory]}) miatt automatikusan összevonva.`,
     };
   }
 

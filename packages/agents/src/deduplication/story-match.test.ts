@@ -38,8 +38,9 @@ function article(
   mentions: ArticleMatchInput["mentions"],
   sport: string | null,
   dateBucket: string,
+  title = "",
 ): ArticleMatchInput {
-  return { mentions, sport, dateBucket };
+  return { mentions, sport, dateBucket, title };
 }
 
 function candidate(
@@ -47,8 +48,9 @@ function candidate(
   entities: CandidateStoryMatchInput["entities"],
   sport: string | null,
   dateBucket: string,
+  canonicalTitle = "",
 ): CandidateStoryMatchInput {
-  return { storyId, entities, sport, dateBucket };
+  return { storyId, entities, sport, dateBucket, canonicalTitle };
 }
 
 describe("scoreStoryMatch — rule 1+2: competition-only match is never sufficient", () => {
@@ -331,6 +333,86 @@ describe("scoreStoryMatch — strong event identity drives auto_merge", () => {
         { entityId: "arsenal", type: "team", nameCanonical: "Arsenal FC" },
       ]),
     );
+  });
+});
+
+describe("headline similarity — same-event signal for one shared specific entity", () => {
+  const unitedMention = {
+    entity: { entityId: "man-utd", type: "team", nameCanonical: "Manchester United FC" },
+    location: "title" as const,
+  };
+  const unitedCandidate = {
+    entity: { entityId: "man-utd", type: "team", nameCanonical: "Manchester United FC" },
+    role: "subject" as const,
+  };
+
+  it("auto_merges highly similar same-event headlines on one shared team", () => {
+    const art = article(
+      [unitedMention],
+      "football",
+      "2026-08-29",
+      "Manchester United agree deal for Carlos Baleba",
+    );
+    const cand = candidate(
+      "story-1",
+      [unitedCandidate],
+      "football",
+      "2026-08-30",
+      "Man Utd reach agreement to sign Carlos Baleba",
+    );
+
+    const decision = decideStoryMatch(art, [cand]);
+
+    expect(decision.kind).toBe("auto_merge");
+    expect(decision.decisionReasonHu).toContain("címsor-hasonlóság");
+  });
+
+  it("does not auto_merge different transfer targets at the same club", () => {
+    const art = article(
+      [
+        unitedMention,
+        {
+          entity: { entityId: "baleba", type: "player", nameCanonical: "Carlos Baleba" },
+          location: "title",
+        },
+      ],
+      "football",
+      "2026-08-29",
+      "Manchester United agree deal for Carlos Baleba",
+    );
+    const cand = candidate(
+      "story-1",
+      [
+        unitedCandidate,
+        {
+          entity: { entityId: "wharton", type: "player", nameCanonical: "Adam Wharton" },
+          role: "subject",
+        },
+      ],
+      "football",
+      "2026-08-29",
+      "Man Utd reach agreement to sign Adam Wharton",
+    );
+
+    expect(decideStoryMatch(art, [cand]).kind).toBe("needs_review");
+  });
+
+  it("does not auto_merge an injury headline with a transfer headline", () => {
+    const art = article(
+      [unitedMention],
+      "football",
+      "2026-08-29",
+      "Manchester United suffer defender injury",
+    );
+    const cand = candidate(
+      "story-1",
+      [unitedCandidate],
+      "football",
+      "2026-08-29",
+      "Manchester United make bid for midfielder",
+    );
+
+    expect(decideStoryMatch(art, [cand]).kind).toBe("needs_review");
   });
 });
 
