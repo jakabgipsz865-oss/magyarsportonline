@@ -370,6 +370,13 @@ main {
 
   .admin-shell__nav {
     padding-inline: 0.35rem;
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .admin-shell__nav-link {
+    flex: 1 1 calc(50% - 0.25rem);
+    text-align: center;
   }
 
   .admin-metric-grid {
