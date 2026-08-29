@@ -16,6 +16,7 @@ import {
   type CandidateStoryMatchInput,
 } from "./story-match";
 import { extractEntityMentions, extractLead } from "./entity-mentions";
+import { isPremierLeagueRelevant } from "./relevance";
 import { inferSportFromUrl } from "./sport";
 
 export * from "./date-bucket";
@@ -23,6 +24,7 @@ export * from "./entity-matcher";
 export * from "./entity-mentions";
 export * from "./merge-audit";
 export * from "./missed-merge-candidates";
+export * from "./relevance";
 export * from "./sport";
 export * from "./story-match";
 
@@ -109,6 +111,14 @@ export async function handleSourceArticleIngested(
       }
 
       const entities = await deps.entityRepository.listAll();
+      if (!isPremierLeagueRelevant(rawArticle, entities)) {
+        deps.logger.info(
+          { correlationId: event.correlation_id, rawArticleId: rawArticle.id },
+          "article dropped by Premier League relevance gate",
+        );
+        return;
+      }
+
       const mentions = extractEntityMentions(rawArticle, entities);
       const sport = inferSportFromUrl(rawArticle.sourceUrl);
       const dateBucket = toDateBucket(rawArticle.publishedAtSource ?? rawArticle.ingestedAt);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanStartSources } from "./seed";
+import { cleanStartSources, premierLeagueTeamEntities } from "./seed";
 
 const structuredDomains = [
   "talksport.com",
@@ -14,6 +14,18 @@ const structuredDomains = [
 ];
 
 describe("clean-start source seed", () => {
+  it("contains exactly the 20 canonical Premier League team entities", () => {
+    expect(premierLeagueTeamEntities).toHaveLength(20);
+    expect(new Set(premierLeagueTeamEntities.map((team) => team.nameCanonical)).size).toBe(20);
+    expect(
+      premierLeagueTeamEntities.find((team) => team.nameCanonical === "AFC Bournemouth"),
+    ).toEqual({
+      nameCanonical: "AFC Bournemouth",
+      nameHu: "Bournemouth",
+      aliases: ["Bournemouth", "AFC Bournemouth", "Cherries"],
+    });
+  });
+
   it("contains exactly the 12 canonical, inactive sources", () => {
     expect(cleanStartSources).toHaveLength(12);
     expect(cleanStartSources.every((source) => source.isActive === false)).toBe(true);

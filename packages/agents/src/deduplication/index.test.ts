@@ -222,4 +222,19 @@ describe("handleSourceArticleIngested", () => {
 
     await expect(handleSourceArticleIngested(deps, ingestedEvent())).rejects.toThrow("not found");
   });
+
+  it("drops a non-PL article before Story matching without emitting an error event", async () => {
+    const deps = buildDeps();
+    deps.rawArticleRepository.getById = vi.fn(async () => ({
+      ...RAW_ARTICLE,
+      titleOriginal: "Real Madrid agree a transfer fee",
+      subtitleOriginal: "The Spanish club completed the deal.",
+    }));
+
+    await handleSourceArticleIngested(deps, ingestedEvent());
+
+    expect(deps.storyMatchRepository.findCandidateStories).not.toHaveBeenCalled();
+    expect(deps.storyMatchRepository.recordDecision).not.toHaveBeenCalled();
+    expect(deps.emitted).toEqual([]);
+  });
 });

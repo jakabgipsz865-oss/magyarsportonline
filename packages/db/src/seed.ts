@@ -89,6 +89,85 @@ async function upsertSource(
   return row;
 }
 
+export const premierLeagueTeamEntities = [
+  {
+    nameCanonical: "AFC Bournemouth",
+    nameHu: "Bournemouth",
+    aliases: ["Bournemouth", "AFC Bournemouth", "Cherries"],
+  },
+  { nameCanonical: "Arsenal FC", nameHu: "Arsenal", aliases: ["Arsenal", "Gunners"] },
+  {
+    nameCanonical: "Aston Villa FC",
+    nameHu: "Aston Villa",
+    aliases: ["Aston Villa", "Villa"],
+  },
+  { nameCanonical: "Brentford FC", nameHu: "Brentford", aliases: ["Brentford", "Bees"] },
+  {
+    nameCanonical: "Brighton & Hove Albion FC",
+    nameHu: "Brighton",
+    aliases: ["Brighton", "Brighton & Hove Albion", "Seagulls"],
+  },
+  { nameCanonical: "Chelsea FC", nameHu: "Chelsea", aliases: ["Chelsea", "Blues"] },
+  {
+    nameCanonical: "Coventry City FC",
+    nameHu: "Coventry City",
+    aliases: ["Coventry City", "Coventry", "Sky Blues"],
+  },
+  {
+    nameCanonical: "Crystal Palace FC",
+    nameHu: "Crystal Palace",
+    aliases: ["Crystal Palace", "Palace", "Eagles"],
+  },
+  { nameCanonical: "Everton FC", nameHu: "Everton", aliases: ["Everton", "Toffees"] },
+  { nameCanonical: "Fulham FC", nameHu: "Fulham", aliases: ["Fulham", "Cottagers"] },
+  {
+    nameCanonical: "Hull City AFC",
+    nameHu: "Hull City",
+    aliases: ["Hull City", "Hull", "Tigers"],
+  },
+  {
+    nameCanonical: "Ipswich Town FC",
+    nameHu: "Ipswich Town",
+    aliases: ["Ipswich Town", "Ipswich", "Tractor Boys"],
+  },
+  {
+    nameCanonical: "Leeds United FC",
+    nameHu: "Leeds United",
+    aliases: ["Leeds United", "Leeds"],
+  },
+  { nameCanonical: "Liverpool FC", nameHu: "Liverpool", aliases: ["Liverpool", "Reds"] },
+  {
+    nameCanonical: "Manchester City FC",
+    nameHu: "Manchester City",
+    aliases: ["Manchester City", "Man City"],
+  },
+  {
+    nameCanonical: "Manchester United FC",
+    nameHu: "Manchester United",
+    aliases: ["Manchester United", "Man United", "Man Utd"],
+  },
+  {
+    nameCanonical: "Newcastle United FC",
+    nameHu: "Newcastle United",
+    aliases: ["Newcastle United", "Newcastle", "Magpies"],
+  },
+  {
+    nameCanonical: "Nottingham Forest FC",
+    nameHu: "Nottingham Forest",
+    aliases: ["Nottingham Forest", "Forest"],
+  },
+  {
+    nameCanonical: "Sunderland AFC",
+    nameHu: "Sunderland",
+    aliases: ["Sunderland", "Black Cats"],
+  },
+  {
+    nameCanonical: "Tottenham Hotspur FC",
+    nameHu: "Tottenham",
+    aliases: ["Tottenham Hotspur", "Tottenham", "Spurs"],
+  },
+] satisfies Array<{ nameCanonical: string; nameHu: string; aliases: string[] }>;
+
 export const cleanStartSources = [
   {
     name: "BBC Sport - Premier League",
@@ -402,57 +481,7 @@ export const cleanStartSources = [
 export async function seed(db: Database): Promise<void> {
   await upsertCategory(db, { slug: "labdarugas", nameHu: "Labdarúgás" });
 
-  // Small taxonomy covering teams/competitions that show up regularly in the
-  // BBC Sport Football feed — enough for the MVP's deterministic alias-lookup
-  // entity matching (docs/adr/0005-mvp-end-to-end-scope-cuts.md decision 3).
-  // Extending the source base beyond this dev feed means extending this list,
-  // not touching any agent's code.
-  const teamEntities: Array<{ nameCanonical: string; nameHu: string; aliases: string[] }> = [
-    { nameCanonical: "Liverpool FC", nameHu: "Liverpool", aliases: ["Liverpool"] },
-    {
-      nameCanonical: "Manchester United FC",
-      nameHu: "Manchester United",
-      aliases: ["Manchester United", "Man Utd", "Man United"],
-    },
-    {
-      nameCanonical: "Manchester City FC",
-      nameHu: "Manchester City",
-      aliases: ["Manchester City", "Man City"],
-    },
-    { nameCanonical: "Arsenal FC", nameHu: "Arsenal", aliases: ["Arsenal"] },
-    { nameCanonical: "Chelsea FC", nameHu: "Chelsea", aliases: ["Chelsea"] },
-    { nameCanonical: "Tottenham Hotspur FC", nameHu: "Tottenham", aliases: ["Tottenham", "Spurs"] },
-    { nameCanonical: "Newcastle United FC", nameHu: "Newcastle United", aliases: ["Newcastle"] },
-    { nameCanonical: "Real Madrid CF", nameHu: "Real Madrid", aliases: ["Real Madrid"] },
-    { nameCanonical: "FC Barcelona", nameHu: "Barcelona", aliases: ["Barcelona", "Barca"] },
-    {
-      nameCanonical: "FC Bayern München",
-      nameHu: "Bayern München",
-      aliases: ["Bayern Munich", "Bayern"],
-    },
-    // --- Bővítve 2026-07-29 ("specifikus entitásfelismerés bővítése"
-    // sprint) — a felhasználó explicit alias-példái (PSG, Inter), plusz
-    // további, a valós production adatokban ténylegesen előforduló csapatok
-    // (docs/open-decisions.md #14 javítási munka során látott cikkcímek:
-    // Rangers, Aston Villa, Leicester, Bournemouth).
-    {
-      nameCanonical: "Paris Saint-Germain FC",
-      nameHu: "Paris Saint-Germain",
-      aliases: ["Paris Saint-Germain", "PSG", "Paris SG"],
-    },
-    {
-      nameCanonical: "FC Internazionale Milano",
-      nameHu: "Internazionale",
-      aliases: ["Internazionale", "Inter Milan", "Inter"],
-    },
-    { nameCanonical: "Juventus FC", nameHu: "Juventus", aliases: ["Juventus", "Juve"] },
-    { nameCanonical: "AC Milan", nameHu: "AC Milan", aliases: ["AC Milan", "Milan"] },
-    { nameCanonical: "Aston Villa FC", nameHu: "Aston Villa", aliases: ["Aston Villa", "Villa"] },
-    { nameCanonical: "Leicester City FC", nameHu: "Leicester City", aliases: ["Leicester"] },
-    { nameCanonical: "AFC Bournemouth", nameHu: "Bournemouth", aliases: ["Bournemouth"] },
-    { nameCanonical: "Rangers FC", nameHu: "Rangers", aliases: ["Rangers"] },
-  ];
-  for (const team of teamEntities) {
+  for (const team of premierLeagueTeamEntities) {
     await upsertEntity(db, { type: "team", ...team });
   }
 
