@@ -37,8 +37,7 @@ describe("clean-start source seed", () => {
       expect(source?.extractorName, domain).toBe("structured-news-article");
     }
     expect(
-      cleanStartSources.find((source) => source.name === "The Guardian - Football")
-        ?.extractorName,
+      cleanStartSources.find((source) => source.name === "The Guardian - Football")?.extractorName,
     ).toBeNull();
   });
 });

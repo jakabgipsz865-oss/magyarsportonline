@@ -162,8 +162,7 @@ export const cleanStartSources = [
     contentMode: "discovery_only",
     trustBaseline: 72,
     termsStatus: "Pending live ToS/robots/extractor review.",
-    attributionRule:
-      "Attribute claims explicitly to talkSPORT when not independently confirmed.",
+    attributionRule: "Attribute claims explicitly to talkSPORT when not independently confirmed.",
     pollingFrequencyMinutes: 2,
     extractorName: "structured-news-article",
   },
