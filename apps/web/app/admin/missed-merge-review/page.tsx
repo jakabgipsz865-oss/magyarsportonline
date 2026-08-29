@@ -183,7 +183,7 @@ export default async function MissedMergeReviewPage(): Promise<ReactNode> {
   const { pending, decided, decidedCount } = await refreshAndListMissedMergeReviews();
 
   return (
-    <main style={{ maxWidth: 900, margin: "0 auto", padding: "0 12px" }}>
+    <main className="admin-page">
       <AdminHeader activePath="/admin/missed-merge-review" />
       <h1>Elmulasztott merge — kézi felülvizsgálat</h1>
       <p>

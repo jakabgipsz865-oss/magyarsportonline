@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export default function AdminKnowledgePage(): ReactNode {
   return (
-    <main style={{ maxWidth: 900, margin: "0 auto", padding: "0 12px" }}>
+    <main className="admin-page">
       <AdminHeader activePath="/admin/knowledge" />
       <h1>Admin tudás export / import</h1>
       <p style={{ color: "#555" }}>

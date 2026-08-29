@@ -410,7 +410,7 @@ export default async function ReviewQueuePage({ searchParams }: PageProps): Prom
   const decidable = category === "human_decision_required" || category === "ready_for_review";
 
   return (
-    <main style={{ maxWidth: 900, margin: "0 auto", padding: "0 12px" }}>
+    <main className="admin-page">
       <AdminHeader activePath="/admin/review" />
       <h1>Review queue</h1>
 

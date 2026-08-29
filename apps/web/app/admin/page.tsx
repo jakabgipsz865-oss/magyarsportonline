@@ -5,7 +5,6 @@ import { AdminHeader } from "./_components/admin-header";
 import { listTriagedReviewItems } from "../../lib/review-triage";
 import { refreshAndListMissedMergeReviews } from "../../lib/missed-merge-review";
 
-const { STORY_TRIAGE_CATEGORY_LABELS_HU } = publishGate;
 type StoryTriageCategory = publishGate.StoryTriageCategory;
 
 export const dynamic = "force-dynamic";
@@ -17,11 +16,30 @@ const TILE_ORDER: StoryTriageCategory[] = [
   "reject_or_archive",
 ];
 
-const TILE_COLOR: Record<StoryTriageCategory, string> = {
-  human_decision_required: "#9a6700",
-  ready_for_review: "#1a7f37",
-  auto_repair_required: "#57606a",
-  reject_or_archive: "#cf222e",
+const TILE_CONTENT: Record<
+  StoryTriageCategory,
+  { labelHu: string; descriptionHu: string; tone: string }
+> = {
+  human_decision_required: {
+    labelHu: "Döntésre vár",
+    descriptionHu: "Hírek, amelyekhez szerkesztői döntés szükséges.",
+    tone: "attention",
+  },
+  ready_for_review: {
+    labelHu: "Kész ellenőrzésre",
+    descriptionHu: "Feldolgozott hírek, amelyek átnézhetők.",
+    tone: "success",
+  },
+  auto_repair_required: {
+    labelHu: "Automatikus javítás alatt",
+    descriptionHu: "A rendszer által kezelt, még nem kész hírek.",
+    tone: "neutral",
+  },
+  reject_or_archive: {
+    labelHu: "Archiválandó",
+    descriptionHu: "Nem publikálható vagy már lezárt tételek.",
+    tone: "danger",
+  },
 };
 
 const TILE_HREF: Record<StoryTriageCategory, string> = {
@@ -38,26 +56,13 @@ function CategoryTile({
   category: StoryTriageCategory;
   count: number;
 }): ReactNode {
+  const content = TILE_CONTENT[category];
+
   return (
-    <Link
-      href={TILE_HREF[category]}
-      style={{
-        display: "block",
-        flex: "1 1 200px",
-        minWidth: 200,
-        border: `1px solid ${TILE_COLOR[category]}`,
-        borderRadius: 8,
-        padding: 16,
-        textDecoration: "none",
-        color: "inherit",
-      }}
-    >
-      <p style={{ margin: 0, fontSize: "2.2em", fontWeight: 700, color: TILE_COLOR[category] }}>
-        {count}
-      </p>
-      <p style={{ margin: "4px 0 0", fontWeight: 600 }}>
-        {STORY_TRIAGE_CATEGORY_LABELS_HU[category]}
-      </p>
+    <Link href={TILE_HREF[category]} className="admin-metric-card" data-tone={content.tone}>
+      <span className="admin-metric-card__count mono">{count}</span>
+      <strong className="admin-metric-card__label">{content.labelHu}</strong>
+      <span className="admin-metric-card__description">{content.descriptionHu}</span>
     </Link>
   );
 }
@@ -77,74 +82,60 @@ export default async function AdminDashboardPage(): Promise<ReactNode> {
   ]);
 
   return (
-    <main style={{ maxWidth: 900, margin: "0 auto", padding: "0 12px" }}>
+    <main className="admin-page">
       <AdminHeader activePath="/admin" />
-      <h1>Áttekintés</h1>
-      <p style={{ color: "#555" }}>
-        A review queue automatikusan négy kategóriába van sorolva — csak az{" "}
-        <strong>Emberi döntés szükséges</strong> kategória igényel kézi átnézést, a többit a
-        rendszer automatikusan javítja vagy archiválja.
-      </p>
+      <section className="admin-dashboard__intro" aria-labelledby="admin-dashboard-title">
+        <p className="admin-eyebrow">Áttekintés</p>
+        <h1 id="admin-dashboard-title">Mi igényel figyelmet?</h1>
+        <p>Az elsődleges szerkesztői feladatok és a feldolgozás aktuális állapota egy helyen.</p>
+      </section>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 24 }}>
-        {TILE_ORDER.map((category) => (
-          <CategoryTile key={category} category={category} count={countsByCategory[category]} />
-        ))}
-      </div>
+      <section className="admin-dashboard__section" aria-labelledby="news-status-title">
+        <div className="admin-section-heading">
+          <div>
+            <p className="admin-eyebrow">Hírek</p>
+            <h2 id="news-status-title">Feldolgozási állapot</h2>
+          </div>
+          <Link href="/admin/review" className="admin-text-link">
+            Összes hír megnyitása
+          </Link>
+        </div>
+        <div className="admin-metric-grid">
+          {TILE_ORDER.map((category) => (
+            <CategoryTile key={category} category={category} count={countsByCategory[category]} />
+          ))}
+        </div>
+      </section>
 
-      <Link
-        href="/admin/missed-merge-review"
-        style={{
-          display: "block",
-          border: "1px solid #999",
-          borderRadius: 8,
-          padding: 16,
-          textDecoration: "none",
-          color: "inherit",
-          maxWidth: 320,
-        }}
-      >
-        <p style={{ margin: 0, fontSize: "2.2em", fontWeight: 700 }}>
-          {missedMerge.pending.length}
-        </p>
-        <p style={{ margin: "4px 0 0", fontWeight: 600 }}>Story merge review — döntésre vár</p>
-      </Link>
-
-      <Link
-        href="/internal/editorial-ab-review"
-        style={{
-          display: "block",
-          border: "1px solid #1e7e34",
-          borderRadius: 8,
-          padding: 16,
-          textDecoration: "none",
-          color: "inherit",
-          maxWidth: 320,
-          marginTop: 12,
-        }}
-      >
-        <p style={{ margin: 0, fontSize: "1.25em", fontWeight: 700 }}>Magyar nyelvi tanítás</p>
-        <p style={{ margin: "4px 0 0" }}>
-          Rossz→jó mondatpárok, futballszleng és szerkesztői memória
-        </p>
-      </Link>
-
-      <Link
-        href="/admin/knowledge"
-        style={{
-          display: "block",
-          border: "1px solid #476582",
-          borderRadius: 8,
-          padding: 16,
-          textDecoration: "none",
-          color: "inherit",
-          maxWidth: 320,
-          marginTop: 12,
-        }}
-      >
-        <p style={{ margin: 0, fontSize: "1.25em", fontWeight: 700 }}>Tudás export / import</p>
-        <p style={{ margin: "4px 0 0" }}>Verziózott backup, migráció és validált visszaállítás</p>
-      </Link>
+      <section className="admin-dashboard__section" aria-labelledby="admin-tasks-title">
+        <div className="admin-section-heading">
+          <div>
+            <p className="admin-eyebrow">Admin feladatok</p>
+            <h2 id="admin-tasks-title">Ellenőrzés és szerkesztői tudás</h2>
+          </div>
+        </div>
+        <div className="admin-action-grid">
+          <Link href="/admin/missed-merge-review" className="admin-action-card">
+            <span className="admin-action-card__value mono">{missedMerge.pending.length}</span>
+            <strong>Összevonási döntésre vár</strong>
+            <span>Ellenőrizd, hogy két hír ugyanarról az eseményről szól-e.</span>
+          </Link>
+          <Link href="/internal/editorial-ab-review" className="admin-action-card">
+            <span className="admin-action-card__icon" aria-hidden="true">
+              Aa
+            </span>
+            <strong>Nyelvi tanítás</strong>
+            <span>Javítások, futballkifejezések és szerkesztői minták kezelése.</span>
+          </Link>
+          <Link href="/admin/knowledge" className="admin-action-card">
+            <span className="admin-action-card__icon" aria-hidden="true">
+              ↕
+            </span>
+            <strong>Tudás mentése és visszaállítása</strong>
+            <span>Exportáld vagy validáltan importáld a szerkesztői tudást.</span>
+          </Link>
+        </div>
+      </section>
     </main>
   );
 }
