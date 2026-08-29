@@ -1,8 +1,20 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import type { Database } from "../client";
 import { sources } from "../schema/index";
 
 export type Source = typeof sources.$inferSelect;
+
+export function isSourceDue(
+  source: Pick<Source, "isActive" | "lastFetchedAt" | "pollingFrequencyMinutes">,
+  now = new Date(),
+): boolean {
+  return (
+    source.isActive &&
+    (source.lastFetchedAt === null ||
+      source.pollingFrequencyMinutes === null ||
+      source.lastFetchedAt.getTime() + source.pollingFrequencyMinutes * 60_000 <= now.getTime())
+  );
+}
 
 /**
  * Narrow, Source Ingest / Fact Verification agent-facing slice of the
@@ -29,7 +41,16 @@ export class SourceRepository {
     return this.db
       .select()
       .from(sources)
-      .where(eq(sources.isActive, true))
+      .where(
+        and(
+          eq(sources.isActive, true),
+          or(
+            isNull(sources.lastFetchedAt),
+            isNull(sources.pollingFrequencyMinutes),
+            sql`${sources.lastFetchedAt} <= now() - (${sources.pollingFrequencyMinutes} * interval '1 minute')`,
+          ),
+        ),
+      )
       .orderBy(sql`${sources.lastFetchedAt} ASC NULLS FIRST`);
   }
 
