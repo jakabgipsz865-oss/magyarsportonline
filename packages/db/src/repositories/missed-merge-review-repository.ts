@@ -1,5 +1,5 @@
 import type { MissedMergeReviewDecision } from "@magyarsportonline/shared";
-import { desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { count, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import type { Database } from "../client";
 import { missedMergeReviews } from "../schema/index";
 
@@ -61,6 +61,15 @@ export class MissedMergeReviewRepository {
       .from(missedMergeReviews)
       .where(isNull(missedMergeReviews.decision))
       .orderBy(desc(missedMergeReviews.matchScore));
+  }
+
+  /** Dashboard counter without loading candidate JSON payloads. */
+  async countPending(): Promise<number> {
+    const [row] = await this.db
+      .select({ value: count() })
+      .from(missedMergeReviews)
+      .where(isNull(missedMergeReviews.decision));
+    return row?.value ?? 0;
   }
 
   /** Every review regardless of decision state, most recently updated first — audit/history view. */

@@ -35,9 +35,9 @@ function DashboardMetricCard({
  */
 export default async function AdminDashboardPage(): Promise<ReactNode> {
   const repos = createRepositories();
-  const [pendingReviews, pendingMergeReviews] = await Promise.all([
-    repos.reviewQueueRepository.listPending(),
-    repos.missedMergeReviewRepository.listPending(),
+  const [pendingReviewCount, pendingMergeReviewCount] = await Promise.all([
+    repos.reviewQueueRepository.countPending(),
+    repos.missedMergeReviewRepository.countPending(),
   ]);
 
   return (
@@ -62,13 +62,13 @@ export default async function AdminDashboardPage(): Promise<ReactNode> {
         <div className="admin-metric-grid">
           <DashboardMetricCard
             href="/admin/review"
-            count={pendingReviews.length}
+            count={pendingReviewCount}
             labelHu="Ellenőrzésre vár"
             descriptionHu="Még nyitott szerkesztői feladatok."
           />
           <DashboardMetricCard
             href="/admin/missed-merge-review"
-            count={pendingMergeReviews.length}
+            count={pendingMergeReviewCount}
             labelHu="Összevonási döntésre vár"
             descriptionHu="Hírpárok, amelyeknél emberi döntés szükséges."
           />
@@ -84,7 +84,7 @@ export default async function AdminDashboardPage(): Promise<ReactNode> {
         </div>
         <div className="admin-action-grid">
           <Link href="/admin/missed-merge-review" className="admin-action-card">
-            <span className="admin-action-card__value mono">{pendingMergeReviews.length}</span>
+            <span className="admin-action-card__value mono">{pendingMergeReviewCount}</span>
             <strong>Összevonási döntésre vár</strong>
             <span>Ellenőrizd, hogy két hír ugyanarról az eseményről szól-e.</span>
           </Link>

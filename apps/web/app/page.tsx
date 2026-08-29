@@ -7,8 +7,9 @@ import { entitySlug } from "../lib/entity-slug";
 import { buildHomepageView } from "../lib/homepage";
 import { toStorySummaryView, type StorySummaryView } from "../lib/story-view";
 
-// DB-driven, always-fresh listing — never statically prerendered at build time.
-export const dynamic = "force-dynamic";
+// Keep the homepage close to real time without rebuilding it from the DB for
+// every reader. The first request after this short window refreshes the page.
+export const revalidate = 10;
 
 const HOMEPAGE_STORY_LIMIT = 24;
 

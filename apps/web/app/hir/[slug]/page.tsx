@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { ReactNode } from "react";
+import { cache, type ReactNode } from "react";
 import { deduplication } from "@magyarsportonline/agents";
 import { MediaThumb } from "../../../components/media-thumb";
 import { StoryRiver } from "../../../components/story-river";
@@ -22,11 +22,11 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
-async function loadStory(slug: string) {
+const loadStory = cache(async (slug: string) => {
   const { storyReadModelRepository } = createRepositories();
   const row = await storyReadModelRepository.getBySlug(slug);
   return row ? toStoryDetailView(row) : null;
-}
+});
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;

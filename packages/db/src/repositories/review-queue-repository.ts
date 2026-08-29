@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, isNull, lte, or } from "drizzle-orm";
+import { and, asc, count, eq, gte, isNull, lte, or } from "drizzle-orm";
 import type { ReviewQueueReason, ReviewQueueStatus, RiskLevel } from "@magyarsportonline/shared";
 import type { Database } from "../client";
 import { reviewQueueItems, stories, storyVersions } from "../schema/index";
@@ -117,6 +117,20 @@ export class ReviewQueueRepository {
       )
       .orderBy(asc(reviewQueueItems.createdAt))
       .limit(filters.limit ?? 10_000);
+  }
+
+  /** Dashboard counter without loading joined StoryVersion content. */
+  async countPending(): Promise<number> {
+    const [row] = await this.db
+      .select({ value: count() })
+      .from(reviewQueueItems)
+      .where(
+        and(
+          eq(reviewQueueItems.status, "pending"),
+          or(isNull(reviewQueueItems.snoozedUntil), lte(reviewQueueItems.snoozedUntil, new Date())),
+        ),
+      );
+    return row?.value ?? 0;
   }
 
   /** "Később" — a tétel `pending` marad, csak `until`-ig kikerül a `listPending()` eredményéből (nem terminal döntés). */
