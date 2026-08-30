@@ -10,6 +10,8 @@ function story(overrides: Partial<StorySummaryView>): StorySummaryView {
     title: "Title",
     lead: "Lead",
     primarySourceName: null,
+    credibilityLevel: null,
+    credibilityLabel: null,
     confidenceScore: 0.7,
     isDeveloping: false,
     isAiGenerated: true,
@@ -60,9 +62,18 @@ describe("buildHomepageView", () => {
   });
 
   it("only includes entities actually mentioned in a story's title or lead", () => {
-    const stories = [story({ title: "Liverpool beat Arsenal", lead: "A thriller at Anfield." })];
+    const stories = [
+      story({
+        title: "Liverpool beat Arsenal",
+        lead: "A thriller at Anfield.",
+      }),
+    ];
     const entities = [
-      entity({ id: "liverpool", nameCanonical: "Liverpool", aliases: ["Liverpool"] }),
+      entity({
+        id: "liverpool",
+        nameCanonical: "Liverpool",
+        aliases: ["Liverpool"],
+      }),
       entity({ id: "chelsea", nameCanonical: "Chelsea", aliases: ["Chelsea"] }),
     ];
     const result = buildHomepageView(stories, entities);

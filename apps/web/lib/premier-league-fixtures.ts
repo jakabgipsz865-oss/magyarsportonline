@@ -1,0 +1,143 @@
+import { unstable_cache } from "next/cache";
+import { z } from "zod";
+
+const API_URL = "https://v3.football.api-sports.io/fixtures";
+const PREMIER_LEAGUE_ID = 39;
+const CACHE_SECONDS = 15 * 60;
+const DISPLAY_LIMIT = 5;
+const LIVE_STATUSES = new Set(["1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT", "LIVE"]);
+
+const responseSchema = z.object({
+  response: z.array(
+    z.object({
+      fixture: z.object({
+        id: z.number(),
+        date: z.string(),
+        status: z.object({
+          long: z.string(),
+          short: z.string(),
+          elapsed: z.number().nullable(),
+        }),
+      }),
+      teams: z.object({
+        home: z.object({ name: z.string() }),
+        away: z.object({ name: z.string() }),
+      }),
+      goals: z.object({
+        home: z.number().nullable(),
+        away: z.number().nullable(),
+      }),
+    }),
+  ),
+});
+
+export interface PremierLeagueMatch {
+  id: number;
+  kickoffUtc: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeGoals: number | null;
+  awayGoals: number | null;
+  statusShort: string;
+  statusLong: string;
+  elapsed: number | null;
+  isLive: boolean;
+}
+
+export interface PremierLeaguePanel {
+  title: string;
+  state: "ready" | "missing_key" | "unavailable";
+  matches: PremierLeagueMatch[];
+}
+
+function localDate(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Budapest",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function addDays(isoDate: string, days: number): string {
+  const date = new Date(`${isoDate}T12:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function seasonFor(date: Date): number {
+  const year = Number(localDate(date).slice(0, 4));
+  const month = Number(localDate(date).slice(5, 7));
+  return month >= 7 ? year : year - 1;
+}
+
+export function selectPremierLeagueMatches(payload: unknown, now = new Date()): PremierLeaguePanel {
+  const parsed = responseSchema.parse(payload);
+  const today = localDate(now);
+  const matches = parsed.response
+    .map(({ fixture, teams, goals }) => ({
+      id: fixture.id,
+      kickoffUtc: fixture.date,
+      homeTeam: teams.home.name,
+      awayTeam: teams.away.name,
+      homeGoals: goals.home,
+      awayGoals: goals.away,
+      statusShort: fixture.status.short,
+      statusLong: fixture.status.long,
+      elapsed: fixture.status.elapsed,
+      isLive: LIVE_STATUSES.has(fixture.status.short),
+    }))
+    .sort(
+      (a, b) => Number(b.isLive) - Number(a.isLive) || a.kickoffUtc.localeCompare(b.kickoffUtc),
+    );
+  const todayMatches = matches.filter((match) => localDate(new Date(match.kickoffUtc)) === today);
+  const upcoming = matches.filter((match) => new Date(match.kickoffUtc) > now);
+
+  return {
+    title: todayMatches.length ? "Mai Premier League-meccsek" : "Következő Premier League-meccsek",
+    state: "ready",
+    matches: (todayMatches.length ? todayMatches : upcoming).slice(0, DISPLAY_LIMIT),
+  };
+}
+
+const fetchFixtures = unstable_cache(
+  async (from: string, to: string, season: number): Promise<PremierLeaguePanel> => {
+    const apiKey = process.env["API_FOOTBALL_KEY"]?.trim();
+    if (!apiKey) {
+      return {
+        title: "Premier League-meccsek",
+        state: "missing_key",
+        matches: [],
+      };
+    }
+    const url = new URL(API_URL);
+    url.search = new URLSearchParams({
+      league: String(PREMIER_LEAGUE_ID),
+      season: String(season),
+      from,
+      to,
+      timezone: "Europe/Budapest",
+    }).toString();
+    const response = await fetch(url, {
+      headers: { "x-apisports-key": apiKey },
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error(`API-Football HTTP ${response.status}`);
+    return selectPremierLeagueMatches(await response.json());
+  },
+  ["premier-league-fixtures-v1"],
+  { revalidate: CACHE_SECONDS },
+);
+
+export async function getPremierLeaguePanel(now = new Date()): Promise<PremierLeaguePanel> {
+  const from = localDate(now);
+  try {
+    return await fetchFixtures(from, addDays(from, 7), seasonFor(now));
+  } catch {
+    return {
+      title: "Premier League-meccsek",
+      state: "unavailable",
+      matches: [],
+    };
+  }
+}

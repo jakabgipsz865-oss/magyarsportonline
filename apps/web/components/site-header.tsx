@@ -8,8 +8,16 @@ import type { ReactNode } from "react";
 const NAV_LINKS = [
   { href: "/", label: "Kezdőlap" },
   { href: "/kategoria/labdarugas", label: "Labdarúgás" },
+  { href: "/#atigazolasok", label: "Átigazolások" },
+  { href: "/#premier-league", label: "Premier League" },
   { href: "/csapatok", label: "Csapatok" },
 ];
+
+function isActive(pathname: string, href: string): boolean {
+  if (href === "/") return pathname === "/";
+  if (href.includes("#")) return false;
+  return pathname.startsWith(href);
+}
 
 export function SiteHeader(): ReactNode {
   const pathname = usePathname();
@@ -34,7 +42,7 @@ export function SiteHeader(): ReactNode {
         </Link>
         <nav className="site-nav">
           {NAV_LINKS.map((link) => (
-            <Link key={link.href} href={link.href} data-active={pathname === link.href}>
+            <Link key={link.href} href={link.href} data-active={isActive(pathname, link.href)}>
               {link.label}
             </Link>
           ))}

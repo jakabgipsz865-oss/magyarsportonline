@@ -1,4 +1,5 @@
 import type { StoryReadModelRow } from "@magyarsportonline/db";
+import { publicCredibilityRating, type PublicCredibilityLevel } from "@magyarsportonline/shared";
 import { z } from "zod";
 
 const sourceSummarySchema = z.object({
@@ -39,7 +40,10 @@ const sourceBreakdownItemSchema = z.object({
   factCountLabelHu: z.string(),
 });
 
-const contradictionClaimSchema = z.object({ sourceName: z.string(), detailHu: z.string() });
+const contradictionClaimSchema = z.object({
+  sourceName: z.string(),
+  detailHu: z.string(),
+});
 
 const contradictionDetailSchema = z.object({
   factType: z.string(),
@@ -48,7 +52,10 @@ const contradictionDetailSchema = z.object({
   statusHu: z.string(),
 });
 
-const scoreBreakdownEntrySchema = z.object({ labelHu: z.string(), points: z.number() });
+const scoreBreakdownEntrySchema = z.object({
+  labelHu: z.string(),
+  points: z.number(),
+});
 
 const credibilitySummarySchema = z.object({
   score: z.number(),
@@ -72,7 +79,12 @@ export interface CredibilityView {
   officialConfirmed: boolean;
   corroboratingSourceCount: number | null;
   updatedAt: string | null;
-  history: Array<{ score: number; band: string; labelHu: string; recordedAt: string }>;
+  history: Array<{
+    score: number;
+    band: string;
+    labelHu: string;
+    recordedAt: string;
+  }>;
   sourceBreakdown: Array<{
     sourceId: string;
     name: string;
@@ -105,6 +117,8 @@ export interface StorySummaryView {
   title: string;
   lead: string;
   primarySourceName: string | null;
+  credibilityLevel: PublicCredibilityLevel | null;
+  credibilityLabel: string | null;
   confidenceScore: number | null;
   isDeveloping: boolean;
   isAiGenerated: boolean;
@@ -117,8 +131,17 @@ export interface StorySummaryView {
 export interface StoryDetailView extends StorySummaryView {
   bodyHtml: string;
   metaDescription: string | null;
-  sources: Array<{ name: string; url: string; firstSeenAt: string; reliabilityTier?: string }>;
-  versionHistory: Array<{ versionNumber: number; createdAt: string; changeSummary: string | null }>;
+  sources: Array<{
+    name: string;
+    url: string;
+    firstSeenAt: string;
+    reliabilityTier?: string;
+  }>;
+  versionHistory: Array<{
+    versionNumber: number;
+    createdAt: string;
+    changeSummary: string | null;
+  }>;
   credibility: CredibilityView | null;
 }
 
@@ -136,12 +159,31 @@ function parseVersionHistory(value: unknown): z.infer<typeof versionHistoryEntry
 export function toStorySummaryView(row: StoryReadModelRow): StorySummaryView {
   const sources = parseSources(row.sourcesSummary);
   const versionHistory = parseVersionHistory(row.versionHistorySummary);
+  const credibility = parseCredibility(row.credibilitySummary);
+  const independentCorroborationCount = credibility
+    ? Math.min(
+        Math.max(0, sources.length - 1),
+        Math.max(0, (credibility.corroboratingSourceCount ?? 0) - 1),
+      )
+    : 0;
+  const publicCredibility = credibility
+    ? publicCredibilityRating({
+        officialConfirmed: credibility.officialConfirmed,
+        sourceReliabilityTiers: sources.flatMap((source) =>
+          source.reliabilityTier ? [source.reliabilityTier] : [],
+        ),
+        independentCorroborationCount,
+        hasContradiction: credibility.contradictions.length > 0,
+      })
+    : null;
   return {
     id: row.storyId,
     slug: row.slug,
     title: row.titleHu,
     lead: row.leadHu,
     primarySourceName: sources[0]?.name ?? null,
+    credibilityLevel: publicCredibility?.level ?? null,
+    credibilityLabel: publicCredibility?.labelHu ?? null,
     confidenceScore: row.confidenceScore === null ? null : Number(row.confidenceScore),
     isDeveloping: row.isDeveloping,
     isAiGenerated: row.isAiGenerated,

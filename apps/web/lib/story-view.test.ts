@@ -27,7 +27,11 @@ function row(overrides?: Partial<StoryReadModelRow>): StoryReadModelRow {
     publishedAt: new Date("2026-07-27T21:00:00.000Z"),
     lastUpdatedAt: new Date("2026-07-27T21:05:00.000Z"),
     versionHistorySummary: [
-      { version_number: 1, created_at: "2026-07-27T20:55:00.000Z", change_summary: null },
+      {
+        version_number: 1,
+        created_at: "2026-07-27T20:55:00.000Z",
+        change_summary: null,
+      },
     ],
     credibilitySummary: null,
     ...overrides,
@@ -42,6 +46,8 @@ describe("toStorySummaryView", () => {
       title: "Liverpool nyert",
       lead: "Lead szöveg.",
       primarySourceName: "BBC Sport - Football",
+      credibilityLevel: null,
+      credibilityLabel: null,
       confidenceScore: 0.7,
       isDeveloping: false,
       isAiGenerated: true,
@@ -55,6 +61,33 @@ describe("toStorySummaryView", () => {
   it("uses the first projected source as the primary source", () => {
     expect(toStorySummaryView(row()).primarySourceName).toBe("BBC Sport - Football");
     expect(toStorySummaryView(row({ sourcesSummary: [] })).primarySourceName).toBeNull();
+  });
+
+  it("maps the internal credibility evidence to the public five-level scale", () => {
+    const result = toStorySummaryView(
+      row({
+        sourcesSummary: [
+          {
+            name: "BBC Sport",
+            url: "https://example.com/1",
+            firstSeenAt: "2026-07-27T20:00:00.000Z",
+            reliabilityTier: "A",
+          },
+        ],
+        credibilitySummary: {
+          score: 29,
+          band: "speculation",
+          labelHu: "Spekuláció",
+          justificationHu: null,
+          officialConfirmed: false,
+          corroboratingSourceCount: 1,
+          updatedAt: null,
+          history: [],
+        },
+      }),
+    );
+    expect(result.credibilityLevel).toBe(4);
+    expect(result.credibilityLabel).toBe("Erős, megbízható forrás");
   });
 
   it("falls back to an empty version history on malformed jsonb", () => {
@@ -85,7 +118,11 @@ describe("toStoryDetailView", () => {
       },
     ]);
     expect(result.versionHistory).toEqual([
-      { versionNumber: 1, createdAt: "2026-07-27T20:55:00.000Z", changeSummary: null },
+      {
+        versionNumber: 1,
+        createdAt: "2026-07-27T20:55:00.000Z",
+        changeSummary: null,
+      },
     ]);
   });
 
@@ -182,7 +219,10 @@ describe("toStoryDetailView", () => {
             },
           ],
           scoreBreakdown: [
-            { labelHu: "Hivatalos forrás megerősítette (Liverpool FC)", points: 25 },
+            {
+              labelHu: "Hivatalos forrás megerősítette (Liverpool FC)",
+              points: 25,
+            },
           ],
         },
       }),

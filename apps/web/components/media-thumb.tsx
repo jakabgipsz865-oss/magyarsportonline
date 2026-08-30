@@ -6,10 +6,10 @@ import type { CSSProperties, ReactNode } from "react";
  * (no client-side randomness, no layout flicker).
  */
 const PLACEHOLDER_GRADIENTS = [
-  "linear-gradient(135deg, #0a4f36, #0e6b48 60%, #1c8a5f)",
-  "linear-gradient(135deg, #0a4f36, #256b48 55%, #3f8f63)",
-  "linear-gradient(135deg, #5c3a12, #8a5a1f 55%, #b8721a)",
-  "linear-gradient(135deg, #0a4f36, #14533d 45%, #b8721a)",
+  "linear-gradient(135deg, #240507, #7f1018 60%, #d51c28)",
+  "linear-gradient(135deg, #080808, #242424 55%, #761018)",
+  "linear-gradient(135deg, #19080a, #531017 55%, #9b1921)",
+  "linear-gradient(135deg, #050505, #241114 45%, #b81620)",
 ];
 
 function hashToIndex(seed: string, mod: number): number {

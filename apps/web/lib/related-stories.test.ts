@@ -10,6 +10,8 @@ function story(overrides: Partial<StorySummaryView>): StorySummaryView {
     title: "Title",
     lead: "Lead",
     primarySourceName: null,
+    credibilityLevel: null,
+    credibilityLabel: null,
     confidenceScore: 0.7,
     isDeveloping: false,
     isAiGenerated: true,
@@ -35,11 +37,27 @@ function entity(overrides: Partial<Entity>): Entity {
 
 describe("pickRelatedStories", () => {
   it("prioritizes stories mentioning the same entity as the current story", () => {
-    const current = story({ id: "current", title: "Liverpool win big", lead: "" });
-    const shared = story({ id: "shared", title: "Liverpool sign new player", lead: "" });
-    const unrelated = story({ id: "unrelated", title: "Tennis update", lead: "" });
+    const current = story({
+      id: "current",
+      title: "Liverpool win big",
+      lead: "",
+    });
+    const shared = story({
+      id: "shared",
+      title: "Liverpool sign new player",
+      lead: "",
+    });
+    const unrelated = story({
+      id: "unrelated",
+      title: "Tennis update",
+      lead: "",
+    });
     const entities = [
-      entity({ id: "liverpool", nameCanonical: "Liverpool", aliases: ["Liverpool"] }),
+      entity({
+        id: "liverpool",
+        nameCanonical: "Liverpool",
+        aliases: ["Liverpool"],
+      }),
     ];
 
     const result = pickRelatedStories(current, [unrelated, shared], entities);
