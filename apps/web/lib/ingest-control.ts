@@ -10,7 +10,7 @@ export interface PipelineQueuePressure {
  */
 export const MAX_ACTIVE_PIPELINE_JOBS = 200;
 export const EXPECTED_JOBS_PER_NEW_ARTICLE = 6;
-export const MAX_NEW_ARTICLES_PER_INGEST = 2;
+export const MAX_NEW_ARTICLES_PER_INGEST = 1;
 
 export function calculateIngestBudget(queue: PipelineQueuePressure): number {
   const activeJobs = Math.max(0, queue.pending) + Math.max(0, queue.inProgress);
