@@ -905,6 +905,15 @@ main {
   color: var(--ink-soft);
   margin: 0 0 1.1rem;
 }
+.story-article__source {
+  margin: -0.45rem 0 1.1rem;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+.story-article__source a {
+  color: var(--pitch);
+  font-weight: 700;
+}
 .story-article__body {
   font-size: 1.05rem;
   max-width: 38rem;

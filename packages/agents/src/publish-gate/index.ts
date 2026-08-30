@@ -29,7 +29,7 @@ export interface PublishGateDeps {
   factRepository: Pick<FactRepository, "listByStoryId">;
   storySourceRepository: Pick<
     StorySourceRepository,
-    "countByStoryId" | "countFullArticleByStoryId"
+    "countFullArticleByStoryId" | "sourcesWithMetaByStoryId"
   >;
   reviewQueueRepository: Pick<ReviewQueueRepository, "insert">;
   agentRunRepository: AgentRunRecorder;
@@ -73,10 +73,12 @@ export async function handleStorySeoReady(deps: PublishGateDeps, event: Trigger)
       if (!version) {
         throw new Error(`StoryVersion "${event.payload.story_version_id}" not found`);
       }
-      const [sourceCount, fullArticleSourceCount] = await Promise.all([
-        deps.storySourceRepository.countByStoryId(story.id),
+      const [sourceMetas, fullArticleSourceCount] = await Promise.all([
+        deps.storySourceRepository.sourcesWithMetaByStoryId(story.id),
         deps.storySourceRepository.countFullArticleByStoryId(story.id),
       ]);
+      const includedSources = sourceMetas.filter((source) => !source.excluded);
+      const sourceCount = includedSources.length;
       const readiness = assessPublicationReadiness({
         titleHu: version.titleHu,
         leadHu: version.leadHu,
@@ -97,6 +99,12 @@ export async function handleStorySeoReady(deps: PublishGateDeps, event: Trigger)
         hasContradiction,
         hasQualityIssues: !readiness.passed,
         forceReviewMode: deps.forceReviewMode,
+        publicationReady: readiness.passed,
+        singleSource: {
+          count: sourceCount,
+          fullArticleCount: fullArticleSourceCount,
+          category: sourceCount === 1 ? (includedSources[0]?.category ?? null) : null,
+        },
       });
 
       if (decision.autoPublish) {

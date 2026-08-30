@@ -133,6 +133,14 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
         )}
         <h1>{story.title}</h1>
         <p className="story-article__lead">{story.lead}</p>
+        {story.sources.length === 1 && story.sources[0] ? (
+          <p className="story-article__source">
+            <strong>Forrás:</strong>{" "}
+            <a href={story.sources[0].url} target="_blank" rel="noreferrer">
+              {story.sources[0].name}
+            </a>
+          </p>
+        ) : null}
         <div className="story-article__hero">
           <MediaThumb imageUrl={story.imageUrl} title={story.title} seed={story.id} />
         </div>

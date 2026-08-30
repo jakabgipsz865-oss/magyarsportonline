@@ -76,11 +76,27 @@ function version(qualityIssues: unknown[] | null = null) {
   };
 }
 
+function sourceMeta(category: "tabloid" | "trusted_media" | "official" | null = "tabloid") {
+  return {
+    storyId: "story-1",
+    rawArticleId: "raw-1",
+    sourceId: "source-1",
+    sourceName: "Daily Mail - Football",
+    category,
+    reliabilityTier: "C" as const,
+    contributionType: "origin" as const,
+    excluded: false,
+    excludedReason: null,
+  };
+}
+
 function buildDeps(overrides?: {
   story?: ReturnType<typeof story>;
   facts?: ReturnType<typeof fact>[];
   version?: ReturnType<typeof version>;
   forceReviewMode?: boolean;
+  sourceMetas?: ReturnType<typeof sourceMeta>[];
+  fullArticleSourceCount?: number;
 }): PublishGateDeps & {
   emitted: unknown[];
   reviewQueueInserts: unknown[];
@@ -105,8 +121,8 @@ function buildDeps(overrides?: {
     forceReviewMode: overrides?.forceReviewMode ?? false,
     factRepository: { listByStoryId: vi.fn(async () => overrides?.facts ?? [fact(false)]) },
     storySourceRepository: {
-      countByStoryId: vi.fn(async () => 1),
-      countFullArticleByStoryId: vi.fn(async () => 1),
+      sourcesWithMetaByStoryId: vi.fn(async () => overrides?.sourceMetas ?? [sourceMeta()]),
+      countFullArticleByStoryId: vi.fn(async () => overrides?.fullArticleSourceCount ?? 1),
     },
     reviewQueueRepository: {
       insert: vi.fn(async (input: unknown) => {
@@ -152,6 +168,26 @@ describe("handleStorySeoReady", () => {
       }),
     ]);
     expect(deps.reviewQueueInserts).toEqual([]);
+  });
+
+  it("auto-publishes a readiness-passing single tabloid full article at 0.545 confidence", async () => {
+    const deps = buildDeps({ story: story({ confidenceScore: "0.545" }) });
+
+    await handleStorySeoReady(deps, triggerEvent());
+
+    expect(deps.storyRepository.publish).toHaveBeenCalled();
+    expect(deps.reviewQueueInserts).toEqual([]);
+  });
+
+  it("blocks the single-source exception when there is no full article", async () => {
+    const deps = buildDeps({
+      story: story({ confidenceScore: "0.545" }),
+      fullArticleSourceCount: 0,
+    });
+
+    await handleStorySeoReady(deps, triggerEvent());
+
+    expect(deps.storyRepository.publish).not.toHaveBeenCalled();
   });
 
   it("sends a high-risk story to review with reason high_risk", async () => {

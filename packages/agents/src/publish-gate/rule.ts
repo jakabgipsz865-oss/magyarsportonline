@@ -1,4 +1,4 @@
-import type { ReviewQueueReason, RiskLevel } from "@magyarsportonline/shared";
+import type { ReviewQueueReason, RiskLevel, SourceCategory } from "@magyarsportonline/shared";
 
 /** docs/architecture/02-agents.md §2.7: "confidence_score ≥ 0.65". */
 export const CONFIDENCE_THRESHOLD = 0.65;
@@ -11,6 +11,12 @@ export interface PublishDecisionInput {
   hasQualityIssues?: boolean;
   /** Operational kill switch (Content Quality & Reliability Hardening sprint): route every decision to review, no matter how confident — see apps/web/lib/env.ts FORCE_REVIEW_MODE. */
   forceReviewMode?: boolean;
+  publicationReady?: boolean;
+  singleSource?: {
+    count: number;
+    fullArticleCount: number;
+    category: SourceCategory | null;
+  };
 }
 
 export type PublishDecision =
@@ -46,7 +52,14 @@ export function decidePublish(input: PublishDecisionInput): PublishDecision {
   if (input.hasContradiction) {
     return { autoPublish: false, reason: "contradiction" };
   }
-  if (input.confidenceScore < CONFIDENCE_THRESHOLD) {
+  const singleSourceException =
+    input.publicationReady === true &&
+    input.singleSource?.count === 1 &&
+    input.singleSource.fullArticleCount >= 1 &&
+    (input.singleSource.category === "tabloid" ||
+      input.singleSource.category === "trusted_media") &&
+    input.confidenceScore >= 0.5;
+  if (input.confidenceScore < CONFIDENCE_THRESHOLD && !singleSourceException) {
     return { autoPublish: false, reason: "low_confidence" };
   }
   return { autoPublish: true };
