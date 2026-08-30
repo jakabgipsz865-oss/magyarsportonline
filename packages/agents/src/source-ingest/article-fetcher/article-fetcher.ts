@@ -56,6 +56,28 @@ export class ArticleFetcher {
 
     try {
       const html = await withRetry(() => this.htmlFetcher.fetch(url), { retries: 1 });
+      const resolvedUrl = extractor.resolveUrl?.(html, url);
+      if (resolvedUrl && resolvedUrl !== url) {
+        try {
+          const resolvedHtml = await withRetry(() => this.htmlFetcher.fetch(resolvedUrl), {
+            retries: 1,
+          });
+          const resolvedResult = extractor.extract(resolvedHtml, resolvedUrl);
+          if (resolvedResult) {
+            return { ...resolvedResult, resolvedUrl };
+          }
+        } catch (error) {
+          this.logger?.warn(
+            {
+              url,
+              resolvedUrl,
+              extractor: extractor.name,
+              error: error instanceof Error ? error.message : String(error),
+            },
+            "resolved article fetch failed, falling back to the original page",
+          );
+        }
+      }
       const result = extractor.extract(html, url);
       if (!result) {
         this.logger?.warn(

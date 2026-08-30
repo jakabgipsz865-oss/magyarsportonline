@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache, type ReactNode } from "react";
 import { deduplication } from "@magyarsportonline/agents";
+import { publicCredibilityRating } from "@magyarsportonline/shared";
 import { MediaThumb } from "../../../components/media-thumb";
 import { StoryRiver } from "../../../components/story-river";
 import { createRepositories } from "../../../lib/db";
@@ -109,7 +110,27 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
   const primaryEntity = primaryEntityMatch
     ? (entities.find((entity) => entity.id === primaryEntityMatch.entityId) ?? null)
     : null;
-  const sourceUrlByName = new Map(story.sources.map((source) => [source.name, source.url]));
+  const independentCorroborationCount = Math.min(
+    Math.max(0, story.sources.length - 1),
+    Math.max(0, (story.credibility?.corroboratingSourceCount ?? 0) - 1),
+  );
+  const publicCredibility = story.credibility
+    ? publicCredibilityRating({
+        officialConfirmed: story.credibility.officialConfirmed,
+        sourceReliabilityTiers: story.sources.flatMap((source) =>
+          source.reliabilityTier ? [source.reliabilityTier] : [],
+        ),
+        independentCorroborationCount,
+        hasContradiction: story.credibility.contradictions.length > 0,
+      })
+    : null;
+  const reliabilityLabel = story.sources.some((source) => source.reliabilityTier === "A")
+    ? "erős"
+    : story.sources.some((source) => source.reliabilityTier === "B")
+      ? "közepes"
+      : story.sources.some((source) => source.reliabilityTier === "C")
+        ? "korlátozott"
+        : "nincs besorolva";
 
   return (
     <main>
@@ -121,192 +142,127 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
       <Link href="/" className="back-link">
         ← Vissza a főoldalra
       </Link>
-      <article className="story-article">
-        <span className="kicker">
-          Labdarúgás{primaryEntity ? ` · ${primaryEntity.nameHu}` : ""}
-        </span>
-        {!story.isAiGenerated && (
-          <p className="not-ai-notice" role="note">
-            ⚠ Nem AI-fordított tartalom — az eredeti, angol nyelvű forrásszöveg jelenik meg
-            változatlanul.
-          </p>
-        )}
-        <h1>{story.title}</h1>
-        <p className="story-article__lead">{story.lead}</p>
-        {story.sources.length === 1 && story.sources[0] ? (
-          <p className="story-article__source">
-            <strong>Forrás:</strong>{" "}
-            <a href={story.sources[0].url} target="_blank" rel="noreferrer">
-              {story.sources[0].name}
-            </a>
-          </p>
-        ) : null}
-        <div className="story-article__hero">
-          <MediaThumb imageUrl={story.imageUrl} title={story.title} seed={story.id} />
-        </div>
-        {/* biztonságos: story.bodyHtml a projector (packages/agents/read-model-projector) HTML-escape-elt kimenete */}
-        <div className="story-article__body" dangerouslySetInnerHTML={{ __html: story.bodyHtml }} />
-      </article>
-
-      <section className="story-section">
-        <h2>Források ({story.sources.length})</h2>
-        <ul className="story-sources">
-          {story.sources.map((source) => (
-            <li key={source.url}>
-              <a href={source.url} target="_blank" rel="noreferrer">
-                {source.name}
-              </a>
-              {source.reliabilityTier ? (
-                <span className="story-sources__tier">
-                  {" "}
-                  · {source.reliabilityTier} megbízhatóság
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {story.credibility && (
-        <section className="story-section story-credibility">
-          <h2>Hitelesség: {story.credibility.score}/100</h2>
-          <p className="story-credibility__band">
-            <strong>{story.credibility.labelHu ?? "Nincs értékelve"}</strong>
-          </p>
-          {story.credibility.justificationHu ? <p>{story.credibility.justificationHu}</p> : null}
-
-          {story.credibility.sourceBreakdown.length > 0 && (
-            <div className="story-credibility__source-breakdown">
-              <h3>Források</h3>
-              <ul>
-                {story.credibility.sourceBreakdown.map((item) => {
-                  const url = sourceUrlByName.get(item.name);
-                  return (
-                    <li key={item.sourceId}>
-                      <span className="story-credibility__source-name">
-                        {item.badgeEmoji}{" "}
-                        {url ? (
-                          <a href={url} target="_blank" rel="noreferrer">
-                            {item.name}
-                          </a>
-                        ) : (
-                          item.name
-                        )}
-                      </span>
-                      <br />
-                      Megbízhatóság: {item.reliabilityDisplayScore}
-                      <br />
-                      {item.factCountLabelHu}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-
-          {story.credibility.contradictions.map((contradiction) => (
-            <div className="story-credibility__contradiction" key={contradiction.factType}>
-              <p>
-                <strong>⚠ Ellentmondás — {contradiction.factTypeLabelHu}:</strong>
+      <div className="story-layout">
+        <div className="story-main">
+          <article className="story-article">
+            <span className="kicker">
+              Labdarúgás{primaryEntity ? " · " + primaryEntity.nameHu : ""}
+            </span>
+            {!story.isAiGenerated && (
+              <p className="not-ai-notice" role="note">
+                ⚠ Nem AI-fordított tartalom — az eredeti, angol nyelvű forrásszöveg jelenik meg
+                változatlanul.
               </p>
-              <ul>
-                {contradiction.claims.map((claim) => (
-                  <li key={claim.sourceName}>
-                    {claim.sourceName} szerint: {claim.detailHu}
-                  </li>
-                ))}
-              </ul>
-              <p>
-                <strong>Jelenlegi állapot:</strong> {contradiction.statusHu}
+            )}
+            <h1>{story.title}</h1>
+            <p className="story-article__lead">{story.lead}</p>
+            {story.sources.length === 1 && story.sources[0] ? (
+              <p className="story-article__source">
+                <strong>Forrás:</strong>{" "}
+                <a href={story.sources[0].url} target="_blank" rel="noreferrer">
+                  {story.sources[0].name}
+                </a>
               </p>
-            </div>
-          ))}
-
-          <ul className="story-credibility__meta">
-            <li>
-              {story.credibility.corroboratingSourceCount ?? 0} megerősítő forrás a legjobban
-              alátámasztott állításra
-            </li>
-            <li>Hivatalos megerősítés: {story.credibility.officialConfirmed ? "igen" : "nem"}</li>
-            {story.credibility.updatedAt ? (
-              <li>
-                Utolsó frissítés:{" "}
-                <time dateTime={story.credibility.updatedAt}>
-                  {new Date(story.credibility.updatedAt).toLocaleString("hu-HU")}
-                </time>
-              </li>
             ) : null}
-          </ul>
+            <div className="story-article__hero">
+              <MediaThumb imageUrl={story.imageUrl} title={story.title} seed={story.id} />
+            </div>
+            {/* biztonságos: story.bodyHtml a projector (packages/agents/read-model-projector) HTML-escape-elt kimenete */}
+            <div
+              className="story-article__body"
+              dangerouslySetInnerHTML={{ __html: story.bodyHtml }}
+            />
+          </article>
 
-          {story.credibility.scoreBreakdown.length > 0 && (
-            <details className="story-credibility__score-breakdown">
-              <summary>Miért ennyi a pontszám?</summary>
-              <ul>
-                {story.credibility.scoreBreakdown.map((entry, index) => (
-                  <li key={`${entry.labelHu}-${index}`}>
-                    {entry.points > 0 ? `+${entry.points}` : entry.points} — {entry.labelHu}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-
-          {story.credibility.history.length > 1 && (
-            <details className="story-credibility__history">
-              <summary>Hitelességi változások története</summary>
-              <ul>
-                {story.credibility.history.map((entry, index) => (
-                  <li key={`${entry.recordedAt}-${index}`}>
-                    <time dateTime={entry.recordedAt}>
-                      {new Date(entry.recordedAt).toLocaleString("hu-HU")}
+          {story.versionHistory.length > 1 && (
+            <section className="story-section">
+              <h2>Frissítések</h2>
+              <ul className="version-history">
+                {story.versionHistory.map((entry) => (
+                  <li key={entry.versionNumber}>
+                    <time dateTime={entry.createdAt}>
+                      {new Date(entry.createdAt).toLocaleString("hu-HU")}
                     </time>
                     {" — "}
-                    {entry.labelHu} ({entry.score}/100)
+                    {entry.changeSummary ?? "Kezdeti hír a rendelkezésre álló források alapján."}
                   </li>
                 ))}
               </ul>
-            </details>
+            </section>
           )}
-        </section>
-      )}
 
-      {story.versionHistory.length > 1 && (
-        <section className="story-section">
-          <h2>Frissítések</h2>
-          <ul className="version-history">
-            {story.versionHistory.map((entry) => (
-              <li key={entry.versionNumber}>
-                <time dateTime={entry.createdAt}>
-                  {new Date(entry.createdAt).toLocaleString("hu-HU")}
-                </time>
-                {" — "}
-                {entry.changeSummary ?? "Kezdeti hír a rendelkezésre álló források alapján."}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+          {story.isDeveloping ? <p className="story-footer-meta">Ez a sztori még alakul.</p> : null}
 
-      {related.length > 0 ? (
-        <section className="story-section">
-          <h2>Kapcsolódó hírek</h2>
-          <StoryRiver stories={related} />
-        </section>
-      ) : null}
+          {primaryEntity ? (
+            <p className="story-footer-meta">
+              <Link href={"/csapat/" + entitySlug(primaryEntity)}>
+                Több hír: {primaryEntity.nameHu}
+              </Link>
+            </p>
+          ) : null}
+        </div>
 
-      <p className="story-footer-meta">
-        Megbízhatósági pontszám:{" "}
-        {story.confidenceScore !== null ? story.confidenceScore.toFixed(2) : "n/a"}
-        {story.isDeveloping ? " · Ez a sztori még alakul." : null}
-      </p>
+        <aside className="story-sidebar" aria-label="A hír kiegészítő információi">
+          {publicCredibility && story.credibility ? (
+            <section
+              className={
+                "story-section story-credibility story-credibility--" + publicCredibility.slug
+              }
+            >
+              <h2>Hitelesség</h2>
+              <p className="story-credibility__rating">
+                <span>{publicCredibility.level}/5</span>
+                <strong>{publicCredibility.labelHu}</strong>
+              </p>
+              <ul className="story-credibility__meta">
+                <li>Forrás megbízhatósága: {reliabilityLabel}</li>
+                <li>Független megerősítő forrás: {independentCorroborationCount}</li>
+                <li>
+                  Hivatalos megerősítés: {story.credibility.officialConfirmed ? "igen" : "nem"}
+                </li>
+              </ul>
 
-      {primaryEntity ? (
-        <p className="story-footer-meta">
-          <Link href={`/csapat/${entitySlug(primaryEntity)}`}>
-            Több hír: {primaryEntity.nameHu}
-          </Link>
-        </p>
-      ) : null}
+              {story.credibility.contradictions.map((contradiction) => (
+                <div className="story-credibility__contradiction" key={contradiction.factType}>
+                  <p>
+                    <strong>⚠ Ellentmondás — {contradiction.factTypeLabelHu}:</strong>
+                  </p>
+                  <ul>
+                    {contradiction.claims.map((claim) => (
+                      <li key={claim.sourceName}>
+                        {claim.sourceName} szerint: {claim.detailHu}
+                      </li>
+                    ))}
+                  </ul>
+                  <p>
+                    <strong>Jelenlegi állapot:</strong> {contradiction.statusHu}
+                  </p>
+                </div>
+              ))}
+            </section>
+          ) : null}
+
+          <section className="story-section">
+            <h2>Források ({story.sources.length})</h2>
+            <ul className="story-sources">
+              {story.sources.map((source) => (
+                <li key={source.url}>
+                  <a href={source.url} target="_blank" rel="noreferrer">
+                    {source.name}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          {related.length > 0 ? (
+            <section className="story-section story-related">
+              <h2>Kapcsolódó hírek</h2>
+              <StoryRiver stories={related.slice(0, 3)} />
+            </section>
+          ) : null}
+        </aside>
+      </div>
     </main>
   );
 }

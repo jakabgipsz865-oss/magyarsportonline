@@ -57,6 +57,43 @@ export const bbcSportExtractor: ArticleExtractor = {
     }
   },
 
+  resolveUrl(html, url) {
+    try {
+      const pageUrl = new URL(url);
+      if (!pageUrl.pathname.includes("/videos/")) return null;
+
+      const $ = cheerio.load(html);
+      const liveCandidates = new Set<string>();
+      const reportCandidates = new Set<string>();
+      $("a[href]").each((_, element) => {
+        const href = $(element).attr("href");
+        if (!href) return;
+        try {
+          const candidate = new URL(href, pageUrl);
+          const isBbc = BBC_DOMAINS.some(
+            (domain) => candidate.hostname === domain || candidate.hostname === `www.${domain}`,
+          );
+          const isLiveReport = /^\/sport\/football\/live\//.test(candidate.pathname);
+          const isTextReport =
+            /^\/sport\/football\/articles?\//.test(candidate.pathname) &&
+            /match report|full report|report:/i.test($(element).text());
+          if (isBbc && (isLiveReport || isTextReport)) {
+            candidate.search = "";
+            candidate.hash = "";
+            (isLiveReport ? liveCandidates : reportCandidates).add(candidate.toString());
+          }
+        } catch {
+          // Nem URL-szerű link: nem biztonságos feloldási jelölt.
+        }
+      });
+      if (liveCandidates.size === 1) return [...liveCandidates][0]!;
+      if (liveCandidates.size > 1) return null;
+      return reportCandidates.size === 1 ? [...reportCandidates][0]! : null;
+    } catch {
+      return null;
+    }
+  },
+
   extract(html) {
     const $ = cheerio.load(html);
 

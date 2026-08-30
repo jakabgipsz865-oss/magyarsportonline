@@ -35,6 +35,7 @@ export class ArticleEnrichingSourceAdapter implements SourceAdapter {
     );
     return {
       ...article,
+      sourceUrl: fetched.resolvedUrl ?? article.sourceUrl,
       titleOriginal: fetched.titleOriginal || article.titleOriginal,
       subtitleOriginal: fetched.subtitleOriginal,
       bodyOriginal: fetched.bodyOriginal,

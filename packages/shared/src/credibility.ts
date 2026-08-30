@@ -26,3 +26,46 @@ export function credibilityBandForScore(score: number): CredibilityBand {
   const band = CREDIBILITY_BANDS.find((entry) => clamped >= entry.min && clamped <= entry.max);
   return band ?? CREDIBILITY_BANDS[CREDIBILITY_BANDS.length - 1]!;
 }
+
+export type PublicCredibilityLevel = 1 | 2 | 3 | 4 | 5;
+
+export interface PublicCredibilityRating {
+  level: PublicCredibilityLevel;
+  labelHu: string;
+  slug: "speculative" | "rumour" | "reported" | "strong_source" | "official";
+}
+
+const PUBLIC_CREDIBILITY_RATINGS: Record<PublicCredibilityLevel, PublicCredibilityRating> = {
+  1: { level: 1, labelHu: "Spekulatív / gyenge alátámasztás", slug: "speculative" },
+  2: { level: 2, labelHu: "Pletyka / korlátozott bizonyosság", slug: "rumour" },
+  3: { level: 3, labelHu: "Forrásértesülés / mérsékelt bizonyosság", slug: "reported" },
+  4: { level: 4, labelHu: "Erős, megbízható forrás", slug: "strong_source" },
+  5: { level: 5, labelHu: "Hivatalosan / közvetlenül megerősített", slug: "official" },
+};
+
+export function publicCredibilityRating(input: {
+  officialConfirmed: boolean;
+  sourceReliabilityTiers: readonly string[];
+  independentCorroborationCount: number;
+  hasContradiction: boolean;
+}): PublicCredibilityRating {
+  const tiers = new Set(input.sourceReliabilityTiers);
+  let level = input.officialConfirmed
+    ? 5
+    : tiers.has("A")
+      ? 4
+      : tiers.has("B")
+        ? 3
+        : tiers.has("C")
+          ? 2
+          : 1;
+
+  if (!input.officialConfirmed && input.independentCorroborationCount > 0) {
+    level = Math.min(4, level + 1);
+  }
+  if (input.hasContradiction) {
+    level = Math.min(2, level);
+  }
+
+  return PUBLIC_CREDIBILITY_RATINGS[level as PublicCredibilityLevel];
+}

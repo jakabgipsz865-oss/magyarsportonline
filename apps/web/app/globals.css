@@ -881,20 +881,31 @@ main {
   font-size: 0.9rem;
   margin-bottom: 1.25rem;
 }
-.story-article {
-  max-width: 42rem;
+.story-layout {
+  max-width: 1120px;
   margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 760px) minmax(280px, 320px);
+  gap: clamp(1.5rem, 4vw, 2.5rem);
+  align-items: start;
+}
+.story-main {
+  min-width: 0;
+}
+.story-article {
+  max-width: none;
+  margin: 0;
 }
 .story-article__hero {
   margin-bottom: 1.5rem;
 }
 .story-article__hero .media {
-  height: 280px;
+  height: clamp(280px, 42vw, 420px);
 }
 .story-article h1 {
   font-family: var(--font-display), sans-serif;
   font-weight: 700;
-  font-size: clamp(1.7rem, 3.4vw, 2.2rem);
+  font-size: clamp(1.7rem, 3.4vw, 2.4rem);
   line-height: 1.08;
   letter-spacing: -0.01em;
   margin: 0 0 0.85rem;
@@ -916,7 +927,7 @@ main {
 }
 .story-article__body {
   font-size: 1.05rem;
-  max-width: 38rem;
+  max-width: 46rem;
 }
 .story-article__body p {
   margin: 0 0 1.1rem;
@@ -934,6 +945,18 @@ main {
   color: var(--ink-soft);
   margin: 0 0 0.75rem;
   font-weight: 700;
+}
+.story-sidebar {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+.story-sidebar .story-section {
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper-raised);
 }
 .story-sources {
   list-style: none;
@@ -954,6 +977,68 @@ main {
 .story-sources li a:hover {
   text-decoration: underline;
 }
+.story-credibility {
+  --credibility-color: var(--ink-soft);
+  border-left: 5px solid var(--credibility-color) !important;
+}
+.story-credibility--official,
+.story-credibility--strong_source {
+  --credibility-color: var(--pitch);
+}
+.story-credibility--reported {
+  --credibility-color: #9a7200;
+}
+.story-credibility--rumour {
+  --credibility-color: #c05f00;
+}
+.story-credibility--speculative {
+  --credibility-color: var(--live-red);
+}
+.story-credibility__rating {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.65rem;
+  align-items: center;
+  margin: 0 0 0.9rem;
+}
+.story-credibility__rating span {
+  min-width: 3.1rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--credibility-color) 14%, transparent);
+  color: var(--credibility-color);
+  font-weight: 800;
+  text-align: center;
+}
+.story-credibility__rating strong {
+  line-height: 1.25;
+}
+.story-credibility__meta {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+.story-credibility__contradiction {
+  margin-top: 0.9rem;
+  color: var(--live-red);
+  font-size: 0.85rem;
+}
+.story-related .river-card {
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 0.65rem;
+  padding: 0.8rem 0;
+}
+.story-related .river-card .media {
+  height: 54px;
+}
+.story-related .river-card__lead,
+.story-related .item-meta {
+  display: none;
+}
+.story-related .river-card__title {
+  font-size: 0.9rem;
+}
 .version-history {
   list-style: none;
   margin: 0;
@@ -968,6 +1053,31 @@ main {
   font-size: 0.85rem;
   color: var(--ink-soft);
   font-family: var(--font-mono), monospace;
+}
+
+@media (max-width: 920px) {
+  .story-layout {
+    max-width: 46rem;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .story-sidebar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .story-related {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 620px) {
+  .story-sidebar {
+    grid-template-columns: 1fr;
+  }
+  .story-related {
+    grid-column: auto;
+  }
+  .story-article__hero .media {
+    height: 240px;
+  }
 }
 
 /* ---------------- Taxonomy pages (category/team) ---------------- */

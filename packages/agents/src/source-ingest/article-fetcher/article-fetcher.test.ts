@@ -79,4 +79,30 @@ describe("ArticleFetcher", () => {
 
     expect(result?.titleOriginal).toBe("T");
   });
+  it("fetches and attributes a uniquely resolved text report", async () => {
+    const videoUrl = "https://www.bbc.com/sport/football/videos/cx2zvzpdyjdo";
+    const reportUrl = "https://www.bbc.com/sport/football/live/cmq8jxqj2vpet";
+    const htmlFetcher: HtmlFetcher = {
+      fetch: vi.fn(async (url) =>
+        url === videoUrl ? "<html>video</html>" : "<html>report</html>",
+      ),
+    };
+    const extractor = fakeExtractor({
+      resolveUrl: () => reportUrl,
+      extract: (_html, url) => ({
+        titleOriginal: url === reportUrl ? "Match report" : "Video",
+        subtitleOriginal: null,
+        bodyOriginal: "Full match report body.",
+        authorOriginal: null,
+        publishedAtSource: null,
+      }),
+    });
+    const fetcher = new ArticleFetcher(htmlFetcher, [extractor]);
+
+    const result = await fetcher.fetch(videoUrl);
+
+    expect(htmlFetcher.fetch).toHaveBeenCalledTimes(2);
+    expect(result?.titleOriginal).toBe("Match report");
+    expect(result?.resolvedUrl).toBe(reportUrl);
+  });
 });

@@ -136,4 +136,43 @@ describe("RssSourceAdapter", () => {
     const adapter = new RssSourceAdapter({ parseURL: async () => ({ items: [] }) });
     await expect(adapter.fetch({})).rejects.toThrow();
   });
+  it("selects the largest remote media:thumbnail when dimensions are available", async () => {
+    const adapter = new RssSourceAdapter({
+      parseURL: async () => ({
+        items: [
+          {
+            link: "https://example.com/a",
+            title: "A",
+            mediaThumbnail: [
+              {
+                $: {
+                  url: "https://cdn.example.com/160.jpg",
+                  width: "160",
+                  height: "90",
+                },
+              },
+              {
+                $: {
+                  url: "https://cdn.example.com/1280.jpg",
+                  width: "1280",
+                  height: "720",
+                },
+              },
+              {
+                $: {
+                  url: "https://cdn.example.com/640.jpg",
+                  width: "640",
+                  height: "360",
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    const [article] = await adapter.fetch({ url: "https://feeds.example.com/football.xml" });
+
+    expect(article?.imageUrl).toBe("https://cdn.example.com/1280.jpg");
+  });
 });

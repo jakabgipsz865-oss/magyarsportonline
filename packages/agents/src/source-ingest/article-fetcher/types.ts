@@ -15,6 +15,8 @@ export interface FetchedArticle {
   /** Szerző neve, ha a forrás megadja — pl. a BBC Sport legtöbb híre névtelen. */
   authorOriginal: string | null;
   publishedAtSource: Date | null;
+  /** A ténylegesen kinyert szöveges oldal URL-je, ha eltér az RSS-linktől. */
+  resolvedUrl?: string;
 }
 
 /**
@@ -29,6 +31,8 @@ export interface ArticleExtractor {
   readonly name: string;
   /** Igaz, ha ez az extractor tudja kezelni a megadott cikk-URL domainjét. */
   supports(url: string): boolean;
+  /** Egy ismert oldaltípusból egyértelműen kapcsolt, azonos forrású szöveges URL. */
+  resolveUrl?(html: string, url: string): string | null;
   /**
    * A letöltött nyers HTML-ből próbál kinyerni egy FetchedArticle-t.
    * `null`-t ad vissza (SOSEM dob hibát), ha a várt szerkezet nem

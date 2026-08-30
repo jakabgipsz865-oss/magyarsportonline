@@ -8,7 +8,7 @@ const rssFetchConfigSchema = z.object({ url: z.string().url() });
 
 /** A single `<media:thumbnail url="..." .../>` tag as parsed by rss-parser's customFields (xml2js attribute convention: `$`). */
 interface MediaThumbnail {
-  $?: { url?: string };
+  $?: { url?: string; width?: string; height?: string };
 }
 
 interface RssFeedItem {
@@ -37,9 +37,19 @@ function extractImageUrl(item: RssFeedItem): string | null {
   if (item.enclosure?.url) {
     return item.enclosure.url;
   }
-  const thumbnail = Array.isArray(item.mediaThumbnail)
-    ? item.mediaThumbnail[0]
-    : item.mediaThumbnail;
+  const thumbnails = (
+    Array.isArray(item.mediaThumbnail) ? item.mediaThumbnail : [item.mediaThumbnail]
+  ).filter((thumbnail): thumbnail is MediaThumbnail => Boolean(thumbnail?.$?.url));
+  const area = (thumbnail: MediaThumbnail) => {
+    const width = Number(thumbnail.$?.width);
+    const height = Number(thumbnail.$?.height);
+    return width > 0 && height > 0 && width <= 10_000 && height <= 10_000 ? width * height : 0;
+  };
+  const thumbnail = thumbnails.some((candidate) => area(candidate) > 0)
+    ? thumbnails.reduce((largest, candidate) =>
+        area(candidate) > area(largest) ? candidate : largest,
+      )
+    : thumbnails[0];
   return thumbnail?.$?.url ?? null;
 }
 

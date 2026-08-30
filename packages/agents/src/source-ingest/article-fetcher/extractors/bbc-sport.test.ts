@@ -101,3 +101,35 @@ describe("bbcSportExtractor.extract", () => {
     expect(result?.bodyOriginal).toBe("Just one paragraph, no byline or date.");
   });
 });
+
+describe("bbcSportExtractor.resolveUrl", () => {
+  it("resolves a BBC video item to its single related match report", () => {
+    const videoUrl = "https://www.bbc.com/sport/football/videos/cx2zvzpdyjdo?at_medium=RSS";
+    const reportUrl = "https://www.bbc.com/sport/football/live/cmq8jxqj2vpet";
+    const html = `
+      <nav><a href="/sport/football/articles/ce8e6y90g2jo">Follow Your Team</a></nav>
+      <main><a href="/sport/football/live/cmq8jxqj2vpet">MATCH REPORT: Leeds United 1-1 Brentford</a></main>
+    `;
+
+    expect(bbcSportExtractor.resolveUrl?.(html, videoUrl)).toBe(reportUrl);
+  });
+
+  it("does not resolve non-video pages or ambiguous report links", () => {
+    const ambiguous = `
+      <a href="/sport/football/live/first">First report</a>
+      <a href="/sport/football/live/second">Second report</a>
+    `;
+    expect(
+      bbcSportExtractor.resolveUrl?.(
+        ambiguous,
+        "https://www.bbc.com/sport/football/videos/cx2zvzpdyjdo",
+      ),
+    ).toBeNull();
+    expect(
+      bbcSportExtractor.resolveUrl?.(
+        '<a href="/sport/football/live/only">Report</a>',
+        "https://www.bbc.com/sport/football/articles/current",
+      ),
+    ).toBeNull();
+  });
+});

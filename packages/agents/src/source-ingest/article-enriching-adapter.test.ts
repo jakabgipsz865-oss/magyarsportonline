@@ -109,4 +109,28 @@ describe("ArticleEnrichingSourceAdapter", () => {
     expect(results[0]?.titleOriginal).toBe("Enriched 1");
     expect(results[1]).toEqual(second);
   });
+  it("uses the resolved report URL as the public source link", async () => {
+    const reportUrl = "https://www.bbc.com/sport/football/live/cmq8jxqj2vpet";
+    const adapter = new ArticleEnrichingSourceAdapter(
+      fakeInnerAdapter([
+        {
+          ...RSS_ARTICLE,
+          sourceUrl: "https://www.bbc.com/sport/football/videos/cx2zvzpdyjdo",
+        },
+      ]),
+      fakeArticleFetcher({
+        titleOriginal: "Match report",
+        subtitleOriginal: null,
+        bodyOriginal: "Full match report body.",
+        authorOriginal: null,
+        publishedAtSource: null,
+        resolvedUrl: reportUrl,
+      }),
+    );
+
+    const [result] = await adapter.fetch({});
+
+    expect(result?.sourceUrl).toBe(reportUrl);
+    expect(result?.contentOrigin).toBe("full_article");
+  });
 });
