@@ -79,6 +79,7 @@ function source(overrides: Partial<Record<string, unknown>>) {
     pollingFrequencyMinutes: null,
     extractorName: null,
     lastSuccessAt: null,
+    ingestWatermarkAt: null,
     lastErrorAt: null,
     ...overrides,
   };

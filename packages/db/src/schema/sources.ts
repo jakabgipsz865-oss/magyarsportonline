@@ -57,6 +57,8 @@ export const sources = pgTable("sources", {
   extractorName: text("extractor_name"),
   /** Utolsó SIKERES lekérés időpontja — a meglévő `lastFetchedAt`-tal szemben (ami minden kísérletet rögzít), ez csak a sikereket. */
   lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+  /** A már baseline-olt/feldolgozott feed-elemek legnagyobb source-publication időpontja. */
+  ingestWatermarkAt: timestamp("ingest_watermark_at", { withTimezone: true }),
   /** Utolsó HIBÁS lekérés időpontja. */
   lastErrorAt: timestamp("last_error_at", { withTimezone: true }),
 });

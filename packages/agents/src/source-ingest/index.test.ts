@@ -31,6 +31,7 @@ const SOURCE = {
   pollingFrequencyMinutes: null,
   extractorName: null,
   lastSuccessAt: WATERMARK as Date | null,
+  ingestWatermarkAt: WATERMARK as Date | null,
   lastErrorAt: null,
 };
 
@@ -53,23 +54,34 @@ function buildDeps(overrides?: {
   upgraded: Array<{ id: string; bodyOriginal: string }>;
   emitted: unknown[];
   fetchResults: Array<{ sourceId: string; status: string }>;
+  watermarks: Date[];
 } {
   const existingUrls = overrides?.existingUrls ?? new Set<string>();
   const inserted: Array<{ sourceUrl: string }> = [];
   const upgraded: Array<{ id: string; bodyOriginal: string }> = [];
   const emitted: unknown[] = [];
   const fetchResults: Array<{ sourceId: string; status: string }> = [];
+  const watermarks: Date[] = [];
+  const activeSources = (overrides?.sources ?? [SOURCE]).map((source) => ({ ...source }));
 
   const deps: SourceIngestDeps & {
     inserted: Array<{ sourceUrl: string }>;
     upgraded: Array<{ id: string; bodyOriginal: string }>;
     emitted: unknown[];
     fetchResults: Array<{ sourceId: string; status: string }>;
+    watermarks: Date[];
   } = {
     sourceRepository: {
-      listActive: vi.fn(async () => overrides?.sources ?? [SOURCE]),
+      listActive: vi.fn(async () => activeSources),
       recordFetchResult: vi.fn(async (sourceId: string, result: { status: "ok" | "error" }) => {
         fetchResults.push({ sourceId, status: result.status });
+      }),
+      advanceIngestWatermark: vi.fn(async (sourceId: string, watermark: Date) => {
+        watermarks.push(watermark);
+        const source = activeSources.find(({ id }) => id === sourceId);
+        if (source && (!source.ingestWatermarkAt || watermark > source.ingestWatermarkAt)) {
+          source.ingestWatermarkAt = watermark;
+        }
       }),
     },
     rawArticleRepository: {
@@ -125,20 +137,82 @@ function buildDeps(overrides?: {
     upgraded,
     emitted,
     fetchResults,
+    watermarks,
   };
   return deps;
 }
 
 describe("runSourceIngest", () => {
   it("uses the first successful fetch only as a freshness baseline", async () => {
-    const deps = buildDeps({ sources: [{ ...SOURCE, lastSuccessAt: null }] });
+    const deps = buildDeps({ sources: [{ ...SOURCE, ingestWatermarkAt: null }] });
 
     const results = await runSourceIngest(deps);
 
     expect(results[0]).toMatchObject({ ingestedCount: 0, status: "ok" });
     expect(deps.inserted).toEqual([]);
     expect(deps.emitted).toEqual([]);
+    expect(deps.watermarks).toEqual([NEW_ARTICLE_TIME]);
     expect(deps.fetchResults).toEqual([{ sourceId: SOURCE.id, status: "ok" }]);
+  });
+
+  it("leaves the baseline watermark null when the feed has no valid timestamp", async () => {
+    const deps = buildDeps({
+      sources: [{ ...SOURCE, ingestWatermarkAt: null }],
+      adapter: {
+        fetch: async () => [
+          {
+            sourceUrl: "https://example.com/no-time",
+            titleOriginal: "No time",
+            subtitleOriginal: null,
+            bodyOriginal: "Body",
+            authorOriginal: null,
+            publishedAtSource: null,
+            imageUrl: null,
+            contentOrigin: "full_article",
+          },
+        ],
+      },
+    });
+
+    await runSourceIngest(deps);
+
+    expect(deps.watermarks).toEqual([]);
+    expect(deps.inserted).toEqual([]);
+    expect(deps.emitted).toEqual([]);
+  });
+
+  it("ingests two newest-first articles losslessly across cap=1 runs", async () => {
+    const firstTime = new Date("2026-08-30T10:01:00.000Z");
+    const secondTime = new Date("2026-08-30T10:02:00.000Z");
+    const deps = buildDeps({
+      maxNewArticlesPerRun: 1,
+      adapter: {
+        fetch: async () =>
+          [
+            { sourceUrl: "https://example.com/b", publishedAtSource: secondTime },
+            { sourceUrl: "https://example.com/a", publishedAtSource: firstTime },
+          ].map((article) => ({
+            ...article,
+            titleOriginal: "Title",
+            subtitleOriginal: null,
+            bodyOriginal: "Body",
+            authorOriginal: null,
+            imageUrl: null,
+            contentOrigin: "full_article" as const,
+          })),
+      },
+    });
+
+    expect((await runSourceIngest(deps))[0]?.ingestedCount).toBe(1);
+    expect(deps.inserted).toEqual([{ sourceUrl: "https://example.com/a" }]);
+    expect(deps.watermarks).toEqual([firstTime]);
+
+    expect((await runSourceIngest(deps))[0]?.ingestedCount).toBe(1);
+    expect(deps.inserted).toEqual([
+      { sourceUrl: "https://example.com/a" },
+      { sourceUrl: "https://example.com/b" },
+    ]);
+    expect(deps.watermarks).toEqual([firstTime, secondTime]);
   });
 
   it.each([

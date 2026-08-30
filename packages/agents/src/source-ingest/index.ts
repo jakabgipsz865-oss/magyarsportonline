@@ -17,7 +17,10 @@ export interface Emitter {
 }
 
 export interface SourceIngestDeps {
-  sourceRepository: Pick<SourceRepository, "listActive" | "recordFetchResult">;
+  sourceRepository: Pick<
+    SourceRepository,
+    "listActive" | "recordFetchResult" | "advanceIngestWatermark"
+  >;
   rawArticleRepository: Pick<
     RawArticleRepository,
     "findBySourceUrl" | "insert" | "upgradeFromFullArticle"
@@ -133,10 +136,19 @@ async function ingestOneSource(
     throw new Error(`No SourceAdapter registered for source type "${source.type}"`);
   }
 
-  const articles = await adapter.fetch(source.fetchConfig);
+  const articles = (await adapter.fetch(source.fetchConfig))
+    .filter(
+      (article): article is typeof article & { publishedAtSource: Date } =>
+        article.publishedAtSource !== null && !Number.isNaN(article.publishedAtSource.getTime()),
+    )
+    .sort((a, b) => a.publishedAtSource.getTime() - b.publishedAtSource.getTime());
   let ingestedCount = 0;
 
-  if (source.lastSuccessAt === null) {
+  if (source.ingestWatermarkAt === null) {
+    const newestPublishedAt = articles.at(-1)?.publishedAtSource;
+    if (newestPublishedAt) {
+      await deps.sourceRepository.advanceIngestWatermark(source.id, newestPublishedAt);
+    }
     log.info({ sourceId: source.id }, "baseline fetch completed without ingesting feed backlog");
     return 0;
   }
@@ -150,7 +162,7 @@ async function ingestOneSource(
       break;
     }
 
-    if (article.publishedAtSource === null || article.publishedAtSource <= source.lastSuccessAt) {
+    if (article.publishedAtSource <= source.ingestWatermarkAt) {
       log.info(
         { sourceId: source.id, sourceUrl: article.sourceUrl },
         "skipping article at or before source freshness watermark",
@@ -176,6 +188,7 @@ async function ingestOneSource(
           );
         }
       }
+      await deps.sourceRepository.advanceIngestWatermark(source.id, article.publishedAtSource);
       continue;
     }
 
@@ -199,6 +212,7 @@ async function ingestOneSource(
       payload: { raw_article_id: rawArticle.id, source_id: source.id },
     });
     log.info({ correlationId, rawArticleId: rawArticle.id }, "ingested new RawArticle");
+    await deps.sourceRepository.advanceIngestWatermark(source.id, article.publishedAtSource);
     ingestedCount++;
   }
 
