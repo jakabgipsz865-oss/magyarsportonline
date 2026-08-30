@@ -153,7 +153,7 @@ async function ingestOneSource(
     return 0;
   }
 
-  for (const article of articles) {
+  for (const [index, article] of articles.entries()) {
     if (remainingBudget !== undefined && ingestedCount >= remainingBudget) {
       log.info(
         { sourceId: source.id, cap: remainingBudget },
@@ -169,6 +169,9 @@ async function ingestOneSource(
       );
       continue;
     }
+
+    const timestampGroupComplete =
+      articles[index + 1]?.publishedAtSource.getTime() !== article.publishedAtSource.getTime();
 
     const existing = await deps.rawArticleRepository.findBySourceUrl(article.sourceUrl);
     if (existing) {
@@ -188,7 +191,9 @@ async function ingestOneSource(
           );
         }
       }
-      await deps.sourceRepository.advanceIngestWatermark(source.id, article.publishedAtSource);
+      if (timestampGroupComplete) {
+        await deps.sourceRepository.advanceIngestWatermark(source.id, article.publishedAtSource);
+      }
       continue;
     }
 
@@ -212,7 +217,9 @@ async function ingestOneSource(
       payload: { raw_article_id: rawArticle.id, source_id: source.id },
     });
     log.info({ correlationId, rawArticleId: rawArticle.id }, "ingested new RawArticle");
-    await deps.sourceRepository.advanceIngestWatermark(source.id, article.publishedAtSource);
+    if (timestampGroupComplete) {
+      await deps.sourceRepository.advanceIngestWatermark(source.id, article.publishedAtSource);
+    }
     ingestedCount++;
   }
 

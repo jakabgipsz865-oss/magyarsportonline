@@ -215,6 +215,37 @@ describe("runSourceIngest", () => {
     expect(deps.watermarks).toEqual([firstTime, secondTime]);
   });
 
+  it("finishes an equal-timestamp group losslessly across cap=1 runs", async () => {
+    const sharedTime = new Date("2026-08-30T10:01:00.000Z");
+    const deps = buildDeps({
+      maxNewArticlesPerRun: 1,
+      adapter: {
+        fetch: async () =>
+          ["a", "b"].map((key) => ({
+            sourceUrl: `https://example.com/${key}`,
+            titleOriginal: "Title",
+            subtitleOriginal: null,
+            bodyOriginal: "Body",
+            authorOriginal: null,
+            publishedAtSource: sharedTime,
+            imageUrl: null,
+            contentOrigin: "full_article" as const,
+          })),
+      },
+    });
+
+    expect((await runSourceIngest(deps))[0]?.ingestedCount).toBe(1);
+    expect(deps.inserted).toEqual([{ sourceUrl: "https://example.com/a" }]);
+    expect(deps.watermarks).toEqual([]);
+
+    expect((await runSourceIngest(deps))[0]?.ingestedCount).toBe(1);
+    expect(deps.inserted).toEqual([
+      { sourceUrl: "https://example.com/a" },
+      { sourceUrl: "https://example.com/b" },
+    ]);
+    expect(deps.watermarks).toEqual([sharedTime]);
+  });
+
   it.each([
     ["older", new Date("2026-08-30T09:59:59.999Z")],
     ["equal", WATERMARK],
