@@ -406,11 +406,10 @@ export const cleanStartSources = [
     licenseType: "pending_review",
     reliabilityTier: "B",
     fetchConfig: {
-      url: "https://www.football365.com/feed",
+      url: "https://www.football365.com/rss",
       priority: "P1",
       relevanceProfile: "uk_football_gossip",
-      feedEvidence:
-        "Current 2026 RSS directories list Football365 and its transfer-gossip coverage.",
+      feedEvidence: "Direct fetch returned HTTP 200 text/xml with dated article items in 2026-08.",
     },
     isActive: false,
     country: "GB",

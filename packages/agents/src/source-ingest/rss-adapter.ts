@@ -43,6 +43,12 @@ function extractImageUrl(item: RssFeedItem): string | null {
   return thumbnail?.$?.url ?? null;
 }
 
+function parsePublishedDate(value: string | undefined): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value.replace(/\sBST$/, " +0100"));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 /**
  * RSS `SourceAdapter` (docs/architecture/02-agents.md §2.1 step 1-2: fetch +
  * parse/clean). `fetchConfig` (`Source.fetch_config` jsonb, e.g. `{ "url":
@@ -68,8 +74,7 @@ export class RssSourceAdapter implements SourceAdapter {
           return null;
         }
         const bodyOriginal = stripHtml(item.contentSnippet ?? item.content ?? "");
-        const dateString = item.isoDate ?? item.pubDate;
-        const publishedAtSource = dateString ? new Date(dateString) : null;
+        const publishedAtSource = parsePublishedDate(item.isoDate ?? item.pubDate);
 
         return {
           sourceUrl,
@@ -81,10 +86,7 @@ export class RssSourceAdapter implements SourceAdapter {
           subtitleOriginal: null,
           bodyOriginal,
           authorOriginal: null,
-          publishedAtSource:
-            publishedAtSource && !Number.isNaN(publishedAtSource.getTime())
-              ? publishedAtSource
-              : null,
+          publishedAtSource,
           imageUrl: extractImageUrl(item),
           contentOrigin: "rss_snippet",
         };

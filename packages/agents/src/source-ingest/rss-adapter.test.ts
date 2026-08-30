@@ -114,6 +114,24 @@ describe("RssSourceAdapter", () => {
     expect(article?.publishedAtSource).toBeNull();
   });
 
+  it("parses Sky's live RSS pubDate with a BST timezone", async () => {
+    const adapter = new RssSourceAdapter({
+      parseURL: async () => ({
+        items: [
+          {
+            link: "https://www.skysports.com/football/news/example",
+            title: "Sky live-format fixture",
+            pubDate: "Sun, 30 Aug 2026 17:15:00 BST",
+          },
+        ],
+      }),
+    });
+
+    const [article] = await adapter.fetch({ url: "https://www.skysports.com/rss/12040" });
+
+    expect(article?.publishedAtSource).toEqual(new Date("2026-08-30T16:15:00.000Z"));
+  });
+
   it("rejects a fetchConfig without a valid url", async () => {
     const adapter = new RssSourceAdapter({ parseURL: async () => ({ items: [] }) });
     await expect(adapter.fetch({})).rejects.toThrow();
