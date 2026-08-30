@@ -4,7 +4,7 @@ import { decidePublish, type PublishDecisionInput } from "./rule";
 describe("decidePublish", () => {
   const eligibleSingleSource = {
     publicationReady: true,
-    singleSource: { count: 1, fullArticleCount: 1, category: "tabloid" as const },
+    singleSource: { count: 1, category: "tabloid" as const },
   };
   const singleSourceInput = (
     overrides: Partial<PublishDecisionInput> = {},
@@ -66,19 +66,12 @@ describe("decidePublish", () => {
         confidenceScore: 0.62,
         hasContradiction: false,
         publicationReady: true,
-        singleSource: { count: 1, fullArticleCount: 1, category: "trusted_media" },
+        singleSource: { count: 1, category: "trusted_media" },
       }),
     ).toEqual({ autoPublish: true });
   });
 
-  it("blocks the exception for snippet-only, confidence below 0.50, or unsupported category", () => {
-    expect(
-      decidePublish(
-        singleSourceInput({
-          singleSource: { count: 1, fullArticleCount: 0, category: "tabloid" },
-        }),
-      ),
-    ).toEqual({ autoPublish: false, reason: "low_confidence" });
+  it("blocks the exception for confidence below 0.50 or unsupported category", () => {
     expect(decidePublish(singleSourceInput({ confidenceScore: 0.49 }))).toEqual({
       autoPublish: false,
       reason: "low_confidence",
@@ -86,14 +79,14 @@ describe("decidePublish", () => {
     expect(
       decidePublish(
         singleSourceInput({
-          singleSource: { count: 1, fullArticleCount: 1, category: "official" },
+          singleSource: { count: 1, category: "official" },
         }),
       ),
     ).toEqual({ autoPublish: false, reason: "low_confidence" });
     expect(
       decidePublish(
         singleSourceInput({
-          singleSource: { count: 1, fullArticleCount: 1, category: null },
+          singleSource: { count: 1, category: null },
         }),
       ),
     ).toEqual({ autoPublish: false, reason: "low_confidence" });

@@ -45,6 +45,15 @@ describe("assessPublicationReadiness", () => {
     expect(result.blockers).toContainEqual({ kind: "self_check_fallback" });
   });
 
+  it("blocks an RSS-only Story when its fact check fails", () => {
+    const result = assessPublicationReadiness({
+      ...SAFE_INPUT,
+      fullArticleSourceCount: 0,
+      factConsistencyScore: 0.94,
+    });
+    expect(result.blockers).toContainEqual({ kind: "fact_check_failed" });
+  });
+
   it("blocks missing credibility and a missing source", () => {
     const result = assessPublicationReadiness({
       ...SAFE_INPUT,
@@ -53,21 +62,17 @@ describe("assessPublicationReadiness", () => {
       fullArticleSourceCount: 0,
     });
     expect(result.blockers).toEqual(
-      expect.arrayContaining([
-        { kind: "missing_credibility" },
-        { kind: "missing_source" },
-        { kind: "missing_full_article_source" },
-      ]),
+      expect.arrayContaining([{ kind: "missing_credibility" }, { kind: "missing_source" }]),
     );
   });
 
-  it("blocks an RSS-only Story even when it has a source row", () => {
+  it("allows an RSS-only Story when every content and safety check passes", () => {
     const result = assessPublicationReadiness({
       ...SAFE_INPUT,
       sourceCount: 1,
       fullArticleSourceCount: 0,
     });
-    expect(result.blockers).toContainEqual({ kind: "missing_full_article_source" });
+    expect(result).toMatchObject({ passed: true, blockers: [] });
   });
 
   it("blocks the real production Rodri mistranslation on a fresh assessment", () => {

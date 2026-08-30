@@ -14,7 +14,6 @@ export interface PublishDecisionInput {
   publicationReady?: boolean;
   singleSource?: {
     count: number;
-    fullArticleCount: number;
     category: SourceCategory | null;
   };
 }
@@ -55,7 +54,6 @@ export function decidePublish(input: PublishDecisionInput): PublishDecision {
   const singleSourceException =
     input.publicationReady === true &&
     input.singleSource?.count === 1 &&
-    input.singleSource.fullArticleCount >= 1 &&
     (input.singleSource.category === "tabloid" ||
       input.singleSource.category === "trusted_media") &&
     input.confidenceScore >= 0.5;

@@ -7,8 +7,7 @@ export type PublicationBlockerKind =
   | "self_check_fallback"
   | "fact_check_failed"
   | "missing_credibility"
-  | "missing_source"
-  | "missing_full_article_source";
+  | "missing_source";
 
 export interface PublicationBlocker {
   kind: PublicationBlockerKind;
@@ -25,7 +24,8 @@ export interface PublicationReadinessInput {
   selfCheckFallback: boolean;
   credibilityScore: number | null;
   sourceCount: number;
-  fullArticleSourceCount: number;
+  /** Content-origin metadata only; RSS-only Stories may also publish. */
+  fullArticleSourceCount?: number;
 }
 
 export interface PublicationReadinessAssessment {
@@ -75,10 +75,6 @@ export function assessPublicationReadiness(
   if (input.sourceCount < 1) {
     blockers.push({ kind: "missing_source" });
   }
-  if (input.fullArticleSourceCount < 1) {
-    blockers.push({ kind: "missing_full_article_source" });
-  }
-
   return {
     passed: blockers.length === 0,
     blockers,

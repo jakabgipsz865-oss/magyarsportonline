@@ -27,10 +27,7 @@ export interface PublishGateDeps {
   storyRepository: Pick<StoryRepository, "getById" | "publish" | "updateStatus">;
   storyVersionRepository: Pick<StoryVersionRepository, "markPublished" | "getById">;
   factRepository: Pick<FactRepository, "listByStoryId">;
-  storySourceRepository: Pick<
-    StorySourceRepository,
-    "countFullArticleByStoryId" | "sourcesWithMetaByStoryId"
-  >;
+  storySourceRepository: Pick<StorySourceRepository, "sourcesWithMetaByStoryId">;
   reviewQueueRepository: Pick<ReviewQueueRepository, "insert">;
   agentRunRepository: AgentRunRecorder;
   dispatcher: Emitter;
@@ -73,10 +70,7 @@ export async function handleStorySeoReady(deps: PublishGateDeps, event: Trigger)
       if (!version) {
         throw new Error(`StoryVersion "${event.payload.story_version_id}" not found`);
       }
-      const [sourceMetas, fullArticleSourceCount] = await Promise.all([
-        deps.storySourceRepository.sourcesWithMetaByStoryId(story.id),
-        deps.storySourceRepository.countFullArticleByStoryId(story.id),
-      ]);
+      const sourceMetas = await deps.storySourceRepository.sourcesWithMetaByStoryId(story.id);
       const includedSources = sourceMetas.filter((source) => !source.excluded);
       const sourceCount = includedSources.length;
       const readiness = assessPublicationReadiness({
@@ -90,7 +84,6 @@ export async function handleStorySeoReady(deps: PublishGateDeps, event: Trigger)
         selfCheckFallback: version.selfCheckFallback,
         credibilityScore: story.credibilityScore,
         sourceCount,
-        fullArticleSourceCount,
       });
 
       const decision = decidePublish({
@@ -102,7 +95,6 @@ export async function handleStorySeoReady(deps: PublishGateDeps, event: Trigger)
         publicationReady: readiness.passed,
         singleSource: {
           count: sourceCount,
-          fullArticleCount: fullArticleSourceCount,
           category: sourceCount === 1 ? (includedSources[0]?.category ?? null) : null,
         },
       });

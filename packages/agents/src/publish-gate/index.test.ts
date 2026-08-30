@@ -96,7 +96,6 @@ function buildDeps(overrides?: {
   version?: ReturnType<typeof version>;
   forceReviewMode?: boolean;
   sourceMetas?: ReturnType<typeof sourceMeta>[];
-  fullArticleSourceCount?: number;
 }): PublishGateDeps & {
   emitted: unknown[];
   reviewQueueInserts: unknown[];
@@ -122,7 +121,6 @@ function buildDeps(overrides?: {
     factRepository: { listByStoryId: vi.fn(async () => overrides?.facts ?? [fact(false)]) },
     storySourceRepository: {
       sourcesWithMetaByStoryId: vi.fn(async () => overrides?.sourceMetas ?? [sourceMeta()]),
-      countFullArticleByStoryId: vi.fn(async () => overrides?.fullArticleSourceCount ?? 1),
     },
     reviewQueueRepository: {
       insert: vi.fn(async (input: unknown) => {
@@ -179,15 +177,12 @@ describe("handleStorySeoReady", () => {
     expect(deps.reviewQueueInserts).toEqual([]);
   });
 
-  it("blocks the single-source exception when there is no full article", async () => {
-    const deps = buildDeps({
-      story: story({ confidenceScore: "0.545" }),
-      fullArticleSourceCount: 0,
-    });
+  it("auto-publishes an RSS-only single-source Story when every other gate passes", async () => {
+    const deps = buildDeps({ story: story({ confidenceScore: "0.545" }) });
 
     await handleStorySeoReady(deps, triggerEvent());
 
-    expect(deps.storyRepository.publish).not.toHaveBeenCalled();
+    expect(deps.storyRepository.publish).toHaveBeenCalled();
   });
 
   it("sends a high-risk story to review with reason high_risk", async () => {
