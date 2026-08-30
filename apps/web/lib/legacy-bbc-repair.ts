@@ -39,9 +39,7 @@ export async function repairLegacyBbcVideoStories(): Promise<LegacyBbcRepairResu
     if (!story || story.status !== "published") continue;
     const articles = await repos.rawArticleRepository.listByStoryId(story.id);
     for (const article of articles) {
-      if (article.contentOrigin !== "rss_snippet" || !BBC_VIDEO_PATH.test(article.sourceUrl)) {
-        continue;
-      }
+      if (!BBC_VIDEO_PATH.test(article.sourceUrl)) continue;
       const fetched = await fetcher.fetch(article.sourceUrl);
       if (!fetched?.resolvedUrl) continue;
 
