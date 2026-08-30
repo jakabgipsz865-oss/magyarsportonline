@@ -75,10 +75,11 @@ export class SourceRepository {
   }
 
   async advanceIngestWatermark(sourceId: string, watermark: Date): Promise<void> {
+    const watermarkIso = watermark.toISOString();
     await this.db
       .update(sources)
       .set({
-        ingestWatermarkAt: sql`GREATEST(COALESCE(${sources.ingestWatermarkAt}, ${watermark}), ${watermark})`,
+        ingestWatermarkAt: sql`GREATEST(COALESCE(${sources.ingestWatermarkAt}, ${watermarkIso}::timestamptz), ${watermarkIso}::timestamptz)`,
       })
       .where(eq(sources.id, sourceId));
   }

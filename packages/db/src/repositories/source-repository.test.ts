@@ -27,7 +27,8 @@ describe("SourceRepository watermarks", () => {
 
     const query = new PgDialect().sqlToQuery(values["ingestWatermarkAt"] as never);
     expect(query.sql).toContain("GREATEST(COALESCE(");
-    expect(query.params).toEqual([watermark, watermark]);
+    expect(query.sql).toContain("::timestamptz");
+    expect(query.params).toEqual([watermark.toISOString(), watermark.toISOString()]);
   });
 
   it("keeps lastSuccessAt equal to the successful fetch time", async () => {
