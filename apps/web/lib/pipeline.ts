@@ -23,6 +23,7 @@ import {
   NO_LLM_MODEL_LABEL,
   NoLlmClient,
 } from "@magyarsportonline/llm";
+import { revalidatePath } from "next/cache";
 import { createRepositories, type Repositories } from "./db";
 import { env } from "./env";
 import { getLlmClient } from "./llm";
@@ -167,8 +168,8 @@ export function buildDispatcher(repos: Repositories = createRepositories()): InP
     ),
   );
 
-  dispatcher.on("story/published", (event) =>
-    readModelProjector.handleStoryPublished(
+  dispatcher.on("story/published", async (event) => {
+    await readModelProjector.handleStoryPublished(
       {
         storyRepository: repos.storyRepository,
         storyVersionRepository: repos.storyVersionRepository,
@@ -178,8 +179,9 @@ export function buildDispatcher(repos: Repositories = createRepositories()): InP
         logger,
       },
       event,
-    ),
-  );
+    );
+    revalidatePath("/");
+  });
 
   return dispatcher;
 }
@@ -346,7 +348,7 @@ export async function dispatchJobToHandler(
       );
 
     case "story/published":
-      return readModelProjector.handleStoryPublished(
+      await readModelProjector.handleStoryPublished(
         {
           storyRepository: repos.storyRepository,
           storyVersionRepository: repos.storyVersionRepository,
@@ -357,6 +359,8 @@ export async function dispatchJobToHandler(
         },
         event,
       );
+      revalidatePath("/");
+      return;
 
     default:
       return;

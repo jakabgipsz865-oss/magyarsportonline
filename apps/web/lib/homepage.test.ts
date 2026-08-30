@@ -9,6 +9,7 @@ function story(overrides: Partial<StorySummaryView>): StorySummaryView {
     slug: "slug",
     title: "Title",
     lead: "Lead",
+    primarySourceName: null,
     confidenceScore: 0.7,
     isDeveloping: false,
     isAiGenerated: true,

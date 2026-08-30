@@ -41,6 +41,7 @@ describe("toStorySummaryView", () => {
       slug: "liverpool-nyert",
       title: "Liverpool nyert",
       lead: "Lead szöveg.",
+      primarySourceName: "BBC Sport - Football",
       confidenceScore: 0.7,
       isDeveloping: false,
       isAiGenerated: true,
@@ -49,6 +50,11 @@ describe("toStorySummaryView", () => {
       lastUpdatedAt: "2026-07-27T21:05:00.000Z",
       versionCount: 1,
     });
+  });
+
+  it("uses the first projected source as the primary source", () => {
+    expect(toStorySummaryView(row()).primarySourceName).toBe("BBC Sport - Football");
+    expect(toStorySummaryView(row({ sourcesSummary: [] })).primarySourceName).toBeNull();
   });
 
   it("falls back to an empty version history on malformed jsonb", () => {

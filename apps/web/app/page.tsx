@@ -82,7 +82,7 @@ export default async function HomePage(): Promise<ReactNode> {
                 <h2 className="hero-card__title">{hero.title}</h2>
                 <p className="hero-card__lead">{hero.lead}</p>
                 <div className="item-meta">
-                  <span>BBC Sport</span>
+                  <span>{hero.primarySourceName ?? "Forrás"}</span>
                   <span className="dot" />
                   <span>{timeAgo(hero.publishedAt)}</span>
                   <StatusBadges story={hero} />
@@ -144,7 +144,7 @@ export default async function HomePage(): Promise<ReactNode> {
         <footer className="site-footer">
           <span>© MagyarSportOnline</span>
           <span>
-            <Link href="/impresszum">Impresszum</Link> · Források: BBC Sport
+            <Link href="/impresszum">Impresszum</Link> · Források az egyes cikkeknél
           </span>
         </footer>
       </main>

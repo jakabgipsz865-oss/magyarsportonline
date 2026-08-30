@@ -104,6 +104,7 @@ export interface StorySummaryView {
   slug: string;
   title: string;
   lead: string;
+  primarySourceName: string | null;
   confidenceScore: number | null;
   isDeveloping: boolean;
   isAiGenerated: boolean;
@@ -133,12 +134,14 @@ function parseVersionHistory(value: unknown): z.infer<typeof versionHistoryEntry
 
 /** `story_read_model` → the public `/api/v1/stories` list item shape (docs/architecture/04-api-spec.md §4.1). */
 export function toStorySummaryView(row: StoryReadModelRow): StorySummaryView {
+  const sources = parseSources(row.sourcesSummary);
   const versionHistory = parseVersionHistory(row.versionHistorySummary);
   return {
     id: row.storyId,
     slug: row.slug,
     title: row.titleHu,
     lead: row.leadHu,
+    primarySourceName: sources[0]?.name ?? null,
     confidenceScore: row.confidenceScore === null ? null : Number(row.confidenceScore),
     isDeveloping: row.isDeveloping,
     isAiGenerated: row.isAiGenerated,
