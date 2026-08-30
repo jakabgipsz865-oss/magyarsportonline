@@ -7,7 +7,7 @@ describe("calculateIngestBudget", () => {
   });
 
   it("accounts for downstream fan-out near the pressure limit", () => {
-    expect(calculateIngestBudget({ pending: 150, inProgress: 2 })).toBe(1);
+    expect(calculateIngestBudget({ pending: 188, inProgress: 2 })).toBe(1);
   });
 
   it("pauses ingest while the active backlog is at or above the limit", () => {
