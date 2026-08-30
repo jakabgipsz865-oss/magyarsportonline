@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
 import {
   EDITORIAL_KNOWLEDGE_FORMAT,
   EDITORIAL_KNOWLEDGE_SCHEMA_VERSION,
@@ -10,6 +11,7 @@ import { editorialKnowledgeEntries, editorialKnowledgeImportRuns } from "../sche
 import {
   EditorialKnowledgeRepository,
   editorialKnowledgeRelevanceScore,
+  postgresTextArray,
 } from "./editorial-knowledge-repository";
 
 function record(overrides: Partial<EditorialKnowledgeRecord> = {}): EditorialKnowledgeRecord {
@@ -307,5 +309,27 @@ describe("EditorialKnowledgeRepository relevance", () => {
       ),
     ).toBe(0);
     expect(editorialKnowledgeRelevanceScore(record({ status: "draft" }), input)).toBe(0);
+  });
+});
+
+describe("EditorialKnowledgeRepository PostgreSQL context arrays", () => {
+  const compile = (contexts: string[]) => new PgDialect().sqlToQuery(postgresTextArray(contexts));
+
+  it("parameterizes one context as a PostgreSQL text array", () => {
+    expect(compile(["match_report"])).toMatchObject({
+      sql: "ARRAY[$1]::text[]",
+      params: ["match_report"],
+    });
+  });
+
+  it("parameterizes multiple contexts as individual array elements", () => {
+    expect(compile(["match_report", "transfer"])).toMatchObject({
+      sql: "ARRAY[$1, $2]::text[]",
+      params: ["match_report", "transfer"],
+    });
+  });
+
+  it("compiles an empty context list without a record cast", () => {
+    expect(compile([])).toMatchObject({ sql: "ARRAY[]::text[]", params: [] });
   });
 });

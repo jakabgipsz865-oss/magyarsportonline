@@ -56,6 +56,13 @@ type EditorialKnowledgeExecutor = Pick<Database, "select" | "insert" | "execute"
 
 const EDITORIAL_KNOWLEDGE_IMPORT_LOCK = 1297304144;
 
+export function postgresTextArray(values: string[]) {
+  return sql`ARRAY[${sql.join(
+    values.map((value) => sql`${value}`),
+    sql`, `,
+  )}]::text[]`;
+}
+
 /**
  * Editorial Knowledge V2 kizárólagos DB-határa. Sem legacy correctiont,
  * sem review patternt, sem Source Registry rekordot nem olvas vagy ír.
@@ -98,9 +105,10 @@ export class EditorialKnowledgeRepository {
     const limit = Math.max(1, Math.min(input.limit ?? 20, 20));
     const contextText = input.contextText.slice(0, 30_000);
     if (contextText.trim().length === 0 && input.contexts.length === 0) return [];
+    const contexts = postgresTextArray(input.contexts);
 
     const phraseMatch = sql<boolean>`(
-      (${editorialKnowledgeEntries.knowledgeType} in ('headline_rule', 'grammar_style_rule', 'learned_failure_pattern') AND ${editorialKnowledgeEntries.contexts} && ${input.contexts}::text[])
+      (${editorialKnowledgeEntries.knowledgeType} in ('headline_rule', 'grammar_style_rule', 'learned_failure_pattern') AND ${editorialKnowledgeEntries.contexts} && ${contexts})
       OR (coalesce(${editorialKnowledgeEntries.sourcePhrase}, '') <> '' AND position(lower(${editorialKnowledgeEntries.sourcePhrase}) in lower(${contextText})) > 0)
       OR (coalesce(${editorialKnowledgeEntries.canonicalHu}, '') <> '' AND position(lower(${editorialKnowledgeEntries.canonicalHu}) in lower(${contextText})) > 0)
       OR EXISTS (SELECT 1 FROM unnest(${editorialKnowledgeEntries.matchTerms}) AS term WHERE length(term) > 1 AND position(lower(term) in lower(${contextText})) > 0)
@@ -110,7 +118,7 @@ export class EditorialKnowledgeRepository {
       CASE WHEN coalesce(${editorialKnowledgeEntries.sourcePhrase}, '') <> '' AND position(lower(${editorialKnowledgeEntries.sourcePhrase}) in lower(${contextText})) > 0 THEN 100 ELSE 0 END
       + CASE WHEN EXISTS (SELECT 1 FROM unnest(${editorialKnowledgeEntries.matchTerms}) AS term WHERE length(term) > 1 AND position(lower(term) in lower(${contextText})) > 0) THEN 80 ELSE 0 END
       + CASE WHEN EXISTS (SELECT 1 FROM unnest(${editorialKnowledgeEntries.avoidHu}) AS term WHERE length(term) > 1 AND position(lower(term) in lower(${contextText})) > 0) THEN 60 ELSE 0 END
-      + CASE WHEN ${editorialKnowledgeEntries.contexts} && ${input.contexts}::text[] THEN 20 ELSE 0 END
+      + CASE WHEN ${editorialKnowledgeEntries.contexts} && ${contexts} THEN 20 ELSE 0 END
     )`;
     const rows = await this.db
       .select()
