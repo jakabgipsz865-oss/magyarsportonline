@@ -123,9 +123,7 @@ describe("generateStoryVersion", () => {
     });
 
     await regenerateWithFactRepair(llm, {
-      facts: [
-        { factType: "score", detailHu: "3-1", quoteOriginal: null, quoteSpeaker: null },
-      ],
+      facts: [{ factType: "score", detailHu: "3-1", quoteOriginal: null, quoteSpeaker: null }],
       previousVersion: null,
       previousAttempt: { titleHu: "Hibás", leadHu: "Hibás lead", bodyHu: "Hibás törzs" },
       selfCheckIssues: ["A 4-1-es eredmény nincs a Facts között"],
