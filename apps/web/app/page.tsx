@@ -152,7 +152,7 @@ export default async function HomePage(): Promise<ReactNode> {
 
   if (!hero) {
     return (
-      <div className="home-redesign">
+      <div className="home-redesign public-surface">
         <main className="home-main">
           <h1 className="sr-only">Legfrissebb sporthírek</h1>
           <div className="home-empty-grid">
@@ -169,7 +169,7 @@ export default async function HomePage(): Promise<ReactNode> {
   }
 
   return (
-    <div className="home-redesign">
+    <div className="home-redesign public-surface">
       <div className="home-ticker">
         <div className="home-ticker__inner">
           <strong>ÉLŐ MOST</strong>

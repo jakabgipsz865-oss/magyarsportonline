@@ -43,7 +43,7 @@ export default async function CategoryPage({ params }: PageProps): Promise<React
   const stories = rows.map(toStorySummaryView);
 
   return (
-    <main>
+    <main className="public-surface">
       <div className="taxonomy-header">
         <div className="taxonomy-header__mark" aria-hidden="true">
           {category.nameHu.slice(0, 2).toUpperCase()}

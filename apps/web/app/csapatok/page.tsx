@@ -21,7 +21,7 @@ export default async function TeamsIndexPage(): Promise<ReactNode> {
   const entities = await entityRepository.listAll();
 
   return (
-    <main>
+    <main className="public-surface">
       <div className="taxonomy-header">
         <div className="taxonomy-header__mark" aria-hidden="true">
           CS

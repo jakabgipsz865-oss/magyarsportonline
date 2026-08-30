@@ -133,7 +133,7 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
         : "nincs besorolva";
 
   return (
-    <main>
+    <main className="public-surface">
       {/* biztonságos: newsArticleJsonLd kimenete JSON.stringify-jal épül, nem nyers string-összefűzéssel */}
       <script
         type="application/ld+json"

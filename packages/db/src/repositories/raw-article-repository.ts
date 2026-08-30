@@ -56,6 +56,28 @@ export class RawArticleRepository {
     return rows.length > 0;
   }
 
+  /** Targeted repair for a legacy video URL after deterministic text-report resolution. */
+  async replaceWithResolvedFullArticle(
+    id: string,
+    data: Pick<
+      NewRawArticle,
+      | "sourceUrl"
+      | "titleOriginal"
+      | "subtitleOriginal"
+      | "bodyOriginal"
+      | "authorOriginal"
+      | "publishedAtSource"
+      | "imageUrl"
+    >,
+  ): Promise<boolean> {
+    const rows = await this.db
+      .update(rawArticles)
+      .set({ ...data, contentOrigin: "full_article" })
+      .where(eq(rawArticles.id, id))
+      .returning({ id: rawArticles.id });
+    return rows.length > 0;
+  }
+
   async getById(id: string): Promise<RawArticle | null> {
     const [row] = await this.db.select().from(rawArticles).where(eq(rawArticles.id, id)).limit(1);
     return row ?? null;

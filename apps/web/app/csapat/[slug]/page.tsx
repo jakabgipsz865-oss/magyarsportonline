@@ -55,7 +55,7 @@ export default async function EntityPage({ params }: PageProps): Promise<ReactNo
     .filter((story) => entityMatchesText(entity, `${story.title} ${story.lead}`));
 
   return (
-    <main>
+    <main className="public-surface">
       <div className="taxonomy-header">
         <div className="taxonomy-header__mark" aria-hidden="true">
           {entity.nameHu.slice(0, 2).toUpperCase()}

@@ -1,0 +1,38 @@
+name: Repair legacy BBC video Stories
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Queue targeted legacy repair
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          BASE: https://magyarsportonline-web.vercel.app
+        run: |
+          test -n "$CRON_SECRET"
+          curl -fsS --max-time 60 -X POST \
+            "$BASE/api/internal/repair-legacy-bbc-video-stories" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -o repair.json
+          cat repair.json
+      - name: Let the normal queue worker finish the repaired Stories
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          BASE: https://magyarsportonline-web.vercel.app
+        run: |
+          for attempt in $(seq 1 24); do
+            curl -fsS --max-time 120 -X POST "$BASE/api/internal/jobs/process" \
+              -H "Authorization: Bearer $CRON_SECRET" >/dev/null || true
+            sleep 10
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: legacy-bbc-repair-evidence
+          path: repair.json

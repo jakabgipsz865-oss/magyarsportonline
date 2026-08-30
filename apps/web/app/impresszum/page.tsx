@@ -19,7 +19,7 @@ export const metadata: Metadata = {
  */
 export default function ImpresszumPage(): ReactNode {
   return (
-    <main>
+    <main className="public-surface">
       <h1>Impresszum</h1>
       <p>
         <strong>
