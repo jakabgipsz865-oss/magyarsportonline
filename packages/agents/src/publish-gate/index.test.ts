@@ -84,7 +84,7 @@ function sourceMeta(category: "tabloid" | "trusted_media" | "official" | null = 
     sourceName: "Daily Mail - Football",
     category,
     reliabilityTier: "C" as const,
-    contributionType: "origin" as const,
+    contributionType: "initial" as const,
     excluded: false,
     excludedReason: null,
   };
