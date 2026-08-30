@@ -136,6 +136,11 @@ async function ingestOneSource(
   const articles = await adapter.fetch(source.fetchConfig);
   let ingestedCount = 0;
 
+  if (source.lastSuccessAt === null) {
+    log.info({ sourceId: source.id }, "baseline fetch completed without ingesting feed backlog");
+    return 0;
+  }
+
   for (const article of articles) {
     if (remainingBudget !== undefined && ingestedCount >= remainingBudget) {
       log.info(
@@ -143,6 +148,14 @@ async function ingestOneSource(
         "reached the run-wide maxNewArticlesPerRun budget, remaining new articles deferred to the next ingest",
       );
       break;
+    }
+
+    if (article.publishedAtSource === null || article.publishedAtSource <= source.lastSuccessAt) {
+      log.info(
+        { sourceId: source.id, sourceUrl: article.sourceUrl },
+        "skipping article at or before source freshness watermark",
+      );
+      continue;
     }
 
     const existing = await deps.rawArticleRepository.findBySourceUrl(article.sourceUrl);

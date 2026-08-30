@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import { runSourceIngest, type SourceIngestDeps } from "./index";
 import type { SourceAdapter } from "./types";
 
+const WATERMARK = new Date("2026-08-30T10:00:00.000Z");
+const NEW_ARTICLE_TIME = new Date("2026-08-30T10:01:00.000Z");
+
 const SOURCE = {
   id: "11111111-1111-4111-8111-111111111111",
   name: "BBC Sport - Football",
@@ -27,7 +30,7 @@ const SOURCE = {
   imagePolicy: null,
   pollingFrequencyMinutes: null,
   extractorName: null,
-  lastSuccessAt: null,
+  lastSuccessAt: WATERMARK as Date | null,
   lastErrorAt: null,
 };
 
@@ -80,6 +83,7 @@ function buildDeps(overrides?: {
       ),
       insert: vi.fn(async (data: { sourceUrl: string }) => {
         inserted.push({ sourceUrl: data.sourceUrl });
+        existingUrls.add(data.sourceUrl);
         return { id: `new-${inserted.length}`, ...data } as never;
       }),
       upgradeFromFullArticle: vi.fn(
@@ -106,7 +110,7 @@ function buildDeps(overrides?: {
               subtitleOriginal: null,
               bodyOriginal: "Body",
               authorOriginal: null,
-              publishedAtSource: null,
+              publishedAtSource: NEW_ARTICLE_TIME,
               imageUrl: null,
               contentOrigin: "full_article",
             },
@@ -126,6 +130,46 @@ function buildDeps(overrides?: {
 }
 
 describe("runSourceIngest", () => {
+  it("uses the first successful fetch only as a freshness baseline", async () => {
+    const deps = buildDeps({ sources: [{ ...SOURCE, lastSuccessAt: null }] });
+
+    const results = await runSourceIngest(deps);
+
+    expect(results[0]).toMatchObject({ ingestedCount: 0, status: "ok" });
+    expect(deps.inserted).toEqual([]);
+    expect(deps.emitted).toEqual([]);
+    expect(deps.fetchResults).toEqual([{ sourceId: SOURCE.id, status: "ok" }]);
+  });
+
+  it.each([
+    ["older", new Date("2026-08-30T09:59:59.999Z")],
+    ["equal", WATERMARK],
+    ["missing", null],
+  ])("skips an article with a %s publication timestamp", async (_label, publishedAtSource) => {
+    const deps = buildDeps({
+      adapter: {
+        fetch: async () => [
+          {
+            sourceUrl: "https://example.com/not-fresh",
+            titleOriginal: "Not fresh",
+            subtitleOriginal: null,
+            bodyOriginal: "Body",
+            authorOriginal: null,
+            publishedAtSource,
+            imageUrl: null,
+            contentOrigin: "full_article",
+          },
+        ],
+      },
+    });
+
+    const results = await runSourceIngest(deps);
+
+    expect(results[0]).toMatchObject({ ingestedCount: 0, status: "ok" });
+    expect(deps.inserted).toEqual([]);
+    expect(deps.emitted).toEqual([]);
+  });
+
   it("inserts a new RawArticle and emits source/article.ingested", async () => {
     const deps = buildDeps();
 
@@ -143,15 +187,19 @@ describe("runSourceIngest", () => {
   });
 
   it("skips URLs that already exist (idempotent ingest)", async () => {
-    const deps = buildDeps({ existingUrls: new Set(["https://example.com/1"]) });
+    const deps = buildDeps();
 
-    const results = await runSourceIngest(deps);
+    const firstResults = await runSourceIngest(deps);
+    const secondResults = await runSourceIngest(deps);
 
-    expect(results).toEqual([
+    expect(firstResults).toEqual([
+      { sourceId: SOURCE.id, sourceName: SOURCE.name, ingestedCount: 1, status: "ok" },
+    ]);
+    expect(secondResults).toEqual([
       { sourceId: SOURCE.id, sourceName: SOURCE.name, ingestedCount: 0, status: "ok" },
     ]);
-    expect(deps.inserted).toEqual([]);
-    expect(deps.emitted).toEqual([]);
+    expect(deps.inserted).toEqual([{ sourceUrl: "https://example.com/1" }]);
+    expect(deps.emitted).toHaveLength(1);
     expect(deps.upgraded).toEqual([]);
   });
 
@@ -190,7 +238,7 @@ describe("runSourceIngest", () => {
               subtitleOriginal: null,
               bodyOriginal: "Body",
               authorOriginal: null,
-              publishedAtSource: null,
+              publishedAtSource: NEW_ARTICLE_TIME,
               imageUrl: null,
               contentOrigin: "full_article",
             },
