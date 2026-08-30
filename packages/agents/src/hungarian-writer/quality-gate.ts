@@ -78,6 +78,7 @@ const FORBIDDEN_TERMINOLOGY_PATTERNS = [
   /(?<!\p{L})futballfedezet\p{L}*/iu,
   /(?<!\p{L})csillam\p{L}*/iu,
   /(?<!\p{L})borúslatos játékos\p{L}*/iu,
+  /(?<!\p{L})megejtő\p{L}*\s+győzel\p{L}*/iu,
   /(?<!\p{L})ambiciók(?!\p{L})/iu,
   /(?<!\p{L})aláírta\b.{0,50}\baláírását(?!\p{L})/iu,
 ];

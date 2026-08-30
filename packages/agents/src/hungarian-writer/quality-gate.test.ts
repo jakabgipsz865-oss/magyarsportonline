@@ -211,6 +211,8 @@ describe("assessContentQuality", () => {
     "borúslatos játékosok érkeztek",
     "új ambiciók vezérlik",
     "aláírta a támadó aláírását",
+    "Megejtő győzelem született",
+    "megejtő győzelmet aratott",
   ])("flags known bad football terminology: %s", (badPhrase) => {
     const result = assessContentQuality({
       titleHu: "A klub fontos döntés előtt áll",
@@ -221,6 +223,18 @@ describe("assessContentQuality", () => {
     });
 
     expect(result.issues).toContainEqual({ field: "lead", kind: "forbidden_terminology" });
+  });
+
+  it("does not ban megejtő outside the bad football phrase", () => {
+    const result = assessContentQuality({
+      titleHu: "Különleges látvány fogadta a szurkolókat",
+      leadHu: "A stadionból megejtő látvány nyílt a környező hegyekre.",
+      bodyHu:
+        "A csapat közben megkezdte a felkészülést, a vezetőedző pedig ismertette a következő mérkőzés programját.",
+      facts: FACTS,
+    });
+
+    expect(result.issues).not.toContainEqual({ field: "lead", kind: "forbidden_terminology" });
   });
 });
 

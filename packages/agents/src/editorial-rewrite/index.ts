@@ -6,23 +6,10 @@ import type {
   StoryVersionRepository,
 } from "@magyarsportonline/db";
 import { createEventEnvelope, type SportsNewsEvent } from "@magyarsportonline/events";
-import { NoLlmClient, type LlmClient } from "@magyarsportonline/llm";
+import type { LlmClient } from "@magyarsportonline/llm";
 import type { Logger } from "@magyarsportonline/observability";
-import { toWriterFact } from "../hungarian-writer/facts";
-import { assessContentQuality } from "../hungarian-writer/quality-gate";
-import { selfCheckContent } from "../hungarian-writer/self-check";
-import { evaluateCorrectionApplication } from "../shared/correction-effectiveness";
-import {
-  selectRelevantCorrections,
-  type EditorialCorrection,
-} from "../shared/editorial-corrections";
 import type { AgentRunRecorder } from "../shared/with-agent-run";
 import { withAgentRun } from "../shared/with-agent-run";
-import { rewriteForStyle } from "./rewrite";
-
-/** A teljes szerkesztői memóriából ennyi jelöltet olvasunk, majd lokálisan relevancia szerint rangsorolunk. */
-const LEARNED_CORRECTION_CANDIDATE_LIMIT = 2_000;
-const LEARNED_CORRECTIONS_LIMIT = 20;
 
 export * from "./ab-test";
 export * from "./readability";
@@ -54,17 +41,9 @@ type Trigger = Extract<SportsNewsEvent, { type: "story/content.drafted" }>;
 
 /**
  * Editorial Rewrite Agent (docs/editorial-style-guide.md): sits between the
- * Hungarian Writer and SEO agents. The Writer already carries the house
- * style, football lexicon, and learned corrections. Therefore this agent
- * spends Cloudflare neurons only when the deterministic quality gate left
- * concrete issues on the draft; a clean draft passes through without an
- * extra rewrite/self-check pair.
- *
- * Never trusts the rewrite blindly: it re-runs the Hungarian Writer's own
- * fact-consistency self-check against the *rewritten* text before accepting
- * it. Any doubt (inconsistent, or a fallback/no-LLM identity passthrough)
- * means the original Writer content ships unchanged — this agent can only
- * ever make wording better, never risk correctness for it.
+ * Hungarian Writer and SEO agents. The Writer already performs one targeted
+ * quality fix and a second fact check. This stage therefore preserves that
+ * final Writer version and only emits the downstream compatibility event.
  */
 export async function handleStoryContentDrafted(
   deps: EditorialRewriteDeps,
@@ -89,7 +68,7 @@ export async function handleStoryContentDrafted(
         throw new Error(`StoryVersion "${event.payload.story_version_id}" not found`);
       }
 
-      let editorialRewriteApplied = false;
+      const editorialRewriteApplied = false;
 
       const hasQualityIssues =
         Array.isArray(version.qualityIssues) && version.qualityIssues.length > 0;
@@ -105,129 +84,16 @@ export async function handleStoryContentDrafted(
           { correlationId: event.correlation_id, storyId: story.id, versionId: version.id },
           "editorial rewrite: version already published, skipping",
         );
-      } else if (!hasQualityIssues) {
+      } else if (hasQualityIssues) {
+        deps.logger.info(
+          { correlationId: event.correlation_id, storyId: story.id, versionId: version.id },
+          "editorial rewrite: Writer quality issues remain, skipping redundant LLM rewrite",
+        );
+      } else {
         deps.logger.info(
           { correlationId: event.correlation_id, storyId: story.id, versionId: version.id },
           "editorial rewrite: deterministic quality gate passed, skipping LLM rewrite",
         );
-      } else {
-        const facts = (await deps.factRepository.listByStoryId(story.id)).map(toWriterFact);
-        const correctionCandidates: EditorialCorrection[] = await deps.editorialCorrectionRepository
-          .listRecent(LEARNED_CORRECTION_CANDIDATE_LIMIT)
-          .then((rows) =>
-            rows.map((row) => ({
-              id: row.id,
-              category: row.category,
-              termEn: row.termEn,
-              originalSentenceEn: row.originalSentenceEn,
-              currentSentenceHu: row.currentSentenceHu,
-              correctedSentenceHu: row.correctedSentenceHu,
-              note: row.note,
-            })),
-          );
-        const learnedCorrections = selectRelevantCorrections(
-          correctionCandidates,
-          [
-            ...facts.flatMap((fact) => [fact.detailHu, fact.quoteOriginal]),
-            version.titleHu,
-            version.leadHu,
-            version.bodyHu,
-          ]
-            .filter((value): value is string => Boolean(value))
-            .join("\n"),
-          LEARNED_CORRECTIONS_LIMIT,
-        );
-        const rewritten = await rewriteForStyle(deps.llm, {
-          facts,
-          titleHu: version.titleHu,
-          leadHu: version.leadHu,
-          bodyHu: version.bodyHu,
-          learnedCorrections,
-        });
-
-        if (rewritten.isFallback || deps.llm instanceof NoLlmClient) {
-          deps.logger.info(
-            { correlationId: event.correlation_id, storyId: story.id },
-            "editorial rewrite: no LLM available, keeping original wording",
-          );
-        } else {
-          const check = await selfCheckContent(deps.llm, { facts, ...rewritten });
-          if (check.consistent) {
-            const quality = assessContentQuality({
-              titleHu: rewritten.titleHu,
-              leadHu: rewritten.leadHu,
-              bodyHu: rewritten.bodyHu,
-              facts,
-            });
-            if (!quality.passed) {
-              deps.logger.warn(
-                {
-                  correlationId: event.correlation_id,
-                  storyId: story.id,
-                  versionId: version.id,
-                  issues: quality.issues,
-                },
-                "editorial rewrite: rewritten text failed the quality gate, keeping original wording",
-              );
-            } else {
-              const updated = await deps.storyVersionRepository.updateDraftContent(version.id, {
-                titleHu: rewritten.titleHu,
-                leadHu: rewritten.leadHu,
-                bodyHu: rewritten.bodyHu,
-                editorialRewriteApplied: true,
-                qualityIssues: quality.issues,
-              });
-              editorialRewriteApplied = updated;
-              if (!updated) {
-                deps.logger.warn(
-                  {
-                    correlationId: event.correlation_id,
-                    storyId: story.id,
-                    versionId: version.id,
-                  },
-                  "editorial rewrite: version was published before the rewrite could be saved, discarding it",
-                );
-              } else if (learnedCorrections.length > 0) {
-                // "Mérhető szerkesztői memória" (2026-07-28 sprint): csak akkor
-                // mérünk, ha az átírás ténylegesen megtörtént és el is mentődött
-                // — egy elutasított vagy fallback-átírás nem tükrözi a modell
-                // tanulását.
-                const generatedText = `${rewritten.titleHu}\n${rewritten.leadHu}\n${rewritten.bodyHu}`;
-                const englishQuotes = facts
-                  .map((fact) => fact.quoteOriginal)
-                  .filter((quote): quote is string => Boolean(quote))
-                  .join("\n");
-                const sourceText = `${englishQuotes}\n${version.titleHu}\n${version.leadHu}\n${version.bodyHu}`;
-                for (const correction of learnedCorrections) {
-                  const result = evaluateCorrectionApplication(
-                    correction,
-                    generatedText,
-                    sourceText,
-                  );
-                  if (result) {
-                    await deps.editorialCorrectionApplicationRepository.create({
-                      correctionId: correction.id,
-                      storyId: story.id,
-                      stage: "editorial_rewrite",
-                      verdict: result.verdict,
-                      evidence: result.evidence,
-                    });
-                  }
-                }
-              }
-            }
-          } else {
-            deps.logger.warn(
-              {
-                correlationId: event.correlation_id,
-                storyId: story.id,
-                versionId: version.id,
-                issues: check.issues,
-              },
-              "editorial rewrite: rewritten text failed the fact-consistency check, keeping original wording",
-            );
-          }
-        }
       }
 
       await deps.dispatcher.emit({
