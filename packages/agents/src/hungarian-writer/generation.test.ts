@@ -4,7 +4,7 @@ import {
 } from "@magyarsportonline/db";
 import { FakeLlmClient, MODEL_TIERS } from "@magyarsportonline/llm";
 import { describe, expect, it } from "vitest";
-import { generateStoryVersion } from "./generation";
+import { generateStoryVersion, regenerateWithFactRepair } from "./generation";
 
 describe("generateStoryVersion", () => {
   it("uses the writing model and returns the parsed content", async () => {
@@ -107,6 +107,34 @@ describe("generateStoryVersion", () => {
 
     const system = llm.jsonRequests[0]?.system ?? "";
     expect(system).not.toContain("\n\nSZERKESZTŐI TUDÁS V2:\n-");
+  });
+
+  it("passes the previous draft and self-check issues to the fact-repair prompt", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: {
+        title_hu: "Javított",
+        lead_hu: "Javított lead",
+        body_hu: "Javított törzs",
+        change_summary_hu: null,
+      },
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+
+    await regenerateWithFactRepair(llm, {
+      facts: [
+        { factType: "score", detailHu: "3-1", quoteOriginal: null, quoteSpeaker: null },
+      ],
+      previousVersion: null,
+      previousAttempt: { titleHu: "Hibás", leadHu: "Hibás lead", bodyHu: "Hibás törzs" },
+      selfCheckIssues: ["A 4-1-es eredmény nincs a Facts között"],
+    });
+
+    expect(llm.jsonRequests[0]?.messages[0]?.content).toContain(
+      "A 4-1-es eredmény nincs a Facts között",
+    );
+    expect(llm.jsonRequests[0]?.system).toContain("Facts az egyetlen hiteles tartalmi forrás");
   });
 });
 

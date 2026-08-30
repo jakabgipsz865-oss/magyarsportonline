@@ -210,9 +210,10 @@ function queueSelfCheck(
   consistent: boolean,
   score: number,
   isFallback?: boolean,
+  issues: string[] = consistent ? [] : ["hiba"],
 ) {
   llm.queueJson({
-    data: { consistent, fact_consistency_score: score, issues: consistent ? [] : ["hiba"] },
+    data: { consistent, fact_consistency_score: score, issues },
     inputTokens: 5,
     outputTokens: 5,
     isFallback,
@@ -244,6 +245,7 @@ describe("handleStoryFactsVerified", () => {
         },
       }),
     ]);
+    expect(deps.llm.jsonRequests).toHaveLength(2);
   });
 
   it("falls back to a default change summary when updating and the model omits one", async () => {
@@ -260,18 +262,53 @@ describe("handleStoryFactsVerified", () => {
     });
   });
 
-  it("does not spend a blind regeneration on an inconsistent draft and persists the blocking score", async () => {
+  it("repairs one inconsistent draft and persists it when the second self-check passes", async () => {
     const deps = buildDeps();
     queueGeneration(deps.llm, { title_hu: "Rossz cím" });
+    queueSelfCheck(deps.llm, false, 0.2, false, ["Nem igazolt állítás"]);
+    queueGeneration(deps.llm, { title_hu: "Javított cím" });
+    queueSelfCheck(deps.llm, true, 1);
+
+    await handleStoryFactsVerified(deps, triggerEvent());
+
+    expect(deps.llm.jsonRequests).toHaveLength(4);
+    expect(deps.llm.jsonRequests[2]?.messages[0]?.content).toContain("Nem igazolt állítás");
+    expect(deps.createNextVersionCalls[0]).toMatchObject({
+      titleHu: "Javított cím",
+      factConsistencyScore: 1,
+    });
+  });
+
+  it("fails closed after the single fact repair also fails self-check", async () => {
+    const deps = buildDeps();
+    queueGeneration(deps.llm, { title_hu: "Rossz cím" });
+    queueSelfCheck(deps.llm, false, 0.2);
+    queueGeneration(deps.llm, { title_hu: "Még mindig hibás cím" });
+    queueSelfCheck(deps.llm, false, 0.4);
+
+    await handleStoryFactsVerified(deps, triggerEvent());
+
+    expect(deps.llm.jsonRequests).toHaveLength(4);
+    expect(deps.createNextVersionCalls[0]).toMatchObject({
+      titleHu: "Még mindig hibás cím",
+      factConsistencyScore: 0.4,
+    });
+  });
+
+  it("does not repair an inconsistent fallback generation", async () => {
+    const deps = buildDeps();
+    deps.llm.queueJson({
+      data: { title_hu: "Fallback", lead_hu: "Lead", body_hu: "Törzs", change_summary_hu: null },
+      inputTokens: 0,
+      outputTokens: 0,
+      isFallback: true,
+    });
     queueSelfCheck(deps.llm, false, 0.2);
 
     await handleStoryFactsVerified(deps, triggerEvent());
 
     expect(deps.llm.jsonRequests).toHaveLength(2);
-    expect(deps.createNextVersionCalls[0]).toMatchObject({
-      titleHu: "Rossz cím",
-      factConsistencyScore: 0.2,
-    });
+    expect(deps.createNextVersionCalls[0]).toMatchObject({ factConsistencyScore: 0.2 });
   });
 
   it("labels the version as not-AI-generated when deps.llm is the NoLlmClient adapter", async () => {

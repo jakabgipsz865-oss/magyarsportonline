@@ -69,6 +69,13 @@ const QUALITY_FIX_SYSTEM_PROMPT = `Magyar sportújságíró vagy. Az előző ter
 - ügyelj a helyes névelőkre, ékezetekre és mondatszerkezetre;
 - kizárólag a "facts" tömbben szereplő tényekre támaszkodj, ne találj ki semmit.`;
 
+const FACT_REPAIR_SYSTEM_PROMPT = `Magyar sportújságíró vagy. Az előző tervezet tényellenőrzése hibát talált. Írd újra a teljes címet, leadet és törzset kizárólag a "facts" tömb alapján.
+
+- A "selfCheckIssues" minden jelzett hibáját javítsd: a nem igazolt állítást töröld vagy igazítsd a Facts tartalmához.
+- Semmilyen új tényt, nevet, számot, következtetést vagy körülményt ne találj ki.
+- A "previousAttempt" csak a hibák azonosítására szolgál; a Facts az egyetlen hiteles tartalmi forrás.
+- Maradjon természetes, mai magyar sportújságírói szöveg, és tartsd be a Szerkesztői Tudás V2 releváns szabályait.`;
+
 /** A determinisztikusan kiválasztott V2 rekordok korlátos promptblokkja. */
 export function formatEditorialKnowledgeBlock(records: EditorialKnowledgeRecord[]): string {
   const lines: string[] = [];
@@ -141,6 +148,28 @@ export async function generateStoryVersion(
 export interface QualityFixInput extends GenerationInput {
   previousAttempt: { titleHu: string; leadHu: string; bodyHu: string };
   issues: QualityIssue[];
+}
+
+export interface FactRepairInput extends GenerationInput {
+  previousAttempt: { titleHu: string; leadHu: string; bodyHu: string };
+  selfCheckIssues: string[];
+}
+
+export async function regenerateWithFactRepair(
+  llm: LlmClient,
+  input: FactRepairInput,
+): Promise<GeneratedContent> {
+  return runGenerationCall(
+    llm,
+    FACT_REPAIR_SYSTEM_PROMPT,
+    {
+      facts: input.facts,
+      previousVersion: input.previousVersion,
+      previousAttempt: input.previousAttempt,
+      selfCheckIssues: input.selfCheckIssues,
+    },
+    input.knowledge ?? [],
+  );
 }
 
 /**

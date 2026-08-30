@@ -15,6 +15,7 @@ import type { Logger } from "@magyarsportonline/observability";
 import { toWriterFact } from "./facts";
 import {
   generateStoryVersion,
+  regenerateWithFactRepair,
   regenerateWithQualityFix,
   type PreviousVersionContent,
 } from "./generation";
@@ -107,11 +108,32 @@ export async function handleStoryFactsVerified(
         knowledge,
       });
       let check = await selfCheckContent(deps.llm, { facts, ...generated });
+      let factRepairAttempted = false;
 
+      if (
+        !check.consistent &&
+        !check.isFallback &&
+        !generated.isFallback &&
+        !(deps.llm instanceof NoLlmClient)
+      ) {
+        factRepairAttempted = true;
+        deps.logger.warn(
+          { correlationId: event.correlation_id, storyId: story.id, issues: check.issues },
+          "self-check flagged the draft as inconsistent; attempting one targeted fact repair",
+        );
+        generated = await regenerateWithFactRepair(deps.llm, {
+          facts,
+          previousVersion,
+          knowledge,
+          previousAttempt: generated,
+          selfCheckIssues: check.issues,
+        });
+        check = await selfCheckContent(deps.llm, { facts, ...generated });
+      }
       if (!check.consistent) {
         deps.logger.warn(
           { correlationId: event.correlation_id, storyId: story.id, issues: check.issues },
-          "self-check flagged the draft as inconsistent; persisting it for fail-closed review",
+          "self-check remains inconsistent; persisting for fail-closed review",
         );
       }
 
@@ -128,7 +150,12 @@ export async function handleStoryFactsVerified(
         bodyHu: generated.bodyHu,
         facts,
       });
-      if (!quality.passed && !generated.isFallback && !(deps.llm instanceof NoLlmClient)) {
+      if (
+        !quality.passed &&
+        !factRepairAttempted &&
+        !generated.isFallback &&
+        !(deps.llm instanceof NoLlmClient)
+      ) {
         deps.logger.warn(
           { correlationId: event.correlation_id, storyId: story.id, issues: quality.issues },
           "content quality gate failed, attempting one targeted fix-up call",
