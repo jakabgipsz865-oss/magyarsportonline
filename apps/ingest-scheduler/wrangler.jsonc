@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "magyarsportonline-ingest-scheduler",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-30",
+  "workers_dev": false,
+  "triggers": {
+    "crons": ["* * * * *"],
+  },
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@magyarsportonline/ingest-scheduler",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "3.114.17"
+  }
+}
