@@ -4,6 +4,11 @@ import { createRepositories } from "./db";
 import { buildQueueingEmitter } from "./pipeline";
 
 const BBC_VIDEO_PATH = /\/sport\/football\/videos\//;
+const LEGACY_BBC_STORY_IDS = [
+  "60680bc2-025b-466a-a6c9-7cf9aa2f3af4",
+  "462ba252-bc91-4b98-b1be-002dea41c292",
+  "db601a87-0534-4a91-81fd-701fc2593797",
+] as const;
 
 export interface LegacyBbcRepairResult {
   storyId: string;
@@ -27,11 +32,11 @@ export async function repairLegacyBbcVideoStories(): Promise<LegacyBbcRepairResu
   const repos = createRepositories();
   const emitter = buildQueueingEmitter(repos.pipelineJobRepository);
   const fetcher = new sourceIngest.ArticleFetcher();
-  const stories = await repos.storyRepository.listRecent(2_000);
   const repaired: LegacyBbcRepairResult[] = [];
 
-  for (const story of stories) {
-    if (story.status !== "published") continue;
+  for (const storyId of LEGACY_BBC_STORY_IDS) {
+    const story = await repos.storyRepository.getById(storyId);
+    if (!story || story.status !== "published") continue;
     const articles = await repos.rawArticleRepository.listByStoryId(story.id);
     for (const article of articles) {
       if (article.contentOrigin !== "rss_snippet" || !BBC_VIDEO_PATH.test(article.sourceUrl)) {
