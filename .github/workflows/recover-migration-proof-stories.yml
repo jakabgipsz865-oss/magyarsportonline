@@ -1,0 +1,28 @@
+name: Recover migration proof Stories
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Recover three allowlisted proof Stories
+        env:
+          RECOVERY_TOKEN: ${{ secrets.BBC_REPAIR_TOKEN }}
+          BASE: https://magyarsportonline-web.vercel.app
+        run: |
+          test -n "$RECOVERY_TOKEN"
+          curl -fsS --max-time 290 -X POST \
+            "$BASE/api/internal/recover-migration-proof-stories" \
+            -H "Authorization: Bearer $RECOVERY_TOKEN" \
+            -o recovery.json
+          cat recovery.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: migration-proof-recovery-evidence
+          path: recovery.json
