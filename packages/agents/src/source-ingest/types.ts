@@ -1,5 +1,7 @@
 export interface NormalizedArticle {
   sourceUrl: string;
+  /** Original RSS detection URL when enrichment resolves to a better canonical report URL. */
+  detectedSourceUrl?: string;
   titleOriginal: string;
   /** Alcím/standfirst, ha a forrás megadja — az RSS-adapter mindig `null`-t ad, a Source Fetcher (article-fetcher/) tölti ki, ha talál ilyet. */
   subtitleOriginal: string | null;

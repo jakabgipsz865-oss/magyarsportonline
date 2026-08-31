@@ -6,6 +6,7 @@ const NAV_LINKS: Array<{ href: string; labelHu: string }> = [
   { href: "/admin/review", labelHu: "Hírek" },
   { href: "/admin/missed-merge-review", labelHu: "Ellenőrzés" },
   { href: "/admin/knowledge", labelHu: "Szerkesztői tudás" },
+  { href: "/admin/system", labelHu: "Rendszer" },
 ];
 
 /**

@@ -42,4 +42,10 @@ describe("selectPremierLeagueMatches", () => {
     expect(panel.title).toBe("Következő Premier League-meccsek");
     expect(panel.matches).toHaveLength(1);
   });
+
+  it("fails closed instead of treating an API error as an empty fixture list", () => {
+    expect(() =>
+      selectPremierLeagueMatches({ errors: { plan: "Current season unavailable" }, response: [] }),
+    ).toThrow("Current season unavailable");
+  });
 });

@@ -1,5 +1,10 @@
 import { parseEvent } from "@magyarsportonline/events";
-import { isCloudflareDailyNeuronQuotaError } from "@magyarsportonline/llm";
+import {
+  isCloudflareDailyNeuronQuotaError,
+  isDailyLlmQuotaError,
+  isGeminiDailyQuotaError,
+  delayUntilNextGeminiQuotaReset,
+} from "@magyarsportonline/llm";
 import { NextResponse, type NextRequest } from "next/server";
 import { createRepositories } from "../../../../../lib/db";
 import { delayUntilNextCloudflareQuotaReset } from "../../../../../lib/cloudflare-quota";
@@ -37,7 +42,7 @@ const BUDGET_MS = 35_000; // short admission window: one slow LLM stage per work
 const STALE_LOCK_MS = 10 * 60_000; // an in_progress job locked longer than this is presumed abandoned
 const BASE_BACKOFF_MS = 30_000;
 const MAX_BACKOFF_MS = 30 * 60_000;
-const CLOUDFLARE_QUOTA_ERROR_PREFIX = "[cloudflare_daily_neuron_quota]";
+const DAILY_AI_QUOTA_ERROR_PREFIX = "[daily_ai_quota]";
 
 /** Exponential backoff, capped — `attempts` is already post-increment (claimBatch increments it), so attempt 1 -> 30s, 2 -> 1min, 3 -> 2min, ... */
 function backoffFor(attempts: number): number {
@@ -55,7 +60,7 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
   const logger = getLogger();
   const deadline = Date.now() + BUDGET_MS;
   const activeQuotaDeferral = await repos.pipelineJobRepository.findActiveDeferral(
-    CLOUDFLARE_QUOTA_ERROR_PREFIX,
+    DAILY_AI_QUOTA_ERROR_PREFIX,
   );
   if (activeQuotaDeferral) {
     const queue = await repos.pipelineJobRepository.getStatusCounts();
@@ -98,19 +103,26 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
       succeeded += 1;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (isCloudflareDailyNeuronQuotaError(error)) {
+      if (
+        isCloudflareDailyNeuronQuotaError(error) ||
+        isGeminiDailyQuotaError(error) ||
+        isDailyLlmQuotaError(error)
+      ) {
         const now = new Date();
-        const delayMs = delayUntilNextCloudflareQuotaReset(now);
+        const isGeminiQuota = isGeminiDailyQuotaError(error) || isDailyLlmQuotaError(error);
+        const delayMs = isGeminiQuota
+          ? delayUntilNextGeminiQuotaReset(now)
+          : delayUntilNextCloudflareQuotaReset(now);
         quotaRetryAt = new Date(now.getTime() + delayMs).toISOString();
         await repos.pipelineJobRepository.deferWithoutAttempt(
           job.id,
-          `${CLOUDFLARE_QUOTA_ERROR_PREFIX} ${message}`,
+          `${DAILY_AI_QUOTA_ERROR_PREFIX} ${message}`,
           delayMs,
         );
         quotaDeferred = true;
         logger.warn(
           { jobId: job.id, retryAt: quotaRetryAt },
-          "Cloudflare daily neuron quota exhausted; pipeline deferred without consuming an attempt",
+          "Daily AI quota exhausted; pipeline deferred without consuming an attempt",
         );
         break;
       }

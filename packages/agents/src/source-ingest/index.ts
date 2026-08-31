@@ -173,10 +173,15 @@ async function ingestOneSource(
     const timestampGroupComplete =
       articles[index + 1]?.publishedAtSource.getTime() !== article.publishedAtSource.getTime();
 
-    const existing = await deps.rawArticleRepository.findBySourceUrl(article.sourceUrl);
+    const existing =
+      (await deps.rawArticleRepository.findBySourceUrl(article.sourceUrl)) ??
+      (article.detectedSourceUrl
+        ? await deps.rawArticleRepository.findBySourceUrl(article.detectedSourceUrl)
+        : null);
     if (existing) {
       if (existing.contentOrigin === "rss_snippet" && article.contentOrigin === "full_article") {
         const upgraded = await deps.rawArticleRepository.upgradeFromFullArticle(existing.id, {
+          sourceUrl: article.sourceUrl,
           titleOriginal: article.titleOriginal,
           subtitleOriginal: article.subtitleOriginal,
           bodyOriginal: article.bodyOriginal,
@@ -188,6 +193,20 @@ async function ingestOneSource(
           log.info(
             { rawArticleId: existing.id, sourceUrl: article.sourceUrl },
             "upgraded existing RSS snippet to full-article provenance",
+          );
+          const correlationId = crypto.randomUUID();
+          await deps.dispatcher.emit(
+            existing.storyId
+              ? {
+                  ...createEventEnvelope({ correlationId, id: correlationId }),
+                  type: "story/created",
+                  payload: { story_id: existing.storyId },
+                }
+              : {
+                  ...createEventEnvelope({ correlationId, id: correlationId }),
+                  type: "source/article.ingested",
+                  payload: { raw_article_id: existing.id, source_id: source.id },
+                },
           );
         }
       }

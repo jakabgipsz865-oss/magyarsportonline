@@ -26,7 +26,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { createRepositories, type Repositories } from "./db";
 import { env } from "./env";
-import { getLlmClient } from "./llm";
+import { getFactLlmClient, getLlmClient, getWriterLlmClient } from "./llm";
 import { getLogger } from "./logger";
 import { calculateIngestBudget } from "./ingest-control";
 
@@ -47,7 +47,8 @@ const DEFAULT_CATEGORY_SLUG = "labdarugas";
 export function buildDispatcher(repos: Repositories = createRepositories()): InProcessDispatcher {
   const dispatcher = createInProcessDispatcher();
   const logger = getLogger();
-  const llm = getLlmClient();
+  const factLlm = getFactLlmClient();
+  const writerLlm = getWriterLlmClient();
 
   dispatcher.on("source/article.ingested", (event) =>
     deduplication.handleSourceArticleIngested(
@@ -87,7 +88,7 @@ export function buildDispatcher(repos: Repositories = createRepositories()): InP
     factRepository: repos.factRepository,
     storySourceRepository: repos.storySourceRepository,
     storyCredibilityHistoryRepository: repos.storyCredibilityHistoryRepository,
-    llm,
+    llm: factLlm,
     agentRunRepository: repos.agentRunRepository,
     dispatcher,
     logger,
@@ -112,7 +113,8 @@ export function buildDispatcher(repos: Repositories = createRepositories()): InP
         storyVersionRepository: repos.storyVersionRepository,
         factRepository: repos.factRepository,
         editorialKnowledgeRepository: repos.editorialKnowledgeRepository,
-        llm,
+        writerLlm,
+        selfCheckLlm: factLlm,
         agentRunRepository: repos.agentRunRepository,
         dispatcher,
         logger,
@@ -129,7 +131,7 @@ export function buildDispatcher(repos: Repositories = createRepositories()): InP
         factRepository: repos.factRepository,
         editorialCorrectionRepository: repos.editorialCorrectionRepository,
         editorialCorrectionApplicationRepository: repos.editorialCorrectionApplicationRepository,
-        llm,
+        llm: writerLlm,
         agentRunRepository: repos.agentRunRepository,
         dispatcher,
         logger,
@@ -234,7 +236,8 @@ export async function dispatchJobToHandler(
   emitter: { emit(event: unknown): Promise<void> },
 ): Promise<void> {
   const logger = getLogger();
-  const llm = getLlmClient();
+  const factLlm = getFactLlmClient();
+  const writerLlm = getWriterLlmClient();
 
   switch (event.type) {
     case "source/article.ingested":
@@ -279,7 +282,7 @@ export async function dispatchJobToHandler(
           factRepository: repos.factRepository,
           storySourceRepository: repos.storySourceRepository,
           storyCredibilityHistoryRepository: repos.storyCredibilityHistoryRepository,
-          llm,
+          llm: factLlm,
           agentRunRepository: repos.agentRunRepository,
           dispatcher: emitter,
           logger,
@@ -295,7 +298,8 @@ export async function dispatchJobToHandler(
           storyVersionRepository: repos.storyVersionRepository,
           factRepository: repos.factRepository,
           editorialKnowledgeRepository: repos.editorialKnowledgeRepository,
-          llm,
+          writerLlm,
+          selfCheckLlm: factLlm,
           agentRunRepository: repos.agentRunRepository,
           dispatcher: emitter,
           logger,
@@ -311,7 +315,7 @@ export async function dispatchJobToHandler(
           factRepository: repos.factRepository,
           editorialCorrectionRepository: repos.editorialCorrectionRepository,
           editorialCorrectionApplicationRepository: repos.editorialCorrectionApplicationRepository,
-          llm,
+          llm: writerLlm,
           agentRunRepository: repos.agentRunRepository,
           dispatcher: emitter,
           logger,
@@ -418,8 +422,8 @@ export async function runIngestPipeline(): Promise<{
     // Source Fetcher (2026-07-28-i sprint): az RSS-adaptert becsomagoljuk
     // egy dekorátorral, ami a rövid contentSnippet helyett a cikkoldalról
     // letöltött, teljes törzset adja tovább, HA van a domainhez
-    // regisztrált extractor (jelenleg csak BBC Sport) — minden más forrás,
-    // vagy bármilyen letöltési/kinyerési hiba esetén az eredeti RSS
+    // regisztrált extractor — minden más forrás, vagy bármilyen
+    // letöltési/kinyerési hiba esetén az eredeti RSS
     // snippetre esik vissza, a pipeline sosem áll le emiatt.
     adapters: {
       rss: new sourceIngest.ArticleEnrichingSourceAdapter(

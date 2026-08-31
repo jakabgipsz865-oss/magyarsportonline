@@ -27,9 +27,9 @@ export const env = createEnv({
     // LLM_PROVIDER=none esetén a pipeline a determinisztikus
     // NoLlmClient adaptert használja (packages/llm/src/no-llm-client.ts) —
     // kizárólag explicit helyi fejlesztéshez/teszthez. A production
-    // alapértelmezés Cloudflare Workers AI; más AI-provider nincs a runtime
-    // konfigurációban. A Cloudflare kulcsok feltételes kötelezőségét
-    // lib/llm.ts ellenőrzi.
+    // Fact Extraction és Self Check production providerként Cloudflare
+    // Workers AI-t használ; a Final Hungarian Writer külön Gemini kliens.
+    // A kulcsok feltételes kötelezőségét lib/llm.ts ellenőrzi.
     LLM_PROVIDER: z.enum(["none", "cloudflare"]).default("cloudflare"),
 
     // Csak akkor kötelező ténylegesen, ha LLM_PROVIDER=cloudflare (lib/llm.ts).
@@ -40,14 +40,18 @@ export const env = createEnv({
     // "Workers AI" jogosultságú API-token (Cloudflare Dashboard → My Profile
     // → API Tokens) — kizárólag szerveroldalon (apps/web/lib/llm.ts) kerül
     // felhasználásra, sosem jut a kliens-oldali bundle-be (lásd `client: {}`
-    // lent). Production terheléshez a Workers Paid plan az infrastruktúra
-    // része; az ingyenes napi kvóta nem rendelkezésre-állási garancia.
+    // lent). Provider-kvótánál a tartós queue deferel; paid fallback nincs.
     CLOUDFLARE_API_TOKEN: z.string().min(1).optional(),
 
     // Cloudflare JSON Mode-ot hivatalosan támogató modell. Az adapter a
     // korábbi/hibás, strukturált kimenetet nem támogató env-értéket is erre
     // a fail-safe alapmodellre cseréli.
     CLOUDFLARE_AI_MODEL: z.string().min(1).default("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
+
+    GEMINI_API_KEY: z.string().min(1).optional(),
+    GEMINI_MODEL: z.string().min(1).default("gemini-2.5-flash"),
+    GEMINI_FREE_ONLY: z.literal("true").default("true"),
+    GEMINI_DAILY_REQUEST_CAP: z.coerce.number().int().positive().optional(),
 
     // Admin/review felület (/admin/review) HTTP Basic auth jelszava.
     // Ha nincs beállítva, az admin felület 503-mal letiltva marad —

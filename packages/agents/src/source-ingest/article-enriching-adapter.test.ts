@@ -131,6 +131,9 @@ describe("ArticleEnrichingSourceAdapter", () => {
     const [result] = await adapter.fetch({});
 
     expect(result?.sourceUrl).toBe(reportUrl);
+    expect(result?.detectedSourceUrl).toBe(
+      "https://www.bbc.com/sport/football/videos/cx2zvzpdyjdo",
+    );
     expect(result?.contentOrigin).toBe("full_article");
   });
 });

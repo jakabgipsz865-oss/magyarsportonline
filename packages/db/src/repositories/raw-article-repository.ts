@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "../client";
 import { rawArticles } from "../schema/index";
 
@@ -11,6 +11,30 @@ export type NewRawArticle = typeof rawArticles.$inferInsert;
  */
 export class RawArticleRepository {
   constructor(private readonly db: Database) {}
+
+  async getContentHealth(): Promise<{
+    total: number;
+    fullArticle: number;
+    rssSnippet: number;
+    averageBodyLength: number;
+  }> {
+    const [row] = await this.db.execute<{
+      total: number | string;
+      full_article: number | string;
+      rss_snippet: number | string;
+      average_body_length: number | string;
+    }>(sql`SELECT count(*) AS total,
+      count(*) FILTER (WHERE content_origin = 'full_article') AS full_article,
+      count(*) FILTER (WHERE content_origin = 'rss_snippet') AS rss_snippet,
+      coalesce(avg(length(body_original)), 0)::int AS average_body_length
+      FROM ${rawArticles}`);
+    return {
+      total: Number(row?.total ?? 0),
+      fullArticle: Number(row?.full_article ?? 0),
+      rssSnippet: Number(row?.rss_snippet ?? 0),
+      averageBodyLength: Number(row?.average_body_length ?? 0),
+    };
+  }
 
   /** URL-based dedup (docs/architecture/02-agents.md §2.1 step 4). */
   async findBySourceUrl(sourceUrl: string): Promise<RawArticle | null> {
@@ -41,6 +65,7 @@ export class RawArticleRepository {
     data: Pick<
       NewRawArticle,
       | "titleOriginal"
+      | "sourceUrl"
       | "subtitleOriginal"
       | "bodyOriginal"
       | "authorOriginal"

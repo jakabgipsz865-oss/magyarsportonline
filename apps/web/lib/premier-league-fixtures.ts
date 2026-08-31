@@ -1,13 +1,15 @@
 import { unstable_cache } from "next/cache";
 import { z } from "zod";
 
-const API_URL = "https://v3.football.api-sports.io/fixtures";
+const API_BASE = "https://v3.football.api-sports.io";
 const PREMIER_LEAGUE_ID = 39;
-const CACHE_SECONDS = 15 * 60;
+const CACHE_SECONDS = 30 * 60;
 const DISPLAY_LIMIT = 5;
 const LIVE_STATUSES = new Set(["1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT", "LIVE"]);
 
 const responseSchema = z.object({
+  errors: z.union([z.record(z.unknown()), z.array(z.unknown())]).optional(),
+  results: z.number().optional(),
   response: z.array(
     z.object({
       fixture: z.object({
@@ -48,6 +50,7 @@ export interface PremierLeaguePanel {
   title: string;
   state: "ready" | "missing_key" | "unavailable";
   matches: PremierLeagueMatch[];
+  error: string | null;
 }
 
 function localDate(date: Date): string {
@@ -73,6 +76,10 @@ function seasonFor(date: Date): number {
 
 export function selectPremierLeagueMatches(payload: unknown, now = new Date()): PremierLeaguePanel {
   const parsed = responseSchema.parse(payload);
+  const errors = parsed.errors;
+  if (errors && (Array.isArray(errors) ? errors.length > 0 : Object.keys(errors).length > 0)) {
+    throw new Error(`API-Football: ${JSON.stringify(errors)}`);
+  }
   const today = localDate(now);
   const matches = parsed.response
     .map(({ fixture, teams, goals }) => ({
@@ -97,8 +104,42 @@ export function selectPremierLeagueMatches(payload: unknown, now = new Date()): 
     title: todayMatches.length ? "Mai Premier League-meccsek" : "Következő Premier League-meccsek",
     state: "ready",
     matches: (todayMatches.length ? todayMatches : upcoming).slice(0, DISPLAY_LIMIT),
+    error: null,
   };
 }
+
+const fetchCurrentSeason = unstable_cache(
+  async (): Promise<number> => {
+    const apiKey = process.env["API_FOOTBALL_KEY"]?.trim();
+    if (!apiKey) throw new Error("API_FOOTBALL_KEY missing");
+    const response = await fetch(`${API_BASE}/leagues?id=${PREMIER_LEAGUE_ID}`, {
+      headers: { "x-apisports-key": apiKey },
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error(`API-Football leagues HTTP ${response.status}`);
+    const payload = z
+      .object({
+        errors: z.union([z.record(z.unknown()), z.array(z.unknown())]).optional(),
+        response: z.array(
+          z.object({
+            seasons: z.array(z.object({ year: z.number(), current: z.boolean() })),
+          }),
+        ),
+      })
+      .parse(await response.json());
+    const errors = payload.errors;
+    if (errors && (Array.isArray(errors) ? errors.length : Object.keys(errors).length)) {
+      throw new Error(`API-Football leagues: ${JSON.stringify(errors)}`);
+    }
+    const season = payload.response
+      .flatMap((league) => league.seasons)
+      .find((item) => item.current);
+    if (!season) throw new Error("API-Football returned no current Premier League season");
+    return season.year;
+  },
+  ["premier-league-current-season-v1"],
+  { revalidate: 24 * 60 * 60 },
+);
 
 const fetchFixtures = unstable_cache(
   async (from: string, to: string, season: number): Promise<PremierLeaguePanel> => {
@@ -108,9 +149,10 @@ const fetchFixtures = unstable_cache(
         title: "Premier League-meccsek",
         state: "missing_key",
         matches: [],
+        error: "API_FOOTBALL_KEY missing",
       };
     }
-    const url = new URL(API_URL);
+    const url = new URL(`${API_BASE}/fixtures`);
     url.search = new URLSearchParams({
       league: String(PREMIER_LEAGUE_ID),
       season: String(season),
@@ -132,12 +174,14 @@ const fetchFixtures = unstable_cache(
 export async function getPremierLeaguePanel(now = new Date()): Promise<PremierLeaguePanel> {
   const from = localDate(now);
   try {
-    return await fetchFixtures(from, addDays(from, 7), seasonFor(now));
-  } catch {
+    const season = process.env["API_FOOTBALL_KEY"] ? await fetchCurrentSeason() : seasonFor(now);
+    return await fetchFixtures(from, addDays(from, 7), season);
+  } catch (error) {
     return {
       title: "Premier League-meccsek",
       state: "unavailable",
       matches: [],
+      error: error instanceof Error ? error.message : String(error),
     };
   }
 }

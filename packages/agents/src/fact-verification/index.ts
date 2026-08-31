@@ -103,6 +103,7 @@ export async function handleFactVerificationTrigger(
         return a.ingestedAt.getTime() - b.ingestedAt.getTime();
       });
       const articlesToExtract = sortedArticles.slice(0, EXTRACTION_LIMIT);
+      const processingTimestamp = new Date();
 
       // A források egymástól függetlenek. A korábbi szekvenciális hívások
       // háromszorozták a serverless faliórát; párhuzamosan a szakasz ideje a
@@ -110,7 +111,12 @@ export async function handleFactVerificationTrigger(
       const extractedByArticle = await Promise.all(
         articlesToExtract.map(async (article) => ({
           article,
-          facts: await extractFacts(deps.llm, article),
+          facts: await extractFacts(deps.llm, {
+            titleOriginal: article.titleOriginal,
+            bodyOriginal: article.bodyOriginal,
+            publishedAtSource: article.publishedAtSource,
+            processingTimestamp,
+          }),
         })),
       );
       const newFacts = [];
@@ -121,9 +127,16 @@ export async function handleFactVerificationTrigger(
             rawArticleId: article.id,
             factType: fact.factType,
             payload: {
-              detail_hu: fact.detailHu,
+              fact_type: fact.factType,
+              claim_en: fact.claimEn,
+              evidence_original: fact.evidenceOriginal,
+              subject: fact.subject,
+              predicate: fact.predicate,
+              normalized_value: fact.normalizedValue,
+              event_time_iso: fact.eventTimeIso,
               quote_original: fact.quoteOriginal,
               quote_speaker: fact.quoteSpeaker,
+              source_published_at: article.publishedAtSource?.toISOString() ?? null,
             },
           });
         }

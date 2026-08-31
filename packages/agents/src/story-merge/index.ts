@@ -135,7 +135,7 @@ export async function handleStoryCandidateIdentified(
           categoryId: null,
           confidenceScore: INITIAL_CONFIDENCE_SCORE,
           riskLevel: null,
-          isDeveloping: true,
+          isDeveloping: false,
           imageUrl: rawArticle.imageUrl,
         });
         await deps.rawArticleRepository.linkToStory(rawArticle.id, story.id);
@@ -162,7 +162,7 @@ export async function handleStoryCandidateIdentified(
           categoryId: null,
           confidenceScore: INITIAL_CONFIDENCE_SCORE,
           riskLevel: null,
-          isDeveloping: true,
+          isDeveloping: false,
           imageUrl: rawArticle.imageUrl,
         },
       );

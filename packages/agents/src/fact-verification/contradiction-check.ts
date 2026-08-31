@@ -4,31 +4,23 @@ interface ScoreFactLike {
   payload: unknown;
 }
 
-/** A `payload.detail_hu` normalizált (trim+lowercase) szövege, vagy `null` ha nincs ilyen mező — a claim-merge modul is ezt használja csoportosításhoz. */
+function payloadString(payload: unknown, key: string): string | null {
+  if (!payload || typeof payload !== "object" || !(key in payload)) return null;
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+/** A canonical English claim, with legacy detail_hu read-only compatibility. */
 export function detailOf(payload: unknown): string | null {
-  if (
-    typeof payload === "object" &&
-    payload !== null &&
-    "detail_hu" in payload &&
-    typeof (payload as { detail_hu: unknown }).detail_hu === "string"
-  ) {
-    return (payload as { detail_hu: string }).detail_hu.trim().toLowerCase();
-  }
-  return null;
+  return (
+    (payloadString(payload, "claim_en") ?? payloadString(payload, "detail_hu"))?.toLowerCase() ??
+    null
+  );
 }
 
 /** A `payload.detail_hu` nyers (csak trimmelt, kis/nagybetű megtartva) szövege — megjelenítéshez, nem csoportosításhoz. */
 export function rawDetailOf(payload: unknown): string | null {
-  if (
-    typeof payload === "object" &&
-    payload !== null &&
-    "detail_hu" in payload &&
-    typeof (payload as { detail_hu: unknown }).detail_hu === "string"
-  ) {
-    const trimmed = (payload as { detail_hu: string }).detail_hu.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  }
-  return null;
+  return payloadString(payload, "claim_en") ?? payloadString(payload, "detail_hu");
 }
 
 /**
@@ -53,21 +45,30 @@ const COMPARABLE_FACT_TYPES = new Set(["score", "injury_status", "transfer_statu
  */
 export function findContradictedFactIds(facts: ScoreFactLike[]): string[] {
   const comparableFacts = facts.filter((fact) => COMPARABLE_FACT_TYPES.has(fact.factType));
-  const byFactType = new Map<string, ScoreFactLike[]>();
+  const byClaimSlot = new Map<string, ScoreFactLike[]>();
   for (const fact of comparableFacts) {
-    const group = byFactType.get(fact.factType) ?? [];
+    const subject = payloadString(fact.payload, "subject")?.toLowerCase();
+    const predicate = payloadString(fact.payload, "predicate")?.toLowerCase();
+    if (!subject || !predicate) continue;
+    const slot = `${fact.factType}:${subject}:${predicate}`;
+    const group = byClaimSlot.get(slot) ?? [];
     group.push(fact);
-    byFactType.set(fact.factType, group);
+    byClaimSlot.set(slot, group);
   }
 
   const contradictedIds: string[] = [];
-  for (const group of byFactType.values()) {
-    const distinctDetails = new Set(
+  for (const group of byClaimSlot.values()) {
+    const distinctValues = new Set(
       group
-        .map((fact) => detailOf(fact.payload))
+        .map(
+          (fact) =>
+            payloadString(fact.payload, "normalized_value")?.toLowerCase() ??
+            payloadString(fact.payload, "event_time_iso")?.toLowerCase() ??
+            detailOf(fact.payload),
+        )
         .filter((detail): detail is string => detail !== null),
     );
-    if (distinctDetails.size > 1) {
+    if (distinctValues.size > 1) {
       contradictedIds.push(...group.map((fact) => fact.id));
     }
   }
