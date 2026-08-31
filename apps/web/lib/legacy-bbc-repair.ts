@@ -4,6 +4,7 @@ import { createRepositories } from "./db";
 import { buildQueueingEmitter } from "./pipeline";
 
 const BBC_VIDEO_PATH = /\/sport\/football\/videos\//;
+const BBC_REPORT_PATH = /\/sport\/football\/live\//;
 const LEGACY_BBC_STORY_IDS = [
   "60680bc2-025b-466a-a6c9-7cf9aa2f3af4",
   "462ba252-bc91-4b98-b1be-002dea41c292",
@@ -39,6 +40,24 @@ export async function repairLegacyBbcVideoStories(): Promise<LegacyBbcRepairResu
     if (!story || story.status !== "published") continue;
     const articles = await repos.rawArticleRepository.listByStoryId(story.id);
     for (const article of articles) {
+      if (BBC_REPORT_PATH.test(article.sourceUrl) && article.contentOrigin === "full_article") {
+        const factCountBefore = (await repos.factRepository.listByStoryId(story.id)).length;
+        await emitter.emit({
+          ...createEventEnvelope({ correlationId: crypto.randomUUID() }),
+          type: "story/created",
+          payload: { story_id: story.id },
+        });
+        repaired.push({
+          storyId: story.id,
+          rawArticleId: article.id,
+          sourceUrlBefore: article.sourceUrl,
+          sourceUrlAfter: article.sourceUrl,
+          bodyLengthBefore: article.bodyOriginal.length,
+          bodyLengthAfter: article.bodyOriginal.length,
+          factCountBefore,
+        });
+        break;
+      }
       if (!BBC_VIDEO_PATH.test(article.sourceUrl)) continue;
       const fetched = await fetcher.fetch(article.sourceUrl);
       if (!fetched?.resolvedUrl) continue;
@@ -74,6 +93,7 @@ export async function repairLegacyBbcVideoStories(): Promise<LegacyBbcRepairResu
         bodyLengthAfter: fetched.bodyOriginal.length,
         factCountBefore,
       });
+      break;
     }
   }
 

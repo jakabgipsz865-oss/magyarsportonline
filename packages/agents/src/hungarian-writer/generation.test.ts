@@ -133,6 +133,8 @@ describe("generateStoryVersion", () => {
       "A 4-1-es eredmény nincs a Facts között",
     );
     expect(llm.jsonRequests[0]?.system).toContain("Facts az egyetlen hiteles tartalmi forrás");
+    expect(llm.jsonRequests[0]?.system).toContain("body legalább 800 karakteres");
+    expect(llm.jsonRequests[0]?.system).toContain("4–7 természetes bekezdés");
   });
 });
 

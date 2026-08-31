@@ -28,10 +28,17 @@ const EXTRACTION_JSON_SCHEMA = {
         properties: {
           fact_type: { type: "string", enum: [...FACT_TYPES] },
           detail_hu: { type: "string" },
+          evidence_original: { type: "string" },
           quote_original: { type: ["string", "null"] },
           quote_speaker: { type: ["string", "null"] },
         },
-        required: ["fact_type", "detail_hu", "quote_original", "quote_speaker"],
+        required: [
+          "fact_type",
+          "detail_hu",
+          "evidence_original",
+          "quote_original",
+          "quote_speaker",
+        ],
         additionalProperties: false,
       },
     },
@@ -45,6 +52,7 @@ const extractionResponseSchema = z.object({
     z.object({
       fact_type: z.enum(FACT_TYPES),
       detail_hu: z.string(),
+      evidence_original: z.string(),
       quote_original: z.string().nullable(),
       quote_speaker: z.string().nullable(),
     }),
@@ -61,10 +69,21 @@ TELJESSÉGI SZABÁLYOK:
 - Teljes forráscikknél 10-14 különálló, atomi tényt adj vissza; rövidebb anyagnál legalább 6-ot, ha a forrás ennyit tartalmaz.
 - Fedd le a fő eseményt, a szereplőket, az időpontot, a számokat/eredményeket, az előzményeket, a következményeket és a releváns háttéradatokat.
 - Egy tény egyetlen ellenőrizhető állítást tartalmazzon; ne zsúfolj több különböző állítást egy mondatba.
+- Minden tényhez adj "evidence_original" mezőt: rövid, SZÓ SZERINTI angol forrásrészletet, amely közvetlenül alátámasztja az állítást. Ne fordítsd és ne fogalmazd át.
 - A kapcsolódó cikkek címeit, navigációs elemeket, feliratkozási felszólításokat és promóciós blokkokat ne kezeld tényként.
 - Minden "detail_hu" legyen egyetlen tömör, önálló, természetes magyar mondat, ne angol szöveg és ne tükörfordítás.
 
 Idézetet KIZÁRÓLAG akkor adj meg (quote_original + quote_speaker), ha a cikk szó szerint tartalmazza — sosem találj ki idézetet. Ha egy mezőnek nincs értelme az adott ténynél, null-t adj vissza. Ne adj hozzá semmit, ami nincs a cikkben.`;
+
+function normalizeEvidence(value: string): string {
+  return value
+    .normalize("NFKC")
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase("en");
+}
 
 /**
  * Fact Verification Agent's extraction step (docs/architecture/02-agents.md
@@ -92,17 +111,31 @@ export async function extractFacts(
   });
 
   const parsed = extractionResponseSchema.parse(result.data);
-  // Six atomic facts are sufficient for the downstream writer and its
+  const normalizedSource = normalizeEvidence(`${article.titleOriginal}\n${article.bodyOriginal}`);
+  const seenEvidence = new Set<string>();
+  const seenDetails = new Set<string>();
+  const groundedFacts = parsed.facts.filter((fact) => {
+    const evidence = normalizeEvidence(fact.evidence_original);
+    const detail = normalizeEvidence(fact.detail_hu);
+    if (!evidence || !normalizedSource.includes(evidence)) return false;
+    const evidenceKey = `${fact.fact_type}:${evidence}`;
+    if (seenEvidence.has(evidenceKey) || seenDetails.has(detail)) return false;
+    seenEvidence.add(evidenceKey);
+    seenDetails.add(detail);
+    return true;
+  });
+
+  // Six grounded, distinct atomic facts are sufficient for the downstream writer and its
   // fail-closed publication readiness check. Retrying an otherwise valid
   // 6-7 fact response from the small production extraction model repeatedly
   // produced the same result, consuming quota without adding information.
   const minimumFacts = article.bodyOriginal.length >= 1000 ? 6 : 1;
-  if (parsed.facts.length < minimumFacts) {
+  if (groundedFacts.length < minimumFacts) {
     throw new Error(
-      `Fact extraction returned ${parsed.facts.length} facts; expected at least ${minimumFacts} for a ${article.bodyOriginal.length}-character source`,
+      `Fact extraction returned ${groundedFacts.length} grounded facts; expected at least ${minimumFacts} for a ${article.bodyOriginal.length}-character source`,
     );
   }
-  return parsed.facts.map((fact) => ({
+  return groundedFacts.map((fact) => ({
     factType: fact.fact_type,
     detailHu: fact.detail_hu,
     quoteOriginal: fact.quote_original,
