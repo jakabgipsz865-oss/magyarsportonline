@@ -32,6 +32,11 @@ describe("selectPremierLeagueMatches", () => {
     expect(panel.title).toBe("Mai Premier League-meccsek");
     expect(panel.matches.map((match) => match.id)).toEqual([2, 1]);
     expect(panel.matches[0]?.isLive).toBe(true);
+    expect(panel.diagnostics).toMatchObject({
+      leagueId: 39,
+      results: null,
+      responseLength: 2,
+    });
   });
 
   it("falls back to the next fixtures when there is no match today", () => {
@@ -47,5 +52,18 @@ describe("selectPremierLeagueMatches", () => {
     expect(() =>
       selectPremierLeagueMatches({ errors: { plan: "Current season unavailable" }, response: [] }),
     ).toThrow("Current season unavailable");
+  });
+
+  it("preserves the raw results and paging contract for system health", () => {
+    const panel = selectPremierLeagueMatches({
+      results: 1,
+      paging: { current: 1, total: 1 },
+      response: [fixture()],
+    });
+    expect(panel.diagnostics).toMatchObject({
+      results: 1,
+      paging: { current: 1, total: 1 },
+      responseLength: 1,
+    });
   });
 });

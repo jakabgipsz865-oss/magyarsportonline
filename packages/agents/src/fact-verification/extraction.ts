@@ -60,6 +60,8 @@ const EXTRACTION_JSON_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+const isoDateTimeSchema = z.string().datetime();
+
 const extractionResponseSchema = z.object({
   facts: z.array(
     z.object({
@@ -69,7 +71,10 @@ const extractionResponseSchema = z.object({
       subject: z.string().default(""),
       predicate: z.string().default(""),
       normalized_value: z.string().nullable().default(null),
-      event_time_iso: z.string().datetime().nullable().default(null),
+      event_time_iso: z.preprocess(
+        (value) => (isoDateTimeSchema.safeParse(value).success ? value : null),
+        isoDateTimeSchema.nullable(),
+      ),
       quote_original: z.string().nullable(),
       quote_speaker: z.string().nullable(),
     }),

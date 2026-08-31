@@ -10,6 +10,7 @@ const LIVE_STATUSES = new Set(["1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT",
 const responseSchema = z.object({
   errors: z.union([z.record(z.unknown()), z.array(z.unknown())]).optional(),
   results: z.number().optional(),
+  paging: z.object({ current: z.number(), total: z.number() }).optional(),
   response: z.array(
     z.object({
       fixture: z.object({
@@ -51,6 +52,15 @@ export interface PremierLeaguePanel {
   state: "ready" | "missing_key" | "unavailable";
   matches: PremierLeagueMatch[];
   error: string | null;
+  diagnostics: {
+    leagueId: number;
+    season: number | null;
+    from: string | null;
+    to: string | null;
+    results: number | null;
+    paging: { current: number; total: number } | null;
+    responseLength: number;
+  };
 }
 
 function localDate(date: Date): string {
@@ -105,6 +115,15 @@ export function selectPremierLeagueMatches(payload: unknown, now = new Date()): 
     state: "ready",
     matches: (todayMatches.length ? todayMatches : upcoming).slice(0, DISPLAY_LIMIT),
     error: null,
+    diagnostics: {
+      leagueId: PREMIER_LEAGUE_ID,
+      season: null,
+      from: null,
+      to: null,
+      results: parsed.results ?? null,
+      paging: parsed.paging ?? null,
+      responseLength: parsed.response.length,
+    },
   };
 }
 
@@ -150,6 +169,15 @@ const fetchFixtures = unstable_cache(
         state: "missing_key",
         matches: [],
         error: "API_FOOTBALL_KEY missing",
+        diagnostics: {
+          leagueId: PREMIER_LEAGUE_ID,
+          season,
+          from,
+          to,
+          results: null,
+          paging: null,
+          responseLength: 0,
+        },
       };
     }
     const url = new URL(`${API_BASE}/fixtures`);
@@ -165,7 +193,11 @@ const fetchFixtures = unstable_cache(
       cache: "no-store",
     });
     if (!response.ok) throw new Error(`API-Football HTTP ${response.status}`);
-    return selectPremierLeagueMatches(await response.json());
+    const panel = selectPremierLeagueMatches(await response.json());
+    return {
+      ...panel,
+      diagnostics: { ...panel.diagnostics, season, from, to },
+    };
   },
   ["premier-league-fixtures-v1"],
   { revalidate: CACHE_SECONDS },
@@ -173,15 +205,26 @@ const fetchFixtures = unstable_cache(
 
 export async function getPremierLeaguePanel(now = new Date()): Promise<PremierLeaguePanel> {
   const from = localDate(now);
+  const to = addDays(from, 7);
+  let season: number | null = null;
   try {
-    const season = process.env["API_FOOTBALL_KEY"] ? await fetchCurrentSeason() : seasonFor(now);
-    return await fetchFixtures(from, addDays(from, 7), season);
+    season = process.env["API_FOOTBALL_KEY"] ? await fetchCurrentSeason() : seasonFor(now);
+    return await fetchFixtures(from, to, season);
   } catch (error) {
     return {
       title: "Premier League-meccsek",
       state: "unavailable",
       matches: [],
       error: error instanceof Error ? error.message : String(error),
+      diagnostics: {
+        leagueId: PREMIER_LEAGUE_ID,
+        season,
+        from,
+        to,
+        results: null,
+        paging: null,
+        responseLength: 0,
+      },
     };
   }
 }

@@ -112,6 +112,41 @@ describe("extractFacts", () => {
     ).rejects.toThrow("0 grounded facts");
   });
 
+  it("fails closed to an unknown event time instead of rejecting the full structured response", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: {
+        facts: [
+          {
+            fact_type: "event_time",
+            claim_en: "The meeting will happen before the deadline.",
+            evidence_original: "before the deadline",
+            subject: "meeting",
+            predicate: "event_time",
+            normalized_value: null,
+            event_time_iso: "2026-09-01",
+            quote_original: null,
+            quote_speaker: null,
+          },
+        ],
+      },
+      inputTokens: 10,
+      outputTokens: 10,
+    });
+
+    await expect(
+      extractFacts(llm, {
+        titleOriginal: "Meeting update",
+        bodyOriginal: "The parties will meet before the deadline.",
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        claimEn: "The meeting will happen before the deadline.",
+        eventTimeIso: null,
+      }),
+    ]);
+  });
+
   it("throws when the LLM response doesn't match the expected schema", async () => {
     const llm = new FakeLlmClient();
     llm.queueJson({
