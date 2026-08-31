@@ -25,8 +25,8 @@ export class AgentRunRepository {
       completed: number | string;
       failed: number | string;
     }>(sql`SELECT agent_name,
-      count(*) FILTER (WHERE status = 'completed') AS completed,
-      count(*) FILTER (WHERE status = 'failed') AS failed
+      count(*) FILTER (WHERE status = 'success') AS completed,
+      count(*) FILTER (WHERE status = 'error') AS failed
       FROM ${agentRuns}
       WHERE occurred_at >= ${since.toISOString()}::timestamptz
       GROUP BY agent_name ORDER BY agent_name`);
@@ -43,7 +43,7 @@ export class AgentRunRepository {
     const rows = await this.db.execute<{ error_message: string; occurred_at: Date | string }>(sql`
       SELECT error_message, occurred_at
       FROM ${agentRuns}
-      WHERE agent_name = ${agentName} AND status = 'failed' AND error_message IS NOT NULL
+      WHERE agent_name = ${agentName} AND status = 'error' AND error_message IS NOT NULL
       ORDER BY occurred_at DESC LIMIT 1
     `);
     const row = rows[0];
