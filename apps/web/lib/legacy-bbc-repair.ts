@@ -1,7 +1,7 @@
 import { sourceIngest } from "@magyarsportonline/agents";
 import { createEventEnvelope } from "@magyarsportonline/events";
 import { createRepositories } from "./db";
-import { buildQueueingEmitter } from "./pipeline";
+import { buildDispatcher } from "./pipeline";
 
 const BBC_VIDEO_PATH = /\/sport\/football\/videos\//;
 const BBC_REPORT_PATH = /\/sport\/football\/live\//;
@@ -31,7 +31,7 @@ function recoveryUrl(resolvedUrl: string, originalUrl: string): string {
 /** Bounded recovery: only the three allowlisted BBC video-backed Stories are touched. */
 export async function repairLegacyBbcVideoStories(): Promise<LegacyBbcRepairResult[]> {
   const repos = createRepositories();
-  const emitter = buildQueueingEmitter(repos.pipelineJobRepository);
+  const dispatcher = buildDispatcher(repos);
   const fetcher = new sourceIngest.ArticleFetcher();
   const repaired: LegacyBbcRepairResult[] = [];
 
@@ -42,7 +42,7 @@ export async function repairLegacyBbcVideoStories(): Promise<LegacyBbcRepairResu
     for (const article of articles) {
       if (BBC_REPORT_PATH.test(article.sourceUrl) && article.contentOrigin === "full_article") {
         const factCountBefore = (await repos.factRepository.listByStoryId(story.id)).length;
-        await emitter.emit({
+        await dispatcher.emit({
           ...createEventEnvelope({ correlationId: crypto.randomUUID() }),
           type: "story/created",
           payload: { story_id: story.id },
@@ -79,7 +79,7 @@ export async function repairLegacyBbcVideoStories(): Promise<LegacyBbcRepairResu
       });
       if (!updated) continue;
 
-      await emitter.emit({
+      await dispatcher.emit({
         ...createEventEnvelope({ correlationId: crypto.randomUUID() }),
         type: "story/created",
         payload: { story_id: story.id },

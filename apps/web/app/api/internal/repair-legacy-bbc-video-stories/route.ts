@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { repairLegacyBbcVideoStories } from "../../../../lib/legacy-bbc-repair";
 import { getLogger } from "../../../../lib/logger";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 const TOKEN_SHA256 = "1a257d5b1495d88157c6421117db5f91348f1429b1d29136ddb561449bb2425e";
 
 function isAuthorized(request: NextRequest): boolean {

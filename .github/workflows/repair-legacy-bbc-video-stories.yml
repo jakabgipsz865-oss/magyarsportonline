@@ -9,7 +9,7 @@ permissions:
 jobs:
   repair:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Queue targeted legacy repair
         env:
@@ -17,7 +17,7 @@ jobs:
           BASE: https://magyarsportonline-web.vercel.app
         run: |
           test -n "$BBC_REPAIR_TOKEN"
-          curl -fsS --max-time 60 -X POST \
+          curl -fsS --max-time 290 -X POST \
             "$BASE/api/internal/repair-legacy-bbc-video-stories" \
             -H "Authorization: Bearer $BBC_REPAIR_TOKEN" \
             -o repair.json
