@@ -28,7 +28,7 @@ function recoveryUrl(resolvedUrl: string, originalUrl: string): string {
   return resolved.toString();
 }
 
-/** Idempotent, bounded recovery: only published BBC video-backed snippets are touched. */
+/** Bounded recovery: only the three allowlisted BBC video-backed Stories are touched. */
 export async function repairLegacyBbcVideoStories(): Promise<LegacyBbcRepairResult[]> {
   const repos = createRepositories();
   const emitter = buildQueueingEmitter(repos.pipelineJobRepository);
@@ -37,7 +37,7 @@ export async function repairLegacyBbcVideoStories(): Promise<LegacyBbcRepairResu
 
   for (const storyId of LEGACY_BBC_STORY_IDS) {
     const story = await repos.storyRepository.getById(storyId);
-    if (!story || story.status !== "published") continue;
+    if (!story) continue;
     const articles = await repos.rawArticleRepository.listByStoryId(story.id);
     for (const article of articles) {
       if (BBC_REPORT_PATH.test(article.sourceUrl) && article.contentOrigin === "full_article") {
