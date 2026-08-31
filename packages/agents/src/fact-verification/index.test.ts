@@ -258,7 +258,13 @@ describe("handleFactVerificationTrigger", () => {
     deps.llm.queueJson({
       data: {
         facts: [
-          { fact_type: "score", detail_hu: "3-1", quote_original: null, quote_speaker: null },
+          {
+            fact_type: "score",
+            detail_hu: "3-1",
+            evidence_original: "Liverpool win 3-1",
+            quote_original: null,
+            quote_speaker: null,
+          },
         ],
       },
       inputTokens: 10,
@@ -267,7 +273,13 @@ describe("handleFactVerificationTrigger", () => {
     deps.llm.queueJson({
       data: {
         facts: [
-          { fact_type: "score", detail_hu: "3-1", quote_original: null, quote_speaker: null },
+          {
+            fact_type: "score",
+            detail_hu: "3-1",
+            evidence_original: "Liverpool win 3-1",
+            quote_original: null,
+            quote_speaker: null,
+          },
         ],
       },
       inputTokens: 10,
@@ -312,7 +324,13 @@ describe("handleFactVerificationTrigger", () => {
     deps.llm.queueJson({
       data: {
         facts: [
-          { fact_type: "score", detail_hu: "3-1", quote_original: null, quote_speaker: null },
+          {
+            fact_type: "score",
+            detail_hu: "3-1",
+            evidence_original: "Liverpool win 3-1",
+            quote_original: null,
+            quote_speaker: null,
+          },
         ],
       },
       inputTokens: 10,
@@ -321,7 +339,13 @@ describe("handleFactVerificationTrigger", () => {
     deps.llm.queueJson({
       data: {
         facts: [
-          { fact_type: "score", detail_hu: "2-1", quote_original: null, quote_speaker: null },
+          {
+            fact_type: "score",
+            detail_hu: "2-1",
+            evidence_original: "A dominant display.",
+            quote_original: null,
+            quote_speaker: null,
+          },
         ],
       },
       inputTokens: 10,
@@ -359,6 +383,7 @@ describe("handleFactVerificationTrigger", () => {
           {
             fact_type: "other",
             detail_hu: "Teljes forrás",
+            evidence_original: "Complete source article",
             quote_original: null,
             quote_speaker: null,
           },
@@ -373,6 +398,7 @@ describe("handleFactVerificationTrigger", () => {
           {
             fact_type: "other",
             detail_hu: "Rövid kivonat",
+            evidence_original: "Old snippet",
             quote_original: null,
             quote_speaker: null,
           },
