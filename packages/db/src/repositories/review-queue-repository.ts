@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gte, isNull, lte, or } from "drizzle-orm";
+import { and, asc, count, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import type { ReviewQueueReason, ReviewQueueStatus, RiskLevel } from "@magyarsportonline/shared";
 import type { Database } from "../client";
 import { reviewQueueItems, stories, storyVersions } from "../schema/index";
@@ -131,6 +131,16 @@ export class ReviewQueueRepository {
         ),
       );
     return row?.value ?? 0;
+  }
+
+  async countPendingByReasonSince(since: Date): Promise<Array<{ reason: string; count: number }>> {
+    const rows = await this.db.execute<{ reason: string; count: number | string }>(sql`
+      SELECT reason::text AS reason, count(*) AS count
+      FROM ${reviewQueueItems}
+      WHERE status = 'pending' AND created_at >= ${since.toISOString()}::timestamptz
+      GROUP BY reason ORDER BY count(*) DESC, reason
+    `);
+    return rows.map((row) => ({ reason: row.reason, count: Number(row.count) }));
   }
 
   /** "Később" — a tétel `pending` marad, csak `until`-ig kikerül a `listPending()` eredményéből (nem terminal döntés). */

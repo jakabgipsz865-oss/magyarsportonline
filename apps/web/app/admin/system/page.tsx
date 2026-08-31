@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { geminiQuotaDayStart, MODEL_TIERS } from "@magyarsportonline/llm";
 import { createRepositories } from "../../../lib/db";
 import { env } from "../../../lib/env";
+import { getPremierLeaguePanel } from "../../../lib/premier-league-fixtures";
 import { AdminHeader } from "../_components/admin-header";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,8 @@ export default async function AdminSystemPage(): Promise<ReactNode> {
     geminiCalls,
     extractionFailure,
     aiDeferral,
+    reviewBlockers,
+    fixtures,
   ] = await Promise.all([
     repos.sourceRepository.listAll(),
     repos.rawArticleRepository.getContentHealth(),
@@ -34,6 +37,8 @@ export default async function AdminSystemPage(): Promise<ReactNode> {
     repos.llmUsageRepository.countSince("gemini", geminiQuotaDayStart()),
     repos.agentRunRepository.getLatestFailure("fact-verification"),
     repos.pipelineJobRepository.findActiveDeferral("[daily_ai_quota]"),
+    repos.reviewQueueRepository.countPendingByReasonSince(since),
+    getPremierLeaguePanel(),
   ]);
   const recentUsage = usage.filter((row) => row.occurredAt >= since);
   const writer = agents.find((agent) => agent.agentName === "hungarian-writer");
@@ -152,6 +157,41 @@ export default async function AdminSystemPage(): Promise<ReactNode> {
           {storyStatuses.map((item) => `${item.status}: ${item.count}`).join(" · ") ||
             "nincs Story"}
         </p>
+        <p>
+          Blokkolók (24 óra):{" "}
+          {reviewBlockers.map((item) => `${item.reason}: ${item.count}`).join(" · ") || "nincs"}
+        </p>
+      </section>
+
+      <section className="admin-dashboard__section">
+        <h2>API-Football raw contract</h2>
+        <div className="admin-metric-grid">
+          <div className="admin-metric-card">
+            <strong>Állapot</strong>
+            <span>{fixtures.state}</span>
+            <span>{fixtures.error ?? "errors: {}"}</span>
+          </div>
+          <div className="admin-metric-card">
+            <strong>Premier League</strong>
+            <span>
+              league {fixtures.diagnostics.leagueId} · season {fixtures.diagnostics.season ?? "—"}
+            </span>
+            <span>
+              {fixtures.diagnostics.from ?? "—"} → {fixtures.diagnostics.to ?? "—"}
+            </span>
+          </div>
+          <div className="admin-metric-card">
+            <strong>Válasz</strong>
+            <span>
+              results {fixtures.diagnostics.results ?? "—"} · response{" "}
+              {fixtures.diagnostics.responseLength}
+            </span>
+            <span>
+              paging {fixtures.diagnostics.paging?.current ?? "—"}/
+              {fixtures.diagnostics.paging?.total ?? "—"}
+            </span>
+          </div>
+        </div>
       </section>
     </main>
   );
