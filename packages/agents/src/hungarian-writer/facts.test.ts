@@ -18,17 +18,29 @@ function fact(payload: unknown): Fact {
 }
 
 describe("toWriterFact", () => {
-  it("extracts detail/quote fields from the extraction-shaped payload", () => {
+  it("extracts the source-grounded English contract", () => {
     const result = toWriterFact(
       fact({
-        detail_hu: "3-1 Liverpool javára",
+        claim_en: "Liverpool won 3-1",
+        evidence_original: "Liverpool won 3-1 at Anfield",
+        subject: "Liverpool",
+        predicate: "final_score",
+        normalized_value: "3-1",
+        event_time_iso: null,
+        source_published_at: "2026-08-30T10:00:00.000Z",
         quote_original: "Great win",
         quote_speaker: "Coach",
       }),
     );
     expect(result).toEqual({
       factType: "score",
-      detailHu: "3-1 Liverpool javára",
+      claimEn: "Liverpool won 3-1",
+      evidenceOriginal: "Liverpool won 3-1 at Anfield",
+      subject: "Liverpool",
+      predicate: "final_score",
+      normalizedValue: "3-1",
+      eventTimeIso: null,
+      sourcePublishedAt: "2026-08-30T10:00:00.000Z",
       quoteOriginal: "Great win",
       quoteSpeaker: "Coach",
     });
@@ -38,7 +50,13 @@ describe("toWriterFact", () => {
     const result = toWriterFact(fact({ unexpected: true }));
     expect(result).toEqual({
       factType: "score",
-      detailHu: "",
+      claimEn: "",
+      evidenceOriginal: "",
+      subject: "",
+      predicate: "",
+      normalizedValue: null,
+      eventTimeIso: null,
+      sourcePublishedAt: null,
       quoteOriginal: null,
       quoteSpeaker: null,
     });

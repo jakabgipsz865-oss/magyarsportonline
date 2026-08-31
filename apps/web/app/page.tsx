@@ -104,7 +104,7 @@ function MatchPanel({ panel }: { panel: PremierLeaguePanel }): ReactNode {
           ))}
         </ol>
       )}
-      <p className="match-provider">API-Football · 15 perces szerveroldali gyorsítótár</p>
+      <p className="match-provider">API-Football · 30 perces szerveroldali gyorsítótár</p>
     </section>
   );
 }

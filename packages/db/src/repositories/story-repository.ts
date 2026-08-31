@@ -1,5 +1,5 @@
 import type { RiskLevel, StoryStatus } from "@magyarsportonline/shared";
-import { and, desc, eq, isNull, ne } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Database } from "../client";
 import { isUniqueViolation } from "../errors";
 import { withFingerprintLock } from "../locking";
@@ -48,6 +48,15 @@ export class StoryRepository {
       .where(ne(stories.status, "invalid_merge"))
       .orderBy(desc(stories.lastUpdatedAt))
       .limit(limit);
+  }
+
+  async getStatusCounts(since?: Date): Promise<Array<{ status: string; count: number }>> {
+    const rows = await this.db.execute<{ status: string; count: number | string }>(sql`
+      SELECT status, count(*) AS count FROM ${stories}
+      ${since ? sql`WHERE last_updated_at >= ${since.toISOString()}::timestamptz` : sql``}
+      GROUP BY status ORDER BY status
+    `);
+    return rows.map((row) => ({ status: row.status, count: Number(row.count) }));
   }
 
   /**

@@ -27,6 +27,10 @@ export function isSourceDue(
 export class SourceRepository {
   constructor(private readonly db: Database) {}
 
+  async listAll(): Promise<Source[]> {
+    return this.db.select().from(sources).orderBy(sources.name);
+  }
+
   /**
    * Ordered least-recently-fetched first (2026-07-29) — matters now that
    * `runSourceIngest`'s `maxNewArticlesPerRun` budget is shared across all

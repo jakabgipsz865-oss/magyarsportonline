@@ -42,7 +42,10 @@ export interface HungarianWriterDeps {
   storyVersionRepository: Pick<StoryVersionRepository, "getLatest" | "createNextVersion">;
   factRepository: Pick<FactRepository, "listByStoryId">;
   editorialKnowledgeRepository: Pick<EditorialKnowledgeRepository, "findRelevant">;
-  llm: LlmClient;
+  writerLlm?: LlmClient;
+  selfCheckLlm?: LlmClient;
+  /** Legacy test/local wiring only; production passes explicit role clients. */
+  llm?: LlmClient;
   agentRunRepository: AgentRunRecorder;
   dispatcher: Emitter;
   logger: Logger;
@@ -71,6 +74,10 @@ export async function handleStoryFactsVerified(
       storyId: event.payload.story_id,
     },
     async () => {
+      const writerLlm = deps.writerLlm ?? deps.llm;
+      const selfCheckLlm = deps.selfCheckLlm ?? deps.llm;
+      if (!writerLlm || !selfCheckLlm)
+        throw new Error("Writer and self-check LLM clients are required");
       const story = await deps.storyRepository.getById(event.payload.story_id);
       if (!story) {
         throw new Error(`Story "${event.payload.story_id}" not found`);
@@ -86,7 +93,7 @@ export async function handleStoryFactsVerified(
           }
         : null;
       const knowledgeContext = facts
-        .flatMap((fact) => [fact.detailHu, fact.quoteOriginal])
+        .flatMap((fact) => [fact.claimEn, fact.evidenceOriginal, fact.quoteOriginal])
         .filter((value): value is string => Boolean(value))
         .join("\n");
       const contexts = new Set(["sports_news", "article", "headline", "match_report"]);
@@ -102,33 +109,33 @@ export async function handleStoryFactsVerified(
         limit: 20,
       });
 
-      let generated = await generateStoryVersion(deps.llm, {
+      let generated = await generateStoryVersion(writerLlm, {
         facts,
         previousVersion,
         knowledge,
       });
-      let check = await selfCheckContent(deps.llm, { facts, ...generated });
+      let check = await selfCheckContent(selfCheckLlm, { facts, ...generated });
       let factRepairAttempted = false;
 
       if (
         !check.consistent &&
         !check.isFallback &&
         !generated.isFallback &&
-        !(deps.llm instanceof NoLlmClient)
+        !(writerLlm instanceof NoLlmClient)
       ) {
         factRepairAttempted = true;
         deps.logger.warn(
           { correlationId: event.correlation_id, storyId: story.id, issues: check.issues },
           "self-check flagged the draft as inconsistent; attempting one targeted fact repair",
         );
-        generated = await regenerateWithFactRepair(deps.llm, {
+        generated = await regenerateWithFactRepair(writerLlm, {
           facts,
           previousVersion,
           knowledge,
           previousAttempt: generated,
           selfCheckIssues: check.issues,
         });
-        check = await selfCheckContent(deps.llm, { facts, ...generated });
+        check = await selfCheckContent(selfCheckLlm, { facts, ...generated });
       }
       if (!check.consistent) {
         deps.logger.warn(
@@ -140,7 +147,7 @@ export async function handleStoryFactsVerified(
       // Content Quality Gate (Content Quality & Reliability Hardening
       // sprint): catches empty/still-English/source-verbatim fields that a
       // schema-valid, non-fallback response can still have (e.g. Fact
-      // Verification's own No-LLM fallback silently poisoning `detail_hu`
+      // Verification's own No-LLM fallback silently poisoning canonical Facts
       // with English passthrough text — see no-llm-client.ts
       // `extractionFallback`). Only worth retrying when the draft is real —
       // a No-LLM passthrough has nothing to "fix".
@@ -154,13 +161,13 @@ export async function handleStoryFactsVerified(
         !quality.passed &&
         !factRepairAttempted &&
         !generated.isFallback &&
-        !(deps.llm instanceof NoLlmClient)
+        !(writerLlm instanceof NoLlmClient)
       ) {
         deps.logger.warn(
           { correlationId: event.correlation_id, storyId: story.id, issues: quality.issues },
           "content quality gate failed, attempting one targeted fix-up call",
         );
-        generated = await regenerateWithQualityFix(deps.llm, {
+        generated = await regenerateWithQualityFix(writerLlm, {
           facts,
           previousVersion,
           knowledge,
@@ -171,7 +178,7 @@ export async function handleStoryFactsVerified(
           },
           issues: quality.issues,
         });
-        check = await selfCheckContent(deps.llm, { facts, ...generated });
+        check = await selfCheckContent(selfCheckLlm, { facts, ...generated });
         quality = assessContentQuality({
           titleHu: generated.titleHu,
           leadHu: generated.leadHu,
@@ -198,7 +205,7 @@ export async function handleStoryFactsVerified(
       // only validates the already-real generated content, it doesn't
       // produce it, so its fallback status must never flip real AI content
       // to "not AI-generated".
-      const isAiGenerated = !(deps.llm instanceof NoLlmClient) && !generated.isFallback;
+      const isAiGenerated = !(writerLlm instanceof NoLlmClient) && !generated.isFallback;
 
       // A production kliens a tényleges Cloudflare modellt jelzi; a logikai
       // writer tier csak teszt/local kliensekhez marad tartalék.
@@ -208,7 +215,7 @@ export async function handleStoryFactsVerified(
         bodyHu: generated.bodyHu,
         changeSummaryHu,
         generatedByModel: isAiGenerated
-          ? (deps.llm.modelLabel ?? MODEL_TIERS.writing)
+          ? (writerLlm.modelLabel ?? MODEL_TIERS.writing)
           : NO_LLM_MODEL_LABEL,
         isAiGenerated,
         promptVersion: AGENT_VERSION,

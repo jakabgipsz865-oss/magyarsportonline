@@ -36,6 +36,8 @@ export interface SelfCheckResult {
 
 const SYSTEM_PROMPT = `Tényellenőr vagy. A felhasználói üzenet egy JSON "facts" tömböt és egy legenerált magyar nyelvű "title_hu"/"lead_hu"/"body_hu" hírszöveget tartalmaz. Ellenőrizd MONDATRÓL MONDATRA, hogy a szöveg minden állítása alátámasztható-e a "facts" tömbben szereplő tényekkel.
 
+Minden Fact angol "claimEn" állítást és a forrásból szó szerint megőrzött "evidenceOriginal" bizonyítékot tartalmaz. Az ellenőrzést mindkettőhöz végezd el; a magyar szöveget ne tekintsd igazoltnak pusztán attól, hogy egy claim megfogalmazása hasonló.
+
 - "consistent": false, ha a szövegben van OLYAN állítás, ami nincs a tények között (hallucináció) vagy ellentmond egyténynek.
 - "fact_consistency_score": 0.0-1.0 közötti szám, 1.0 = tökéletes egyezés.
 - "issues": rövid, magyar nyelvű lista a talált problémákról (üres tömb, ha nincs probléma).`;
@@ -59,9 +61,8 @@ export async function selfCheckContent(
         }),
       },
     ],
-    // Három rövid JSON-mező; a production Llama 3.3 nem használ rejtett
-    // Qwen reasoning tokent. A kisebb plafon közvetlenül korlátozza az
-    // ellenőrző hívás neuronfogyasztását.
+    // Három rövid JSON-mező; a kisebb plafon közvetlenül korlátozza az
+    // ellenőrző Cloudflare-hívás neuronfogyasztását.
     maxTokens: 512,
     jsonSchema: SELF_CHECK_JSON_SCHEMA,
   });

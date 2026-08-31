@@ -10,7 +10,7 @@ describe("extractFacts", () => {
         facts: [
           {
             fact_type: "score",
-            detail_hu: "Liverpool 3-1 arányban nyert.",
+            claim_en: "Liverpool won 3-1.",
             evidence_original: "Liverpool win 3-1",
             quote_original: null,
             quote_speaker: null,
@@ -29,7 +29,12 @@ describe("extractFacts", () => {
     expect(facts).toEqual([
       {
         factType: "score",
-        detailHu: "Liverpool 3-1 arányban nyert.",
+        claimEn: "Liverpool won 3-1.",
+        evidenceOriginal: "Liverpool win 3-1",
+        subject: "",
+        predicate: "",
+        normalizedValue: null,
+        eventTimeIso: null,
         quoteOriginal: null,
         quoteSpeaker: null,
       },
@@ -40,6 +45,71 @@ describe("extractFacts", () => {
     expect(request?.maxTokens).toBe(2048);
     expect(request?.messages[0]?.content).toContain("<source_article>");
     expect(request?.messages[0]?.content).toContain("Liverpool win 3-1");
+  });
+
+  it("anchors relative dates to the source publication timestamp, not processing time", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: {
+        facts: [
+          {
+            fact_type: "event_time",
+            claim_en: "The deadline is tomorrow.",
+            evidence_original: "before tomorrow's deadline",
+            subject: "transfer deadline",
+            predicate: "event_time",
+            normalized_value: null,
+            event_time_iso: "2026-08-31T00:00:00.000Z",
+            quote_original: null,
+            quote_speaker: null,
+          },
+        ],
+      },
+      inputTokens: 10,
+      outputTokens: 10,
+    });
+
+    await extractFacts(llm, {
+      titleOriginal: "Transfer update",
+      bodyOriginal: "Carrick discussed options before tomorrow's deadline.",
+      publishedAtSource: new Date("2026-08-30T19:49:00.000Z"),
+      processingTimestamp: new Date("2026-09-02T08:00:00.000Z"),
+    });
+
+    const prompt = llm.jsonRequests[0]?.messages[0]?.content ?? "";
+    expect(prompt).toContain("source_published_at: 2026-08-30T19:49:00.000Z");
+    expect(prompt).toContain("processing_timestamp: 2026-09-02T08:00:00.000Z");
+  });
+
+  it("rejects an August 15 event time for a tomorrow deadline published on August 30", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: {
+        facts: [
+          {
+            fact_type: "event_time",
+            claim_en: "The deadline is tomorrow.",
+            evidence_original: "before tomorrow's deadline",
+            subject: "transfer deadline",
+            predicate: "event_time",
+            normalized_value: null,
+            event_time_iso: "2026-08-15T00:00:00.000Z",
+            quote_original: null,
+            quote_speaker: null,
+          },
+        ],
+      },
+      inputTokens: 10,
+      outputTokens: 10,
+    });
+
+    await expect(
+      extractFacts(llm, {
+        titleOriginal: "Transfer update",
+        bodyOriginal: "Carrick discussed options before tomorrow's deadline.",
+        publishedAtSource: new Date("2026-08-30T19:49:00.000Z"),
+      }),
+    ).rejects.toThrow("0 grounded facts");
   });
 
   it("throws when the LLM response doesn't match the expected schema", async () => {
@@ -60,7 +130,7 @@ describe("extractFacts", () => {
         facts: [
           {
             fact_type: "other",
-            detail_hu: "A cikk egyetlen általános állítást tartalmaz.",
+            claim_en: "The article contains one general statement.",
             evidence_original: "AAAA",
             quote_original: null,
             quote_speaker: null,
@@ -86,7 +156,7 @@ describe("extractFacts", () => {
       data: {
         facts: Array.from({ length: 6 }, (_, index) => ({
           fact_type: "other",
-          detail_hu: `Ellenőrzött tény ${index + 1}.`,
+          claim_en: `Grounded fact ${index + 1}.`,
           evidence_original: evidence[index],
           quote_original: null,
           quote_speaker: null,
@@ -111,14 +181,14 @@ describe("extractFacts", () => {
         facts: [
           {
             fact_type: "score",
-            detail_hu: "A mérkőzés 1-1-re végződött.",
+            claim_en: "The match finished 1-1.",
             evidence_original: "The match finished 1-1",
             quote_original: null,
             quote_speaker: null,
           },
           {
             fact_type: "other",
-            detail_hu: "A Leeds 2-0-s hátrányból állt fel.",
+            claim_en: "Leeds came back from 2-0 down.",
             evidence_original: "Leeds came back from 2-0 down",
             quote_original: null,
             quote_speaker: null,
@@ -135,7 +205,7 @@ describe("extractFacts", () => {
     });
 
     expect(facts).toHaveLength(1);
-    expect(facts[0]?.detailHu).toContain("1-1");
+    expect(facts[0]?.claimEn).toContain("1-1");
     expect(llm.jsonRequests).toHaveLength(1);
   });
 
@@ -146,7 +216,7 @@ describe("extractFacts", () => {
         facts: [
           {
             fact_type: "quote",
-            detail_hu: "Farke szerint nehéz pontot szereztek.",
+            claim_en: "Farke said they earned a difficult point.",
             evidence_original: "‘A HARD   but precious point’",
             quote_original: "A hard but precious point",
             quote_speaker: "Daniel Farke",
@@ -172,14 +242,14 @@ describe("extractFacts", () => {
         facts: [
           {
             fact_type: "other",
-            detail_hu: "Andrews szerint nem szabad lebecsülni Danielt.",
+            claim_en: "Andrews said Daniel must not be underestimated.",
             evidence_original: "Never underestimate Daniel",
             quote_original: null,
             quote_speaker: null,
           },
           {
             fact_type: "other",
-            detail_hu: "Danielt nem lehet lebecsülni Andrews szerint.",
+            claim_en: "Daniel cannot be underestimated, according to Andrews.",
             evidence_original: "Never underestimate Daniel",
             quote_original: null,
             quote_speaker: null,
@@ -206,14 +276,14 @@ describe("extractFacts", () => {
         facts: [
           ...evidence.map((item, index) => ({
             fact_type: "other",
-            detail_hu: `Alátámasztott tény ${index + 1}.`,
+            claim_en: `Grounded fact ${index + 1}.`,
             evidence_original: item,
             quote_original: null,
             quote_speaker: null,
           })),
           {
             fact_type: "other",
-            detail_hu: "Nem alátámasztott hatodik tény.",
+            claim_en: "Unsupported sixth fact.",
             evidence_original: "Missing sixth evidence",
             quote_original: null,
             quote_speaker: null,

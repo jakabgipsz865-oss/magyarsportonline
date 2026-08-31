@@ -5,6 +5,7 @@ import type { ArticleExtractor, FetchedArticle } from "../types";
 export const STRUCTURED_NEWS_DOMAINS = [
   "talksport.com",
   "dailymail.co.uk",
+  "dailymail.com",
   "mirror.co.uk",
   "thesun.co.uk",
   "dailystar.co.uk",
@@ -88,6 +89,44 @@ function toFetchedArticle(candidate: JsonObject): FetchedArticle | null {
   };
 }
 
+function semanticArticle(html: string): FetchedArticle | null {
+  const $ = cheerio.load(html);
+  $("script,style,noscript,nav,header,footer,aside,form,svg").remove();
+  const roots = $("article, main").toArray();
+  const bodies = roots.map((root) => {
+    const paragraphs: string[] = [];
+    const seen = new Set<string>();
+    $(root)
+      .find("p")
+      .each((_, element) => {
+        const text = textOrNull($(element).text());
+        if (!text || text.length < 40 || seen.has(text)) return;
+        seen.add(text);
+        paragraphs.push(text);
+      });
+    return { root: $(root), body: paragraphs.join("\n\n") };
+  });
+  const selected = bodies.sort((a, b) => b.body.length - a.body.length)[0];
+  if (!selected) return null;
+  const bodyOriginal = selected.body;
+  const titleOriginal =
+    textOrNull(selected.root.find("h1").first().text()) ??
+    textOrNull($("h1").first().text()) ??
+    textOrNull($('meta[property="og:title"]').attr("content"));
+  if (!titleOriginal || titleOriginal.length < 10 || bodyOriginal.length < 300) return null;
+  const rawDate =
+    $('meta[property="article:published_time"]').attr("content") ??
+    $("time[datetime]").first().attr("datetime");
+  const parsedDate = rawDate ? new Date(rawDate) : null;
+  return {
+    titleOriginal,
+    subtitleOriginal: null,
+    bodyOriginal,
+    authorOriginal: textOrNull($('meta[name="author"]').attr("content")),
+    publishedAtSource: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null,
+  };
+}
+
 export const structuredNewsArticleExtractor: ArticleExtractor = {
   name: "structured-news-article",
   supports: supportsDomain,
@@ -107,7 +146,8 @@ export const structuredNewsArticleExtractor: ArticleExtractor = {
         candidates
           .map(toFetchedArticle)
           .filter((article): article is FetchedArticle => article !== null)
-          .sort((left, right) => right.bodyOriginal.length - left.bodyOriginal.length)[0] ?? null
+          .sort((left, right) => right.bodyOriginal.length - left.bodyOriginal.length)[0] ??
+        semanticArticle(html)
       );
     } catch {
       return null;

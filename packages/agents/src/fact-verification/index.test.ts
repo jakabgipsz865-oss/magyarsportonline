@@ -260,8 +260,12 @@ describe("handleFactVerificationTrigger", () => {
         facts: [
           {
             fact_type: "score",
-            detail_hu: "3-1",
+            claim_en: "Liverpool won 3-1.",
             evidence_original: "Liverpool win 3-1",
+            subject: "Liverpool",
+            predicate: "final_score",
+            normalized_value: "3-1",
+            event_time_iso: null,
             quote_original: null,
             quote_speaker: null,
           },
@@ -275,8 +279,12 @@ describe("handleFactVerificationTrigger", () => {
         facts: [
           {
             fact_type: "score",
-            detail_hu: "3-1",
+            claim_en: "Liverpool won 3-1.",
             evidence_original: "Liverpool win 3-1",
+            subject: "Liverpool",
+            predicate: "final_score",
+            normalized_value: "3-1",
+            event_time_iso: null,
             quote_original: null,
             quote_speaker: null,
           },
@@ -321,13 +329,26 @@ describe("handleFactVerificationTrigger", () => {
 
   it("marks contradicted score facts and reports has_contradiction", async () => {
     const deps = buildDeps();
+    deps.rawArticleRepository.listByStoryId = vi.fn(async () => [
+      rawArticle({ id: "raw-1", sourceId: "source-1" }),
+      rawArticle({
+        id: "raw-2",
+        sourceId: "source-2",
+        titleOriginal: "Liverpool lose 2-1",
+        ingestedAt: new Date("2026-07-27T20:05:00.000Z"),
+      }),
+    ]);
     deps.llm.queueJson({
       data: {
         facts: [
           {
             fact_type: "score",
-            detail_hu: "3-1",
+            claim_en: "Liverpool won 3-1.",
             evidence_original: "Liverpool win 3-1",
+            subject: "Liverpool",
+            predicate: "final_score",
+            normalized_value: "3-1",
+            event_time_iso: null,
             quote_original: null,
             quote_speaker: null,
           },
@@ -341,8 +362,12 @@ describe("handleFactVerificationTrigger", () => {
         facts: [
           {
             fact_type: "score",
-            detail_hu: "2-1",
-            evidence_original: "A dominant display.",
+            claim_en: "Liverpool lost 2-1.",
+            evidence_original: "Liverpool lose 2-1",
+            subject: "Liverpool",
+            predicate: "final_score",
+            normalized_value: "2-1",
+            event_time_iso: null,
             quote_original: null,
             quote_speaker: null,
           },
@@ -382,8 +407,12 @@ describe("handleFactVerificationTrigger", () => {
         facts: [
           {
             fact_type: "other",
-            detail_hu: "Teljes forrás",
+            claim_en: "This is the complete source article.",
             evidence_original: "Complete source article",
+            subject: "source article",
+            predicate: "completeness",
+            normalized_value: null,
+            event_time_iso: null,
             quote_original: null,
             quote_speaker: null,
           },
@@ -397,8 +426,12 @@ describe("handleFactVerificationTrigger", () => {
         facts: [
           {
             fact_type: "other",
-            detail_hu: "Rövid kivonat",
+            claim_en: "This is an old snippet.",
             evidence_original: "Old snippet",
+            subject: "source article",
+            predicate: "completeness",
+            normalized_value: null,
+            event_time_iso: null,
             quote_original: null,
             quote_speaker: null,
           },

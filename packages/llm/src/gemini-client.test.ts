@@ -41,12 +41,18 @@ describe("GeminiLlmClient", () => {
   });
 
   it("parses JSON completions, including markdown-fenced output", async () => {
-    const fetchImpl = vi.fn(async () =>
-      jsonResponse({
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { generationConfig: Record<string, unknown> };
+      expect(body.generationConfig["responseMimeType"]).toBe("application/json");
+      expect(body.generationConfig["responseJsonSchema"]).toEqual({
+        type: "object",
+        additionalProperties: false,
+      });
+      return jsonResponse({
         candidates: [{ content: { parts: [{ text: '```json\n{"ok": true}\n```' }] } }],
         usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 2 },
-      }),
-    );
+      });
+    });
     const client = new GeminiLlmClient({ apiKey: "key", fetchImpl });
     const result = await client.completeJson({
       ...textRequest,
@@ -84,6 +90,18 @@ describe("GeminiLlmClient", () => {
     const client = new GeminiLlmClient({ apiKey: "key", fetchImpl });
     await expect(client.completeText(textRequest)).rejects.toMatchObject({ apiStatus: "BLOCKED" });
   });
+
+  it("fails closed when a structured response is malformed JSON", async () => {
+    const client = new GeminiLlmClient({
+      apiKey: "key",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse({ candidates: [{ content: { parts: [{ text: "not-json" }] } }] }),
+      ),
+    });
+    await expect(
+      client.completeJson({ ...textRequest, jsonSchema: { type: "object" } }),
+    ).rejects.toMatchObject({ apiStatus: "INVALID_SCHEMA" });
+  });
 });
 
 describe("describeGeminiError", () => {
@@ -95,6 +113,10 @@ describe("describeGeminiError", () => {
       "forbidden",
     );
     expect(describeGeminiError(new GeminiApiError(0, "BLOCKED", "x"))).toBe("content_blocked");
+    expect(describeGeminiError(new GeminiApiError(0, "INVALID_SCHEMA", "x"))).toBe(
+      "invalid_schema",
+    );
+    expect(describeGeminiError(new GeminiApiError(0, "TIMEOUT", "x"))).toBe("timeout");
     expect(describeGeminiError(new GeminiApiError(503, null, "x"))).toBe("service_unavailable");
     expect(describeGeminiError(new GeminiApiError(0, null, "x"))).toBe("network_error");
     expect(describeGeminiError(new Error("boom"))).toBe("unknown_error");

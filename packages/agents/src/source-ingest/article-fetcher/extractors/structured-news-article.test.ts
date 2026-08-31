@@ -73,6 +73,18 @@ describe("structuredNewsArticleExtractor.extract", () => {
     ).toBeNull();
   });
 
+  it("falls back to the longest semantic article body when JSON-LD has no articleBody", () => {
+    const html = `<html><head><meta property="og:title" content="Michael Carrick lays out the Manchester United transfer plan"><script type="application/ld+json">${JSON.stringify(
+      { "@type": "NewsArticle", headline: "Headline", articleBody: "" },
+    )}</script></head><body><article><p>Related card only.</p></article><article><h1>Michael Carrick lays out the Manchester United transfer plan</h1><p>${ARTICLE_BODY}</p><p>${ARTICLE_BODY} Additional confirmed context from the same report.</p></article></body></html>`;
+    const result = structuredNewsArticleExtractor.extract(
+      html,
+      "https://www.express.co.uk/sport/football/2243932/man-utd-transfer-news-carrick",
+    );
+    expect(result?.titleOriginal).toContain("Michael Carrick");
+    expect(result?.bodyOriginal.length).toBeGreaterThan(700);
+  });
+
   it("does not extract valid-looking JSON-LD from a non-allowlisted domain", () => {
     const html = jsonLdHtml({
       "@type": "NewsArticle",

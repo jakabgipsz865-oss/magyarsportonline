@@ -9,15 +9,8 @@ import type {
 
 const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 
-/**
- * Ingyenes tierben elérhető, stabil Gemini modell — felülírható a
- * `GEMINI_MODEL` env változóval kód nélkül, ha Google időközben megváltoztatja
- * a free-tier kínálatot. Egy esetleges elavult/érvénytelen modellnév a Gemini
- * API-tól HTTP hibát kap, amit a ProviderFallbackLlmClient automatikusan
- * No-LLM módra fordít — a rendszer emiatt sosem áll le (lásd
- * provider-fallback-client.ts).
- */
-export const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash-lite";
+/** Free-tier Writer model; production wraps this client in fail-closed metering. */
+export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 
 export interface GeminiLlmClientOptions {
   apiKey: string;
@@ -26,6 +19,7 @@ export interface GeminiLlmClientOptions {
   baseUrl?: string;
   /** Tesztelhetőség: injektálható fetch. */
   fetchImpl?: typeof fetch;
+  timeoutMs?: number;
 }
 
 /** A Gemini API nem-2xx válaszát (vagy hálózati hibát) hordozó, kategorizálható hiba. */
@@ -40,11 +34,7 @@ export class GeminiApiError extends Error {
   }
 }
 
-/**
- * Csak naplózási célra: rövid, ember-olvasható kategória a hibáról. NEM ez
- * dönti el, hogy történjen-e fallback — a ProviderFallbackLlmClient minden
- * hibára fallback-el, ez a függvény kizárólag a log-üzenet tartalmát adja.
- */
+/** Stable error category for durable retry/defer decisions and diagnostics. */
 export function describeGeminiError(error: unknown): string {
   if (error instanceof GeminiApiError) {
     if (error.status === 429 || error.apiStatus === "RESOURCE_EXHAUSTED") {
@@ -56,6 +46,8 @@ export function describeGeminiError(error: unknown): string {
     if (error.apiStatus === "BLOCKED") {
       return "content_blocked";
     }
+    if (error.apiStatus === "INVALID_SCHEMA") return "invalid_schema";
+    if (error.apiStatus === "TIMEOUT") return "timeout";
     if (error.status >= 500) {
       return "service_unavailable";
     }
@@ -65,6 +57,13 @@ export function describeGeminiError(error: unknown): string {
     return `http_${error.status}`;
   }
   return "unknown_error";
+}
+
+export function isGeminiDailyQuotaError(error: unknown): boolean {
+  return (
+    error instanceof GeminiApiError &&
+    (error.status === 429 || error.apiStatus === "RESOURCE_EXHAUSTED")
+  );
 }
 
 function toGeminiRole(role: LlmMessage["role"]): "user" | "model" {
@@ -108,11 +107,8 @@ function parseApiStatus(errorBody: string): string | null {
  * Raw HTTP-alapú Gemini API kliens (nincs `@google/...` SDK-függőség —
  * kevesebb dolog, ami elavulhat/build-et törhet egy free-tier teszthez).
  *
- * A `request.model` mezőt SZÁNDÉKOSAN figyelmen kívül hagyja: a hívó
- * agentek (packages/agents/src/fact-verification, hungarian-writer) az
- * Anthropic-specifikus `MODEL_TIERS` logikai neveit küldik ott
- * ("claude-haiku-4-5" stb., lásd model-router.ts) — ez a kliens mindig a
- * saját, konstruktorban/env-ből kapott egyetlen modelljét hívja, azt a
+ * A `request.model` mezőt szándékosan figyelmen kívül hagyja: a kliens mindig
+ * a konstruktorban/env-ből kapott Writer-modellt hívja, azt a
  * `modelLabel` getter teszi láthatóvá a hívó (Hungarian Writer Agent)
  * számára a `StoryVersion.generated_by_model` helyes kitöltéséhez.
  */
@@ -121,12 +117,14 @@ export class GeminiLlmClient implements LlmClient {
   private readonly model: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly timeoutMs: number;
 
   constructor(options: GeminiLlmClientOptions) {
     this.apiKey = options.apiKey;
     this.model = options.model?.trim() || DEFAULT_GEMINI_MODEL;
     this.baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.timeoutMs = options.timeoutMs ?? 60_000;
   }
 
   get modelLabel(): string {
@@ -145,8 +143,14 @@ export class GeminiLlmClient implements LlmClient {
   async completeJson(request: JsonCompletionRequest): Promise<JsonCompletionResult> {
     const response = await this.generateContent(request, true);
     const text = extractText(response);
+    let data: unknown;
+    try {
+      data = JSON.parse(stripMarkdownFence(text)) as unknown;
+    } catch {
+      throw new GeminiApiError(0, "INVALID_SCHEMA", "Gemini returned malformed JSON");
+    }
     return {
-      data: JSON.parse(stripMarkdownFence(text)) as unknown,
+      data,
       inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
       outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
     };
@@ -165,23 +169,36 @@ export class GeminiLlmClient implements LlmClient {
       })),
       generationConfig: {
         maxOutputTokens: request.maxTokens,
-        ...(wantsJson ? { responseMimeType: "application/json" } : {}),
+        ...(wantsJson
+          ? {
+              responseMimeType: "application/json",
+              responseJsonSchema: "jsonSchema" in request ? request.jsonSchema : undefined,
+            }
+          : {}),
       },
     };
 
     let httpResponse: Response;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       httpResponse = await this.fetchImpl(url, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
     } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new GeminiApiError(0, "TIMEOUT", `Gemini API timed out after ${this.timeoutMs}ms`);
+      }
       throw new GeminiApiError(
         0,
         null,
         `Gemini API network error: ${error instanceof Error ? error.message : String(error)}`,
       );
+    } finally {
+      clearTimeout(timeout);
     }
 
     if (!httpResponse.ok) {

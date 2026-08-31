@@ -1,4 +1,4 @@
-import { desc, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import type { Database } from "../client";
 import { llmUsage } from "../schema/index";
 
@@ -50,5 +50,45 @@ export class LlmUsageRepository {
   /** Legutóbbi N sikeres (nem-fallback) hívás naplója, legfrissebb elöl — diagnosztikai/audit célra (pl. "tényleg történt-e valódi Cloudflare-hívás mostanában"). */
   async listRecent(limit: number): Promise<LlmUsageRow[]> {
     return this.db.select().from(llmUsage).orderBy(desc(llmUsage.occurredAt)).limit(limit);
+  }
+
+  async countSince(provider: string, since: Date): Promise<number> {
+    const [row] = await this.db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(llmUsage)
+      .where(and(eq(llmUsage.provider, provider), gte(llmUsage.occurredAt, since)));
+    return row?.total ?? 0;
+  }
+
+  async reserveRequest(
+    provider: string,
+    model: string,
+    since: Date,
+    cap: number,
+  ): Promise<string | null> {
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`mso-llm-cap:${provider}`}))`);
+      const [count] = await tx
+        .select({ total: sql<number>`count(*)::int` })
+        .from(llmUsage)
+        .where(and(eq(llmUsage.provider, provider), gte(llmUsage.occurredAt, since)));
+      if ((count?.total ?? 0) >= cap) return null;
+      const [reservation] = await tx
+        .insert(llmUsage)
+        .values({ provider, model, inputTokens: 0, outputTokens: 0, costUsd: "0.000000" })
+        .returning({ id: llmUsage.id });
+      return reservation?.id ?? null;
+    });
+  }
+
+  async finalizeRequest(
+    reservationId: string,
+    inputTokens: number,
+    outputTokens: number,
+  ): Promise<void> {
+    await this.db
+      .update(llmUsage)
+      .set({ inputTokens, outputTokens })
+      .where(eq(llmUsage.id, reservationId));
   }
 }

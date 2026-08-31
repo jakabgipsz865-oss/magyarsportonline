@@ -3,7 +3,15 @@ import type { Fact } from "@magyarsportonline/db";
 /** The Fact shape the Writer/self-check LLM calls actually see — the agent contract's "never raw source text" boundary. */
 export interface WriterFact {
   factType: string;
-  detailHu: string;
+  claimEn?: string;
+  evidenceOriginal?: string;
+  subject?: string;
+  predicate?: string;
+  normalizedValue?: string | null;
+  eventTimeIso?: string | null;
+  sourcePublishedAt?: string | null;
+  /** Test/legacy compatibility only; production Fact Verification never writes or reads it as canonical input. */
+  detailHu?: string;
   quoteOriginal: string | null;
   quoteSpeaker: string | null;
 }
@@ -12,12 +20,12 @@ function stringOrNull(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
-/** Reads back the payload shape the Fact Verification Agent writes (extraction.ts's `{detail_hu, quote_original, quote_speaker}`). */
+/** Reads the source-grounded English Fact contract persisted by Fact Verification. */
 export function toWriterFact(fact: Fact): WriterFact {
   const payload = fact.payload;
-  const detailHu =
-    typeof payload === "object" && payload !== null && "detail_hu" in payload
-      ? stringOrNull((payload as { detail_hu: unknown }).detail_hu)
+  const value = (key: string) =>
+    typeof payload === "object" && payload !== null && key in payload
+      ? stringOrNull((payload as Record<string, unknown>)[key])
       : null;
   const quoteOriginal =
     typeof payload === "object" && payload !== null && "quote_original" in payload
@@ -30,7 +38,13 @@ export function toWriterFact(fact: Fact): WriterFact {
 
   return {
     factType: fact.factType,
-    detailHu: detailHu ?? "",
+    claimEn: value("claim_en") ?? "",
+    evidenceOriginal: value("evidence_original") ?? "",
+    subject: value("subject") ?? "",
+    predicate: value("predicate") ?? "",
+    normalizedValue: value("normalized_value"),
+    eventTimeIso: value("event_time_iso"),
+    sourcePublishedAt: value("source_published_at"),
     quoteOriginal,
     quoteSpeaker,
   };

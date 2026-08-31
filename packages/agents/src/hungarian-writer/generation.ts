@@ -45,13 +45,13 @@ export interface GeneratedContent {
   isFallback: boolean;
 }
 
-const SYSTEM_PROMPT = `Magyar sportújságíró vagy egy mai online sportportálnál. Kizárólag a felhasználói üzenetben JSON-ként megadott "facts" tömbre támaszkodva írj eredeti, magyar nyelvű hírt — SOSEM fordítás, és SOSEM tartalmazhat olyan állítást, ami nincs a tények között. Ha egy infó hiányzik, ne találd ki.
+const SYSTEM_PROMPT = `Magyar sportújságíró vagy egy mai online sportportálnál. Kizárólag a felhasználói üzenetben JSON-ként megadott, angol "claimEn" és szó szerinti "evidenceOriginal" mezőkkel alátámasztott facts tömbre támaszkodva írj eredeti, magyar nyelvű hírt. SOSEM tartalmazhat olyan állítást, ami nincs a tények között. Ha egy infó hiányzik, ne találd ki.
 
 Szabályok:
-- "title_hu": KÖTELEZŐEN teljes egészében MAGYAR nyelvű, 6-14 szavas, igés, cselekvő, rövid és tényszerű cím, amilyet egy valódi magyar sportportál (pl. nso.hu, m4sport.hu) főoldalán látnál. Ha van releváns szám vagy eredmény a tényekben, emeld előtérbe. Akkor is magyarul írj, ha a "detail_hu" hibásan angol; tulajdonneveken kívül ne maradjon angol szöveg. Ne fordíts szó szerint angol mondatszerkezetet (pl. "X gólos dráma alatt győzött") — fogalmazz anyanyelvi szerkesztőként.
+- "title_hu": KÖTELEZŐEN teljes egészében MAGYAR nyelvű, 6-14 szavas, igés, cselekvő, rövid és tényszerű cím, amilyet egy valódi magyar sportportál (pl. nso.hu, m4sport.hu) főoldalán látnál. Ha van releváns szám vagy eredmény a tényekben, emeld előtérbe. Tulajdonneveken kívül ne maradjon angol szöveg. Ne fordíts szó szerint angol mondatszerkezetet — fogalmazz anyanyelvi szerkesztőként.
 - "lead_hu": 1-2 mondatos, lehetőleg 40 szó alatti magyar bevezető. Kontextusba helyezi a címet és összefoglal, de nem idézi szó szerint a törzs első mondatát.
-- "body_hu": 5-8 bekezdéses, legalább 900 karakteres törzsszöveg, kizárólag a megadott tényekre építve, kötelezően magyarul. Egy bekezdés 2-4 rövid, egyenes szórendű mondat legyen. Minden bekezdés ÚJ információt vigyen tovább — SOSEM írhatod le ugyanazt a tényt/mondatot két bekezdésben, még átfogalmazva sem. Mielőtt leírsz egy bekezdést, ellenőrizd magadban, hogy annak tartalma nem szerepel-e már a lead-ben vagy egy korábbi bekezdésben; ha igen, hagyd ki vagy vidd tovább egy új részlettel. Ne nyújtsd mesterségesen a szöveget: ha nincs legalább öt bekezdéshez elegendő tény, csak a rendelkezésre álló tényeket használd.
-- Természetes, élő, mai magyar sportújságírói stílust használj — ne fordíts szó szerint, ne másold be a "facts" szövegét változtatás nélkül; fogalmazz újra, kerüld az ismétlést és a gépies, monoton mondatszerkezetet.
+- "body_hu": kizárólag a megadott tényekre épülő magyar törzsszöveg. Legalább 6 Fact esetén legyen legalább 800 karakter és 4–7 természetes bekezdés; kevesebb Fact esetén legyen rövidebb, tömör, 2–4 bekezdéses hír, mesterséges hosszabbítás nélkül. Egy bekezdés 2-4 rövid, egyenes szórendű mondat legyen. Minden bekezdés ÚJ információt vigyen tovább — SOSEM írhatod le ugyanazt a tényt/mondatot két bekezdésben, még átfogalmazva sem.
+- Természetes, élő, mai magyar sportújságírói stílust használj — ne fordíts szó szerint, ne másold be a "claimEn" vagy "evidenceOriginal" szövegét; fogalmazz újra, kerüld az ismétlést és a gépies, monoton mondatszerkezetet.
 - A hangnem legyen magabiztos és tényközlő, de ne száraz. A dráma a tényekből fakadjon, ne szenzációhajhász jelzőkből.
 - Ügyelj a magyar nyelvtanra: helyes névelőhasználat (a/az), ékezetek, ragozás és mondatszerkezet.
 - Szó szerinti idézetet KIZÁRÓLAG akkor használj, ha egy tény "factType" mezője "quote", és akkor is csak a megadott "quoteOriginal"/"quoteSpeaker" alapján, forrás-hivatkozással.
@@ -63,7 +63,7 @@ const QUALITY_FIX_SYSTEM_PROMPT = `Magyar sportújságíró vagy. Az előző ter
 Írd újra TELJESEN a "facts" tömbre támaszkodva:
 - a cím, a lead és a törzs MINDEGYIKE teljes egészében MAGYAR nyelvű legyen (tulajdonnevek kivételével), mai, természetes sportújságírói nyelven — ne tükörfordítás;
 - egyik mező se maradjon üres;
-- a lead legyen legalább 80 karakteres, a törzs legalább 800 karakteres és több bekezdésből álljon;
+- legalább 6 Fact esetén a lead legyen legalább 80 karakteres, a törzs legalább 800 karakteres és több bekezdésből álljon; kevesebb Fact esetén maradjon tömör, de teljes hír;
 - egyik mező se legyen szó szerint azonos egy "facts" bejegyzéssel — fogalmazz újra, természetes magyar sportújságírói stílusban;
 - HA a hiba "repeated_paragraph" vagy "duplicates_body" volt: a törzs bekezdései egymástól és a leadtől is EGYÉRTELMŰEN különböző mondatokat tartalmazzanak — minden bekezdés vigyen tovább valami újat, semmit ne írj le kétszer, még átfogalmazva sem;
 - ügyelj a helyes névelőkre, ékezetekre és mondatszerkezetre;
@@ -109,9 +109,8 @@ async function runGenerationCall(
     model: MODEL_TIERS.writing,
     system: system + formatEditorialKnowledgeBlock(knowledge),
     messages: [{ role: "user", content: JSON.stringify(userContent) }],
-    // A kimenet 900-1500 karakteres cikk és négy rövid JSON-mező. A
-    // production Llama 3.3 nem használ rejtett Qwen reasoning tokent, ezért
-    // a 4096-os korlát csak felesleges neuron-kitettség volt.
+    // A kimenet egy korlátos cikk és négy rövid JSON-mező; a 2048 tokenes
+    // plafon a Free Tier Writer-hívásokat is kiszámíthatóan tartja.
     maxTokens: 2048,
     jsonSchema: GENERATION_JSON_SCHEMA,
   });

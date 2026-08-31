@@ -51,14 +51,14 @@ function buildDeps(overrides?: {
   maxNewArticlesPerRun?: number;
 }): SourceIngestDeps & {
   inserted: Array<{ sourceUrl: string }>;
-  upgraded: Array<{ id: string; bodyOriginal: string }>;
+  upgraded: Array<{ id: string; sourceUrl: string; bodyOriginal: string }>;
   emitted: unknown[];
   fetchResults: Array<{ sourceId: string; status: string }>;
   watermarks: Date[];
 } {
   const existingUrls = overrides?.existingUrls ?? new Set<string>();
   const inserted: Array<{ sourceUrl: string }> = [];
-  const upgraded: Array<{ id: string; bodyOriginal: string }> = [];
+  const upgraded: Array<{ id: string; sourceUrl: string; bodyOriginal: string }> = [];
   const emitted: unknown[] = [];
   const fetchResults: Array<{ sourceId: string; status: string }> = [];
   const watermarks: Date[] = [];
@@ -66,7 +66,7 @@ function buildDeps(overrides?: {
 
   const deps: SourceIngestDeps & {
     inserted: Array<{ sourceUrl: string }>;
-    upgraded: Array<{ id: string; bodyOriginal: string }>;
+    upgraded: Array<{ id: string; sourceUrl: string; bodyOriginal: string }>;
     emitted: unknown[];
     fetchResults: Array<{ sourceId: string; status: string }>;
     watermarks: Date[];
@@ -89,6 +89,7 @@ function buildDeps(overrides?: {
         existingUrls.has(url)
           ? ({
               id: "existing",
+              storyId: "story-1",
               contentOrigin: overrides?.existingOrigin ?? "full_article",
             } as never)
           : null,
@@ -99,8 +100,8 @@ function buildDeps(overrides?: {
         return { id: `new-${inserted.length}`, ...data } as never;
       }),
       upgradeFromFullArticle: vi.fn(
-        async (id: string, data: { bodyOriginal: string }): Promise<boolean> => {
-          upgraded.push({ id, bodyOriginal: data.bodyOriginal });
+        async (id: string, data: { sourceUrl: string; bodyOriginal: string }): Promise<boolean> => {
+          upgraded.push({ id, sourceUrl: data.sourceUrl, bodyOriginal: data.bodyOriginal });
           return true;
         },
       ),
@@ -320,8 +321,46 @@ describe("runSourceIngest", () => {
       { sourceId: SOURCE.id, sourceName: SOURCE.name, ingestedCount: 0, status: "ok" },
     ]);
     expect(deps.inserted).toEqual([]);
-    expect(deps.emitted).toEqual([]);
-    expect(deps.upgraded).toEqual([{ id: "existing", bodyOriginal: "Body" }]);
+    expect(deps.emitted).toEqual([
+      expect.objectContaining({ type: "story/created", payload: { story_id: "story-1" } }),
+    ]);
+    expect(deps.upgraded).toEqual([
+      { id: "existing", sourceUrl: "https://example.com/1", bodyOriginal: "Body" },
+    ]);
+  });
+
+  it("upgrades a detected RSS URL under the resolved full-article URL without a duplicate", async () => {
+    const detectionUrl = "https://www.bbc.com/sport/football/videos/example";
+    const resolvedUrl = "https://www.bbc.com/sport/football/live/example";
+    const deps = buildDeps({
+      existingUrls: new Set([detectionUrl]),
+      existingOrigin: "rss_snippet",
+      adapter: {
+        fetch: async () => [
+          {
+            sourceUrl: resolvedUrl,
+            detectedSourceUrl: detectionUrl,
+            titleOriginal: "Resolved report",
+            subtitleOriginal: null,
+            bodyOriginal: "Full report body",
+            authorOriginal: null,
+            publishedAtSource: NEW_ARTICLE_TIME,
+            imageUrl: null,
+            contentOrigin: "full_article",
+          },
+        ],
+      },
+    });
+
+    await runSourceIngest(deps);
+
+    expect(deps.inserted).toEqual([]);
+    expect(deps.upgraded).toEqual([
+      { id: "existing", sourceUrl: resolvedUrl, bodyOriginal: "Full report body" },
+    ]);
+    expect(deps.emitted).toEqual([
+      expect.objectContaining({ type: "story/created", payload: { story_id: "story-1" } }),
+    ]);
   });
 
   it("shares maxNewArticlesPerRun across all active sources, not per source (2026-07-29 fix)", async () => {

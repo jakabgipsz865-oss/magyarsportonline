@@ -1,0 +1,54 @@
+import { describe, expect, it, vi } from "vitest";
+import { FakeLlmClient } from "./fake-client";
+import {
+  DailyLlmRequestCapError,
+  DailyRequestCappedLlmClient,
+  delayUntilNextGeminiQuotaReset,
+  geminiQuotaDayStart,
+} from "./daily-request-cap";
+
+const request = {
+  model: "gemini-2.5-flash",
+  system: "system",
+  messages: [{ role: "user" as const, content: "content" }],
+  maxTokens: 32,
+};
+
+describe("DailyRequestCappedLlmClient", () => {
+  it("does not call Gemini after the application cap is reached", async () => {
+    const inner = new FakeLlmClient();
+    const reserveRequest = vi.fn(async () => null);
+    const finalizeRequest = vi.fn(async () => undefined);
+    const client = new DailyRequestCappedLlmClient(inner, "gemini", 20, {
+      reserveRequest,
+      finalizeRequest,
+    });
+
+    await expect(client.completeText(request)).rejects.toBeInstanceOf(DailyLlmRequestCapError);
+    expect(inner.textRequests).toHaveLength(0);
+    expect(reserveRequest).toHaveBeenCalledWith("gemini", "unknown", expect.any(Date), 20);
+    expect(finalizeRequest).not.toHaveBeenCalled();
+  });
+
+  it("allows a request while usage remains below the cap", async () => {
+    const inner = new FakeLlmClient();
+    inner.queueText({ text: "ok", inputTokens: 1, outputTokens: 1 });
+    const finalizeRequest = vi.fn(async () => undefined);
+    const client = new DailyRequestCappedLlmClient(inner, "gemini", 20, {
+      reserveRequest: async () => "reservation-id",
+      finalizeRequest,
+    });
+
+    await expect(client.completeText(request)).resolves.toMatchObject({ text: "ok" });
+    expect(inner.textRequests).toHaveLength(1);
+    expect(finalizeRequest).toHaveBeenCalledWith("reservation-id", 1, 1);
+  });
+
+  it("uses the Pacific quota day and defers until the next Pacific midnight", () => {
+    const now = new Date("2026-08-31T10:30:00.000Z");
+    expect(geminiQuotaDayStart(now).toISOString()).toBe("2026-08-31T07:00:00.000Z");
+    expect(new Date(now.getTime() + delayUntilNextGeminiQuotaReset(now)).toISOString()).toBe(
+      "2026-09-01T07:05:00.000Z",
+    );
+  });
+});
