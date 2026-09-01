@@ -171,49 +171,55 @@ export async function extractFacts(
     processingTimestamp?: Date;
   },
 ): Promise<ExtractedFact[]> {
-  const result = await llm.completeJson({
-    model: MODEL_TIERS.extraction,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: `<temporal_context>\nsource_published_at: ${article.publishedAtSource?.toISOString() ?? "null"}\nprocessing_timestamp: ${(article.processingTimestamp ?? new Date()).toISOString()}\n</temporal_context>\n<source_article>\nTitle: ${article.titleOriginal}\n\n${article.bodyOriginal}\n</source_article>`,
-      },
-    ],
-    // Legfeljebb tizennégy tömör atomi tény fér el ebben a keretben.
-    maxTokens: 2048,
-    jsonSchema: EXTRACTION_JSON_SCHEMA,
-  });
-
-  const parsed = extractionResponseSchema.parse(result.data);
   const normalizedSource = normalizeEvidence(`${article.titleOriginal}\n${article.bodyOriginal}`);
-  const seenEvidence = new Set<string>();
-  const seenClaims = new Set<string>();
-  const groundedFacts = parsed.facts.filter((fact) => {
-    const evidence = normalizeEvidence(fact.evidence_original);
-    const claim = normalizeEvidence(fact.claim_en);
-    if (!evidence || !normalizedSource.includes(evidence)) return false;
-    if (numericTokens(fact.claim_en).some((token) => !numericTokens(evidence).includes(token))) {
-      return false;
-    }
-    if (
-      !isTemporallyGrounded(fact.evidence_original, fact.event_time_iso, article.publishedAtSource)
-    ) {
-      return false;
-    }
-    const evidenceKey = `${fact.fact_type}:${evidence}`;
-    const claimKey = `${fact.fact_type}:${normalizeEvidence(fact.subject)}:${normalizeEvidence(fact.predicate)}:${normalizeEvidence(fact.normalized_value ?? fact.claim_en)}`;
-    if (seenEvidence.has(evidenceKey) || seenClaims.has(claimKey)) return false;
-    seenEvidence.add(evidenceKey);
-    seenClaims.add(claimKey || claim);
-    return true;
-  });
+  const sourceMessage = `<temporal_context>\nsource_published_at: ${article.publishedAtSource?.toISOString() ?? "null"}\nprocessing_timestamp: ${(article.processingTimestamp ?? new Date()).toISOString()}\n</temporal_context>\n<source_article>\nTitle: ${article.titleOriginal}\n\n${article.bodyOriginal}\n</source_article>`;
+  const complete = (retry: boolean) =>
+    llm.completeJson({
+      model: MODEL_TIERS.extraction,
+      system: retry
+        ? `${SYSTEM_PROMPT}\n\nKORREKCIÓ: az előző válasz túl kevés ellenőrizhető tényt adott. Adj legalább 6 különálló tényt, mindegyikhez rövid, pontosan kimásolt evidence_original részlettel.`
+        : SYSTEM_PROMPT,
+      messages: [{ role: "user", content: sourceMessage }],
+      maxTokens: 2048,
+      jsonSchema: EXTRACTION_JSON_SCHEMA,
+    });
+  const ground = (data: unknown) => {
+    const parsed = extractionResponseSchema.parse(data);
+    const seenEvidence = new Set<string>();
+    const seenClaims = new Set<string>();
+    return parsed.facts.filter((fact) => {
+      const evidence = normalizeEvidence(fact.evidence_original);
+      const claim = normalizeEvidence(fact.claim_en);
+      if (!evidence || !normalizedSource.includes(evidence)) return false;
+      if (numericTokens(fact.claim_en).some((token) => !numericTokens(evidence).includes(token))) {
+        return false;
+      }
+      if (
+        !isTemporallyGrounded(
+          fact.evidence_original,
+          fact.event_time_iso,
+          article.publishedAtSource,
+        )
+      ) {
+        return false;
+      }
+      const evidenceKey = `${fact.fact_type}:${evidence}`;
+      const claimKey = `${fact.fact_type}:${normalizeEvidence(fact.subject)}:${normalizeEvidence(fact.predicate)}:${normalizeEvidence(fact.normalized_value ?? fact.claim_en)}`;
+      if (seenEvidence.has(evidenceKey) || seenClaims.has(claimKey)) return false;
+      seenEvidence.add(evidenceKey);
+      seenClaims.add(claimKey || claim);
+      return true;
+    });
+  };
 
   // Six grounded, distinct atomic facts are sufficient for the downstream writer and its
-  // fail-closed publication readiness check. Retrying an otherwise valid
-  // 6-7 fact response from the small production extraction model repeatedly
-  // produced the same result, consuming quota without adding information.
+  // fail-closed publication readiness check. Retry a severely under-extracted
+  // full article exactly once; a second short response still fails closed.
   const minimumFacts = article.bodyOriginal.length >= 1000 ? 6 : 1;
+  let groundedFacts = ground((await complete(false)).data);
+  if (groundedFacts.length < minimumFacts && minimumFacts > 1) {
+    groundedFacts = ground((await complete(true)).data);
+  }
   if (groundedFacts.length < minimumFacts) {
     throw new Error(
       `Fact extraction returned ${groundedFacts.length} grounded facts; expected at least ${minimumFacts} for a ${article.bodyOriginal.length}-character source`,
