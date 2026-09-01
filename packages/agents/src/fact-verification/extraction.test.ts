@@ -160,7 +160,7 @@ describe("extractFacts", () => {
 
   it("rejects a severely under-extracted full article so the durable job can retry", async () => {
     const llm = new FakeLlmClient();
-    llm.queueJson({
+    const response = {
       data: {
         facts: [
           {
@@ -174,7 +174,9 @@ describe("extractFacts", () => {
       },
       inputTokens: 100,
       outputTokens: 20,
-    });
+    };
+    llm.queueJson(response);
+    llm.queueJson(response);
 
     await expect(
       extractFacts(llm, {
@@ -182,6 +184,39 @@ describe("extractFacts", () => {
         bodyOriginal: "A".repeat(2_500),
       }),
     ).rejects.toThrow("expected at least 6");
+    expect(llm.jsonRequests).toHaveLength(2);
+  });
+
+  it("retries an under-extracted full article once with stricter grounding guidance", async () => {
+    const llm = new FakeLlmClient();
+    const evidence = Array.from({ length: 6 }, (_, index) => `Evidence ${index + 1}`);
+    llm.queueJson({
+      data: { facts: [] },
+      inputTokens: 100,
+      outputTokens: 10,
+    });
+    llm.queueJson({
+      data: {
+        facts: evidence.map((item, index) => ({
+          fact_type: "other",
+          claim_en: `Grounded fact ${index + 1}.`,
+          evidence_original: item,
+          quote_original: null,
+          quote_speaker: null,
+        })),
+      },
+      inputTokens: 100,
+      outputTokens: 80,
+    });
+
+    await expect(
+      extractFacts(llm, {
+        titleOriginal: "Full article",
+        bodyOriginal: `${evidence.join(". ")}. `.repeat(30),
+      }),
+    ).resolves.toHaveLength(6);
+    expect(llm.jsonRequests).toHaveLength(2);
+    expect(llm.jsonRequests[1]?.system).toContain("az előző válasz túl kevés");
   });
 
   it("accepts six distinct facts for a full article without an expensive retry", async () => {
@@ -306,7 +341,7 @@ describe("extractFacts", () => {
   it("applies the full-article minimum after grounding and deduplication", async () => {
     const llm = new FakeLlmClient();
     const evidence = Array.from({ length: 5 }, (_, index) => `Supported evidence ${index + 1}`);
-    llm.queueJson({
+    const response = {
       data: {
         facts: [
           ...evidence.map((item, index) => ({
@@ -327,7 +362,9 @@ describe("extractFacts", () => {
       },
       inputTokens: 100,
       outputTokens: 80,
-    });
+    };
+    llm.queueJson(response);
+    llm.queueJson(response);
 
     await expect(
       extractFacts(llm, {
@@ -335,5 +372,6 @@ describe("extractFacts", () => {
         bodyOriginal: `${evidence.join(". ")}. `.repeat(40),
       }),
     ).rejects.toThrow("5 grounded facts; expected at least 6");
+    expect(llm.jsonRequests).toHaveLength(2);
   });
 });
