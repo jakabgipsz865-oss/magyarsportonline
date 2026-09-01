@@ -1,8 +1,100 @@
-import { FakeLlmClient, MODEL_TIERS } from "@magyarsportonline/llm";
+import { CloudflareWorkersAiLlmClient, FakeLlmClient, MODEL_TIERS } from "@magyarsportonline/llm";
 import { describe, expect, it, vi } from "vitest";
 import { extractFacts } from "./extraction";
 
 describe("extractFacts", () => {
+  it("grounds facts returned through Cloudflare native JSON Mode", async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            result: {
+              response: {
+                facts: [
+                  {
+                    fact_type: "transfer_status",
+                    claim_en: "Manchester United submitted a £60m bid.",
+                    evidence_original: "Manchester United submitted a £60m bid",
+                    subject: "Manchester United",
+                    predicate: "transfer_bid",
+                    normalized_value: "£60m",
+                    event_time_iso: null,
+                    quote_original: null,
+                    quote_speaker: null,
+                  },
+                ],
+              },
+              usage: { prompt_tokens: 20, completion_tokens: 10 },
+            },
+            success: true,
+            errors: [],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    );
+    const llm = new CloudflareWorkersAiLlmClient({
+      accountId: "acc",
+      apiToken: "token",
+      fetchImpl,
+    });
+
+    const facts = await extractFacts(llm, {
+      titleOriginal: "Manchester United transfer update",
+      bodyOriginal: "Manchester United submitted a £60m bid for the midfielder.",
+    });
+
+    expect(facts).toEqual([
+      expect.objectContaining({
+        claimEn: "Manchester United submitted a £60m bid.",
+        evidenceOriginal: "Manchester United submitted a £60m bid",
+      }),
+    ]);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a malformed native JSON Mode response exactly once", async () => {
+    const valid = {
+      result: {
+        response: {
+          facts: [
+            {
+              fact_type: "other",
+              claim_en: "Carrick signed a three-year contract.",
+              evidence_original: "Carrick signed a three-year contract",
+              subject: "Carrick",
+              predicate: "contract",
+              normalized_value: "three years",
+              event_time_iso: null,
+              quote_original: null,
+              quote_speaker: null,
+            },
+          ],
+        },
+      },
+      success: true,
+      errors: [],
+    };
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ result: { response: "{malformed" }, errors: [] })),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify(valid)));
+    const llm = new CloudflareWorkersAiLlmClient({
+      accountId: "acc",
+      apiToken: "token",
+      fetchImpl,
+    });
+
+    await expect(
+      extractFacts(llm, {
+        titleOriginal: "Carrick contract",
+        bodyOriginal: "Carrick signed a three-year contract at Old Trafford.",
+      }),
+    ).resolves.toHaveLength(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it("sends the article wrapped in a <source_article> block using the extraction model", async () => {
     const llm = new FakeLlmClient();
     llm.queueJson({

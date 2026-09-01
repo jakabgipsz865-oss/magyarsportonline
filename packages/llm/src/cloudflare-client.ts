@@ -117,6 +117,14 @@ interface CloudflareChatCompletionResponse {
   errors?: Array<{ code?: number; message?: string }>;
 }
 
+interface CloudflareStructuredResponse {
+  result?: {
+    response?: unknown;
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  };
+  errors?: Array<{ code?: number; message?: string }>;
+}
+
 function extractText(response: CloudflareChatCompletionResponse): string {
   const content = response.choices?.[0]?.message?.content;
   if (typeof content === "string") {
@@ -228,12 +236,12 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
   }
 
   async completeJson(request: JsonCompletionRequest): Promise<JsonCompletionResult> {
-    const response = await this.chatCompletion(request, request.jsonSchema);
-    const text = extractText(response);
+    const response = await this.structuredCompletion(request);
+    const content = response.result?.response;
 
     let data: unknown;
     try {
-      data = JSON.parse(stripMarkdownFence(text));
+      data = typeof content === "string" ? JSON.parse(stripMarkdownFence(content)) : content;
     } catch (error) {
       throw new CloudflareApiError(
         "parse_error",
@@ -245,9 +253,29 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
 
     return {
       data,
-      inputTokens: response.usage?.prompt_tokens ?? 0,
-      outputTokens: response.usage?.completion_tokens ?? 0,
+      inputTokens: response.result?.usage?.prompt_tokens ?? 0,
+      outputTokens: response.result?.usage?.completion_tokens ?? 0,
     };
+  }
+
+  private async structuredCompletion(
+    request: JsonCompletionRequest,
+  ): Promise<CloudflareStructuredResponse> {
+    const model = this.modelForRequest(request.model);
+    const url = `${this.baseUrl}/accounts/${encodeURIComponent(this.accountId)}/ai/run/${model}`;
+    const body = {
+      messages: [
+        { role: "system", content: request.system },
+        ...request.messages.map((message) => ({ role: message.role, content: message.content })),
+      ],
+      max_tokens: request.maxTokens,
+      temperature: 0.2,
+      repetition_penalty: 1.1,
+      frequency_penalty: 0.2,
+      response_format: { type: "json_schema", json_schema: request.jsonSchema },
+    };
+
+    return this.requestJson<CloudflareStructuredResponse>(url, body);
   }
 
   private modelForRequest(requestedModel: string): string {
@@ -282,6 +310,13 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
       ...(jsonSchema ? { response_format: { type: "json_schema", json_schema: jsonSchema } } : {}),
     };
 
+    return this.requestJson<CloudflareChatCompletionResponse>(url, body);
+  }
+
+  private async requestJson<T extends { errors?: Array<{ message?: string }> }>(
+    url: string,
+    body: Record<string, unknown>,
+  ): Promise<T> {
     let httpResponse: Response;
     try {
       httpResponse = await this.fetchImpl(url, {
@@ -315,7 +350,7 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
       );
     }
 
-    const parsed = (await httpResponse.json()) as CloudflareChatCompletionResponse;
+    const parsed = (await httpResponse.json()) as T;
     if (parsed.errors && parsed.errors.length > 0) {
       throw new CloudflareApiError(
         "error_envelope",
