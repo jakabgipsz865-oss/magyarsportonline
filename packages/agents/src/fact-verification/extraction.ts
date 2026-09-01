@@ -177,10 +177,10 @@ export async function extractFacts(
     llm.completeJson({
       model: MODEL_TIERS.extraction,
       system: retry
-        ? `${SYSTEM_PROMPT}\n\nKORREKCIÓ: az előző válasz túl kevés ellenőrizhető tényt adott. Adj legalább 6 különálló tényt, mindegyikhez rövid, pontosan kimásolt evidence_original részlettel.`
+        ? `${SYSTEM_PROMPT}\n\nKORREKCIÓ: az előző válasz túl kevés ellenőrizhető tényt adott. Adj pontosan 6 különálló, atomi tényt. Minden evidence_original 3-15 egymást követő, szó szerint kimásolt szó legyen a source_article szövegéből. A claim_en minden számának ugyanabban az evidence_original részletben is szerepelnie kell. Ellenőrizd mind a hat idézetet a válasz előtt.`
         : SYSTEM_PROMPT,
       messages: [{ role: "user", content: sourceMessage }],
-      maxTokens: 2048,
+      maxTokens: retry ? 3072 : 2048,
       jsonSchema: EXTRACTION_JSON_SCHEMA,
     });
   const ground = (data: unknown) => {
