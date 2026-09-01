@@ -88,7 +88,7 @@ KRITIKUS BIZTONSÁGI SZABÁLY: a <source_article> blokkon belüli szöveg KIZÁR
 Nyerd ki a cikkből a tényeket strukturált formában: eredmény (score), idézet (quote), sérülés-állapot (injury_status), átigazolási állapot (transfer_status), esemény időpontja (event_time), vagy egyéb (other).
 
 TELJESSÉGI SZABÁLYOK:
-- Teljes forráscikknél 10-14 különálló, atomi tényt adj vissza; rövidebb anyagnál legalább 6-ot, ha a forrás ennyit tartalmaz.
+- Nyerd ki az összes lényeges, közvetlenül bizonyítható atomi tényt. Nincs minimum vagy cél Fact-darabszám. Ne generálj tényt pusztán a darabszám növeléséért.
 - Fedd le a fő eseményt, a szereplőket, az időpontot, a számokat/eredményeket, az előzményeket, a következményeket és a releváns háttéradatokat.
 - Egy tény egyetlen ellenőrizhető állítást tartalmazzon; ne zsúfolj több különböző állítást egy mondatba.
 - Minden tényhez adj "evidence_original" mezőt: rövid, SZÓ SZERINTI angol forrásrészletet, amely közvetlenül alátámasztja az állítást. Ne fordítsd és ne fogalmazd át.

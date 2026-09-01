@@ -135,6 +135,8 @@ describe("extractFacts", () => {
     const [request] = llm.jsonRequests;
     expect(request?.model).toBe(MODEL_TIERS.extraction);
     expect(request?.maxTokens).toBe(2048);
+    expect(request?.system).toContain("Nincs minimum vagy cél Fact-darabszám");
+    expect(request?.system).not.toMatch(/10-14|legalább 6/u);
     expect(request?.messages[0]?.content).toContain("<source_article>");
     expect(request?.messages[0]?.content).toContain("Liverpool win 3-1");
   });
@@ -415,7 +417,10 @@ describe("extractFacts", () => {
     expect(llm.completeJson).toHaveBeenCalledTimes(2);
     const requests = vi.mocked(llm.completeJson).mock.calls.map(([request]) => request);
     expect(requests[0]?.system).not.toContain("TECHNIKAI ÚJRAPRÓBÁLÁS");
+    expect(requests[0]?.system).not.toMatch(/10-14|legalább 6/u);
     expect(requests[1]?.system).toContain("TECHNIKAI ÚJRAPRÓBÁLÁS");
+    expect(requests[1]?.system).not.toMatch(/10-14|legalább 6/u);
+    expect(requests[1]?.maxTokens).toBe(3072);
   });
 
   it("accepts six distinct facts for a full article without an expensive retry", async () => {
