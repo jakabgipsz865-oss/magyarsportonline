@@ -261,7 +261,7 @@ describe("handleFactVerificationTrigger", () => {
           {
             fact_type: "score",
             claim_en: "Liverpool won 3-1.",
-            evidence_original: "Liverpool win 3-1",
+            evidence_segment_id: "S1",
             subject: "Liverpool",
             predicate: "final_score",
             normalized_value: "3-1",
@@ -280,7 +280,7 @@ describe("handleFactVerificationTrigger", () => {
           {
             fact_type: "score",
             claim_en: "Liverpool won 3-1.",
-            evidence_original: "Liverpool win 3-1",
+            evidence_segment_id: "S1",
             subject: "Liverpool",
             predicate: "final_score",
             normalized_value: "3-1",
@@ -344,7 +344,7 @@ describe("handleFactVerificationTrigger", () => {
           {
             fact_type: "score",
             claim_en: "Liverpool won 3-1.",
-            evidence_original: "Liverpool win 3-1",
+            evidence_segment_id: "S1",
             subject: "Liverpool",
             predicate: "final_score",
             normalized_value: "3-1",
@@ -363,7 +363,7 @@ describe("handleFactVerificationTrigger", () => {
           {
             fact_type: "score",
             claim_en: "Liverpool lost 2-1.",
-            evidence_original: "Liverpool lose 2-1",
+            evidence_segment_id: "S1",
             subject: "Liverpool",
             predicate: "final_score",
             normalized_value: "2-1",
@@ -408,7 +408,7 @@ describe("handleFactVerificationTrigger", () => {
           {
             fact_type: "other",
             claim_en: "This is the complete source article.",
-            evidence_original: "Complete source article",
+            evidence_segment_id: "S1",
             subject: "source article",
             predicate: "completeness",
             normalized_value: null,
@@ -427,7 +427,7 @@ describe("handleFactVerificationTrigger", () => {
           {
             fact_type: "other",
             claim_en: "This is an old snippet.",
-            evidence_original: "Old snippet",
+            evidence_segment_id: "S1",
             subject: "source article",
             predicate: "completeness",
             normalized_value: null,

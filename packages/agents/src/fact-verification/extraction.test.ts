@@ -14,7 +14,7 @@ describe("extractFacts", () => {
                   {
                     fact_type: "transfer_status",
                     claim_en: "Manchester United submitted a £60m bid.",
-                    evidence_original: "Manchester United submitted a £60m bid",
+                    evidence_segment_id: "S2",
                     subject: "Manchester United",
                     predicate: "transfer_bid",
                     normalized_value: "£60m",
@@ -46,7 +46,7 @@ describe("extractFacts", () => {
     expect(facts).toEqual([
       expect.objectContaining({
         claimEn: "Manchester United submitted a £60m bid.",
-        evidenceOriginal: "Manchester United submitted a £60m bid",
+        evidenceOriginal: "Manchester United submitted a £60m bid for the midfielder.",
       }),
     ]);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
@@ -60,7 +60,7 @@ describe("extractFacts", () => {
             {
               fact_type: "other",
               claim_en: "Carrick signed a three-year contract.",
-              evidence_original: "Carrick signed a three-year contract",
+              evidence_segment_id: "S2",
               subject: "Carrick",
               predicate: "contract",
               normalized_value: "three years",
@@ -95,7 +95,7 @@ describe("extractFacts", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
-  it("sends the article wrapped in a <source_article> block using the extraction model", async () => {
+  it("sends stable source segments using the extraction model", async () => {
     const llm = new FakeLlmClient();
     llm.queueJson({
       data: {
@@ -103,7 +103,7 @@ describe("extractFacts", () => {
           {
             fact_type: "score",
             claim_en: "Liverpool won 3-1.",
-            evidence_original: "Liverpool win 3-1",
+            evidence_segment_id: "S1",
             quote_original: null,
             quote_speaker: null,
           },
@@ -137,8 +137,8 @@ describe("extractFacts", () => {
     expect(request?.maxTokens).toBe(2048);
     expect(request?.system).toContain("Nincs minimum vagy cél Fact-darabszám");
     expect(request?.system).not.toMatch(/10-14|legalább 6/u);
-    expect(request?.messages[0]?.content).toContain("<source_article>");
-    expect(request?.messages[0]?.content).toContain("Liverpool win 3-1");
+    expect(request?.messages[0]?.content).toContain("<source_segments>");
+    expect(request?.messages[0]?.content).toContain('{"id":"S1","text":"Liverpool win 3-1"}');
   });
 
   it("anchors relative dates to the source publication timestamp, not processing time", async () => {
@@ -149,7 +149,7 @@ describe("extractFacts", () => {
           {
             fact_type: "event_time",
             claim_en: "The deadline is tomorrow.",
-            evidence_original: "before tomorrow's deadline",
+            evidence_segment_id: "S2",
             subject: "transfer deadline",
             predicate: "event_time",
             normalized_value: null,
@@ -183,7 +183,7 @@ describe("extractFacts", () => {
           {
             fact_type: "event_time",
             claim_en: "The deadline is tomorrow.",
-            evidence_original: "before tomorrow's deadline",
+            evidence_segment_id: "S2",
             subject: "transfer deadline",
             predicate: "event_time",
             normalized_value: null,
@@ -214,7 +214,7 @@ describe("extractFacts", () => {
           {
             fact_type: "event_time",
             claim_en: "The meeting will happen before the deadline.",
-            evidence_original: "before the deadline",
+            evidence_segment_id: "S2",
             subject: "meeting",
             predicate: "event_time",
             normalized_value: null,
@@ -260,7 +260,7 @@ describe("extractFacts", () => {
           {
             fact_type: "other",
             claim_en: "The article contains one general statement.",
-            evidence_original: "AAAA",
+            evidence_segment_id: "S2",
             quote_original: null,
             quote_speaker: null,
           },
@@ -301,10 +301,10 @@ describe("extractFacts", () => {
       .mockRejectedValueOnce(new Error("Cloudflare Workers AI returned non-JSON output"))
       .mockResolvedValueOnce({
         data: {
-          facts: evidence.map((item, index) => ({
+          facts: evidence.map((_item, index) => ({
             fact_type: "other",
             claim_en: `Grounded fact ${index + 1}.`,
-            evidence_original: item,
+            evidence_segment_id: `S${index + 2}`,
             quote_original: null,
             quote_speaker: null,
           })),
@@ -346,35 +346,35 @@ describe("extractFacts", () => {
             {
               fact_type: "transfer_status",
               claim_en: "Manchester United submitted a £60m bid.",
-              evidence_original: "Manchester United submitted a £60m bid",
+              evidence_segment_id: "S2",
               quote_original: null,
               quote_speaker: null,
             },
             {
               fact_type: "transfer_status",
               claim_en: "The selling club rejected the offer.",
-              evidence_original: "selling club rejected the offer on Sunday",
+              evidence_segment_id: "S3",
               quote_original: null,
               quote_speaker: null,
             },
             {
               fact_type: "other",
               claim_en: "Michael Carrick signed a three-year contract.",
-              evidence_original: "Michael Carrick signed a three-year contract",
+              evidence_segment_id: "S4",
               quote_original: null,
               quote_speaker: null,
             },
             {
               fact_type: "other",
               claim_en: "The forward scored 12 goals in 34 league appearances.",
-              evidence_original: "forward scored 12 goals in 34 league appearances",
+              evidence_segment_id: "S5",
               quote_original: null,
               quote_speaker: null,
             },
             {
               fact_type: "event_time",
               claim_en: "The medical is scheduled for Monday.",
-              evidence_original: "medical is scheduled for Monday at Carrington",
+              evidence_segment_id: "S6",
               event_time_iso: "2026-08-31T09:00:00.000Z",
               quote_original: null,
               quote_speaker: null,
@@ -382,7 +382,7 @@ describe("extractFacts", () => {
             {
               fact_type: "event_time",
               claim_en: "The transfer deadline is Tuesday at 7pm.",
-              evidence_original: "transfer deadline is Tuesday at 7pm",
+              evidence_segment_id: "S7",
               event_time_iso: "2026-09-01T19:00:00.000Z",
               quote_original: null,
               quote_speaker: null,
@@ -390,7 +390,7 @@ describe("extractFacts", () => {
             {
               fact_type: "transfer_status",
               claim_en: "A £75m agreement was completed.",
-              evidence_original: "A £75m agreement was completed",
+              evidence_segment_id: "S2",
               quote_original: null,
               quote_speaker: null,
             },
@@ -431,7 +431,7 @@ describe("extractFacts", () => {
         facts: Array.from({ length: 6 }, (_, index) => ({
           fact_type: "other",
           claim_en: `Grounded fact ${index + 1}.`,
-          evidence_original: evidence[index],
+          evidence_segment_id: `S${index + 2}`,
           quote_original: null,
           quote_speaker: null,
         })),
@@ -456,14 +456,14 @@ describe("extractFacts", () => {
           {
             fact_type: "score",
             claim_en: "The match finished 1-1.",
-            evidence_original: "The match finished 1-1",
+            evidence_segment_id: "S2",
             quote_original: null,
             quote_speaker: null,
           },
           {
             fact_type: "other",
             claim_en: "Leeds came back from 2-0 down.",
-            evidence_original: "Leeds came back from 2-0 down",
+            evidence_segment_id: "S999",
             quote_original: null,
             quote_speaker: null,
           },
@@ -483,7 +483,7 @@ describe("extractFacts", () => {
     expect(llm.jsonRequests).toHaveLength(1);
   });
 
-  it("matches evidence after case, whitespace and Unicode quote normalization", async () => {
+  it("resolves quotes, apostrophes and hyphens to the exact original source segment", async () => {
     const llm = new FakeLlmClient();
     llm.queueJson({
       data: {
@@ -491,7 +491,7 @@ describe("extractFacts", () => {
           {
             fact_type: "quote",
             claim_en: "Farke said they earned a difficult point.",
-            evidence_original: "‘A HARD   but precious point’",
+            evidence_segment_id: "S2",
             quote_original: "A hard but precious point",
             quote_speaker: "Daniel Farke",
           },
@@ -503,10 +503,14 @@ describe("extractFacts", () => {
 
     await expect(
       extractFacts(llm, {
-        titleOriginal: "Farke reaction",
-        bodyOriginal: "'A hard but precious point', said Daniel Farke.",
+        titleOriginal: "Farke's reaction",
+        bodyOriginal: "‘A hard-but-precious point’, said Daniel Farke.",
       }),
-    ).resolves.toHaveLength(1);
+    ).resolves.toEqual([
+      expect.objectContaining({
+        evidenceOriginal: "‘A hard-but-precious point’, said Daniel Farke.",
+      }),
+    ]);
   });
 
   it("deduplicates facts backed by the same evidence", async () => {
@@ -517,14 +521,14 @@ describe("extractFacts", () => {
           {
             fact_type: "other",
             claim_en: "Andrews said Daniel must not be underestimated.",
-            evidence_original: "Never underestimate Daniel",
+            evidence_segment_id: "S2",
             quote_original: null,
             quote_speaker: null,
           },
           {
             fact_type: "other",
             claim_en: "Daniel cannot be underestimated, according to Andrews.",
-            evidence_original: "Never underestimate Daniel",
+            evidence_segment_id: "S2",
             quote_original: null,
             quote_speaker: null,
           },
@@ -548,17 +552,17 @@ describe("extractFacts", () => {
     const response = {
       data: {
         facts: [
-          ...evidence.map((item, index) => ({
+          ...evidence.map((_item, index) => ({
             fact_type: "other",
             claim_en: `Grounded fact ${index + 1}.`,
-            evidence_original: item,
+            evidence_segment_id: `S${index + 2}`,
             quote_original: null,
             quote_speaker: null,
           })),
           {
             fact_type: "other",
             claim_en: "Unsupported sixth fact.",
-            evidence_original: "Missing sixth evidence",
+            evidence_segment_id: "S999",
             quote_original: null,
             quote_speaker: null,
           },
