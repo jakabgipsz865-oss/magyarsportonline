@@ -85,7 +85,9 @@ interface GeminiGenerateContentResponse {
   }>;
   usageMetadata?: {
     promptTokenCount?: number;
+    thoughtsTokenCount?: number;
     candidatesTokenCount?: number;
+    totalTokenCount?: number;
   };
   promptFeedback?: { blockReason?: string };
 }
@@ -152,15 +154,27 @@ export class GeminiLlmClient implements LlmClient {
     const response = await this.generateContent(request, true);
     const text = extractText(response);
     const finishReason = response.candidates?.[0]?.finishReason ?? null;
+    const usage = response.usageMetadata;
+    console.info(
+      JSON.stringify({
+        event: "gemini_usage",
+        model: this.model,
+        finishReason,
+        promptTokenCount: usage?.promptTokenCount ?? 0,
+        thoughtsTokenCount: usage?.thoughtsTokenCount ?? 0,
+        candidatesTokenCount: usage?.candidatesTokenCount ?? 0,
+        totalTokenCount: usage?.totalTokenCount ?? 0,
+      }),
+    );
     const meteredUsage = {
-      inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
-      outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
+      inputTokens: usage?.promptTokenCount ?? 0,
+      outputTokens: usage?.candidatesTokenCount ?? 0,
     };
     if (finishReason === "MAX_TOKENS") {
       throw new GeminiApiError(
         200,
         "OUTPUT_TRUNCATED",
-        `Gemini output truncated (promptTokens=${meteredUsage.inputTokens}, candidateTokens=${meteredUsage.outputTokens})`,
+        `Gemini output truncated (promptTokens=${meteredUsage.inputTokens}, thoughtsTokens=${usage?.thoughtsTokenCount ?? 0}, candidateTokens=${meteredUsage.outputTokens}, totalTokens=${usage?.totalTokenCount ?? 0})`,
         meteredUsage,
         finishReason,
       );
@@ -172,7 +186,7 @@ export class GeminiLlmClient implements LlmClient {
       throw new GeminiApiError(
         200,
         "INVALID_SCHEMA",
-        `Gemini returned malformed JSON (finishReason=${finishReason ?? "UNKNOWN"}, promptTokens=${meteredUsage.inputTokens}, candidateTokens=${meteredUsage.outputTokens})`,
+        `Gemini returned malformed JSON (finishReason=${finishReason ?? "UNKNOWN"}, promptTokens=${meteredUsage.inputTokens}, thoughtsTokens=${usage?.thoughtsTokenCount ?? 0}, candidateTokens=${meteredUsage.outputTokens}, totalTokens=${usage?.totalTokenCount ?? 0})`,
         meteredUsage,
         finishReason,
       );
@@ -185,7 +199,7 @@ export class GeminiLlmClient implements LlmClient {
   }
 
   private async generateContent(
-    request: TextCompletionRequest,
+    request: TextCompletionRequest | JsonCompletionRequest,
     wantsJson: boolean,
   ): Promise<GeminiGenerateContentResponse> {
     const url = `${this.baseUrl}/models/${encodeURIComponent(this.model)}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
@@ -197,6 +211,9 @@ export class GeminiLlmClient implements LlmClient {
       })),
       generationConfig: {
         maxOutputTokens: request.maxTokens,
+        ...("thinkingLevel" in request && request.thinkingLevel
+          ? { thinkingConfig: { thinkingLevel: request.thinkingLevel } }
+          : {}),
         ...(wantsJson
           ? {
               responseMimeType: "application/json",

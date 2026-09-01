@@ -113,6 +113,7 @@ async function runGenerationCall(
     // Production evidence showed MAX_TOKENS at 2048; 3072 is the smallest
     // bounded increase that leaves room for the complete structured article.
     maxTokens: 3072,
+    thinkingLevel: "minimal",
     jsonSchema: GENERATION_JSON_SCHEMA,
   });
 
