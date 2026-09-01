@@ -216,8 +216,17 @@ export async function extractFacts(
   // fail-closed publication readiness check. Retry a severely under-extracted
   // full article exactly once; a second short response still fails closed.
   const minimumFacts = article.bodyOriginal.length >= 1000 ? 6 : 1;
-  let groundedFacts = ground((await complete(false)).data);
-  if (groundedFacts.length < minimumFacts && minimumFacts > 1) {
+  let attempts = 1;
+  let response: unknown;
+  try {
+    response = (await complete(false)).data;
+  } catch (error) {
+    if (!(error instanceof Error) || !/non-JSON output/i.test(error.message)) throw error;
+    attempts = 2;
+    response = (await complete(true)).data;
+  }
+  let groundedFacts = ground(response);
+  if (groundedFacts.length < minimumFacts && minimumFacts > 1 && attempts < 2) {
     groundedFacts = ground((await complete(true)).data);
   }
   if (groundedFacts.length < minimumFacts) {
