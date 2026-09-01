@@ -109,7 +109,7 @@ describe("extractFacts", () => {
         bodyOriginal: "Carrick discussed options before tomorrow's deadline.",
         publishedAtSource: new Date("2026-08-30T19:49:00.000Z"),
       }),
-    ).rejects.toThrow("0 grounded facts");
+    ).rejects.toThrow("no grounded facts");
   });
 
   it("fails closed to an unknown event time instead of rejecting the full structured response", async () => {
@@ -158,7 +158,7 @@ describe("extractFacts", () => {
     await expect(extractFacts(llm, { titleOriginal: "T", bodyOriginal: "B" })).rejects.toThrow();
   });
 
-  it("rejects a severely under-extracted full article so the durable job can retry", async () => {
+  it("accepts one grounded fact from a long source without a count-driven retry", async () => {
     const llm = new FakeLlmClient();
     const response = {
       data: {
@@ -176,49 +176,28 @@ describe("extractFacts", () => {
       outputTokens: 20,
     };
     llm.queueJson(response);
-    llm.queueJson(response);
+
+    await expect(
+      extractFacts(llm, { titleOriginal: "Full article", bodyOriginal: "A".repeat(2_500) }),
+    ).resolves.toHaveLength(1);
+    expect(llm.jsonRequests).toHaveLength(1);
+  });
+
+  it("fails closed on zero grounded facts without a count-driven retry", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: { facts: [] },
+      inputTokens: 100,
+      outputTokens: 10,
+    });
 
     await expect(
       extractFacts(llm, {
         titleOriginal: "Full article",
         bodyOriginal: "A".repeat(2_500),
       }),
-    ).rejects.toThrow("expected at least 6");
-    expect(llm.jsonRequests).toHaveLength(2);
-  });
-
-  it("retries an under-extracted full article once with stricter grounding guidance", async () => {
-    const llm = new FakeLlmClient();
-    const evidence = Array.from({ length: 6 }, (_, index) => `Evidence ${index + 1}`);
-    llm.queueJson({
-      data: { facts: [] },
-      inputTokens: 100,
-      outputTokens: 10,
-    });
-    llm.queueJson({
-      data: {
-        facts: evidence.map((item, index) => ({
-          fact_type: "other",
-          claim_en: `Grounded fact ${index + 1}.`,
-          evidence_original: item,
-          quote_original: null,
-          quote_speaker: null,
-        })),
-      },
-      inputTokens: 100,
-      outputTokens: 80,
-    });
-
-    await expect(
-      extractFacts(llm, {
-        titleOriginal: "Full article",
-        bodyOriginal: `${evidence.join(". ")}. `.repeat(30),
-      }),
-    ).resolves.toHaveLength(6);
-    expect(llm.jsonRequests).toHaveLength(2);
-    expect(llm.jsonRequests[1]?.system).toContain("az előző válasz túl kevés");
-    expect(llm.jsonRequests[1]?.system).toContain("pontosan 6");
-    expect(llm.jsonRequests[1]?.maxTokens).toBe(3072);
+    ).rejects.toThrow("no grounded facts");
+    expect(llm.jsonRequests).toHaveLength(1);
   });
 
   it("retries malformed Cloudflare JSON once without exceeding two attempts", async () => {
@@ -247,6 +226,9 @@ describe("extractFacts", () => {
       }),
     ).resolves.toHaveLength(6);
     expect(llm.completeJson).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(llm.completeJson).mock.calls[1]?.[0].system).toContain(
+      "TECHNIKAI ÚJRAPRÓBÁLÁS",
+    );
   });
 
   it("keeps six verbatim grounded facts from an Express-like long-source retry", async () => {
@@ -262,66 +244,67 @@ describe("extractFacts", () => {
     ].join(
       " ",
     )} ${"The report describes the talks, the player's record and the club's timetable. ".repeat(18)}`;
-    llm.queueJson({ data: { facts: [] }, inputTokens: 100, outputTokens: 10 });
-    llm.queueJson({
-      data: {
-        facts: [
-          {
-            fact_type: "transfer_status",
-            claim_en: "Manchester United submitted a £60m bid.",
-            evidence_original: "Manchester United submitted a £60m bid",
-            quote_original: null,
-            quote_speaker: null,
-          },
-          {
-            fact_type: "transfer_status",
-            claim_en: "The selling club rejected the offer.",
-            evidence_original: "selling club rejected the offer on Sunday",
-            quote_original: null,
-            quote_speaker: null,
-          },
-          {
-            fact_type: "other",
-            claim_en: "Michael Carrick signed a three-year contract.",
-            evidence_original: "Michael Carrick signed a three-year contract",
-            quote_original: null,
-            quote_speaker: null,
-          },
-          {
-            fact_type: "other",
-            claim_en: "The forward scored 12 goals in 34 league appearances.",
-            evidence_original: "forward scored 12 goals in 34 league appearances",
-            quote_original: null,
-            quote_speaker: null,
-          },
-          {
-            fact_type: "event_time",
-            claim_en: "The medical is scheduled for Monday.",
-            evidence_original: "medical is scheduled for Monday at Carrington",
-            event_time_iso: "2026-08-31T09:00:00.000Z",
-            quote_original: null,
-            quote_speaker: null,
-          },
-          {
-            fact_type: "event_time",
-            claim_en: "The transfer deadline is Tuesday at 7pm.",
-            evidence_original: "transfer deadline is Tuesday at 7pm",
-            event_time_iso: "2026-09-01T19:00:00.000Z",
-            quote_original: null,
-            quote_speaker: null,
-          },
-          {
-            fact_type: "transfer_status",
-            claim_en: "A £75m agreement was completed.",
-            evidence_original: "A £75m agreement was completed",
-            quote_original: null,
-            quote_speaker: null,
-          },
-        ],
-      },
-      inputTokens: 500,
-      outputTokens: 300,
-    });
+    vi.spyOn(llm, "completeJson")
+      .mockRejectedValueOnce(new Error("Cloudflare Workers AI returned non-JSON output"))
+      .mockResolvedValueOnce({
+        data: {
+          facts: [
+            {
+              fact_type: "transfer_status",
+              claim_en: "Manchester United submitted a £60m bid.",
+              evidence_original: "Manchester United submitted a £60m bid",
+              quote_original: null,
+              quote_speaker: null,
+            },
+            {
+              fact_type: "transfer_status",
+              claim_en: "The selling club rejected the offer.",
+              evidence_original: "selling club rejected the offer on Sunday",
+              quote_original: null,
+              quote_speaker: null,
+            },
+            {
+              fact_type: "other",
+              claim_en: "Michael Carrick signed a three-year contract.",
+              evidence_original: "Michael Carrick signed a three-year contract",
+              quote_original: null,
+              quote_speaker: null,
+            },
+            {
+              fact_type: "other",
+              claim_en: "The forward scored 12 goals in 34 league appearances.",
+              evidence_original: "forward scored 12 goals in 34 league appearances",
+              quote_original: null,
+              quote_speaker: null,
+            },
+            {
+              fact_type: "event_time",
+              claim_en: "The medical is scheduled for Monday.",
+              evidence_original: "medical is scheduled for Monday at Carrington",
+              event_time_iso: "2026-08-31T09:00:00.000Z",
+              quote_original: null,
+              quote_speaker: null,
+            },
+            {
+              fact_type: "event_time",
+              claim_en: "The transfer deadline is Tuesday at 7pm.",
+              evidence_original: "transfer deadline is Tuesday at 7pm",
+              event_time_iso: "2026-09-01T19:00:00.000Z",
+              quote_original: null,
+              quote_speaker: null,
+            },
+            {
+              fact_type: "transfer_status",
+              claim_en: "A £75m agreement was completed.",
+              evidence_original: "A £75m agreement was completed",
+              quote_original: null,
+              quote_speaker: null,
+            },
+          ],
+        },
+        inputTokens: 500,
+        outputTokens: 300,
+      });
 
     const facts = await extractFacts(llm, {
       titleOriginal: "Manchester United transfer update",
@@ -337,8 +320,10 @@ describe("extractFacts", () => {
       ),
     ).toBe(true);
     expect(facts.some((fact) => fact.claimEn.includes("£75m"))).toBe(false);
-    expect(llm.jsonRequests[0]?.system).not.toContain("pontosan 6");
-    expect(llm.jsonRequests[1]?.system).toContain("pontosan 6");
+    expect(llm.completeJson).toHaveBeenCalledTimes(2);
+    const requests = vi.mocked(llm.completeJson).mock.calls.map(([request]) => request);
+    expect(requests[0]?.system).not.toContain("TECHNIKAI ÚJRAPRÓBÁLÁS");
+    expect(requests[1]?.system).toContain("TECHNIKAI ÚJRAPRÓBÁLÁS");
   });
 
   it("accepts six distinct facts for a full article without an expensive retry", async () => {
@@ -460,7 +445,7 @@ describe("extractFacts", () => {
     expect(facts).toHaveLength(1);
   });
 
-  it("applies the full-article minimum after grounding and deduplication", async () => {
+  it("keeps five grounded facts after rejecting an unsupported sixth", async () => {
     const llm = new FakeLlmClient();
     const evidence = Array.from({ length: 5 }, (_, index) => `Supported evidence ${index + 1}`);
     const response = {
@@ -486,14 +471,13 @@ describe("extractFacts", () => {
       outputTokens: 80,
     };
     llm.queueJson(response);
-    llm.queueJson(response);
 
     await expect(
       extractFacts(llm, {
         titleOriginal: "Full article",
         bodyOriginal: `${evidence.join(". ")}. `.repeat(40),
       }),
-    ).rejects.toThrow("5 grounded facts; expected at least 6");
-    expect(llm.jsonRequests).toHaveLength(2);
+    ).resolves.toHaveLength(5);
+    expect(llm.jsonRequests).toHaveLength(1);
   });
 });

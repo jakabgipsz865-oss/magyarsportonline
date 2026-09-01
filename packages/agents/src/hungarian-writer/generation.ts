@@ -75,6 +75,7 @@ const FACT_REPAIR_SYSTEM_PROMPT = `Magyar sportújságíró vagy. Az előző ter
 - Semmilyen új tényt, nevet, számot, következtetést vagy körülményt ne találj ki.
 - A "previousAttempt" csak a hibák azonosítására szolgál; a Facts az egyetlen hiteles tartalmi forrás.
 - Ha legalább 6 Fact áll rendelkezésre, a lead legyen legalább 80 karakteres, a body legalább 800 karakteres és 4–7 természetes bekezdésből álljon. Használd fel az egymással összeegyeztethető Facts nagy részét, ismétlés és új tény kitalálása nélkül.
+- Ha 6-nál kevesebb Fact áll rendelkezésre, készíts rövidebb, tömör, 2–4 bekezdéses hírt; tilos paddinggel, következtetéssel vagy új ténnyel mesterségesen hosszabbítani.
 - Maradjon természetes, mai magyar sportújságírói szöveg, és tartsd be a Szerkesztői Tudás V2 releváns szabályait.`;
 
 /** A determinisztikusan kiválasztott V2 rekordok korlátos promptblokkja. */

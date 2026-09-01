@@ -177,7 +177,7 @@ export async function extractFacts(
     llm.completeJson({
       model: MODEL_TIERS.extraction,
       system: retry
-        ? `${SYSTEM_PROMPT}\n\nKORREKCIÓ: az előző válasz túl kevés ellenőrizhető tényt adott. Adj pontosan 6 különálló, atomi tényt. Minden evidence_original 3-15 egymást követő, szó szerint kimásolt szó legyen a source_article szövegéből. A claim_en minden számának ugyanabban az evidence_original részletben is szerepelnie kell. Ellenőrizd mind a hat idézetet a válasz előtt.`
+        ? `${SYSTEM_PROMPT}\n\nTECHNIKAI ÚJRAPRÓBÁLÁS: az előző válasz nem volt érvényes JSON. Kizárólag a megadott JSON schema szerint válaszolj. Minden evidence_original rövid, egymást követő, szó szerint kimásolt forrásrészlet legyen; a claim_en minden száma ugyanabban az evidence-ben is szerepeljen.`
         : SYSTEM_PROMPT,
       messages: [{ role: "user", content: sourceMessage }],
       maxTokens: retry ? 3072 : 2048,
@@ -212,27 +212,16 @@ export async function extractFacts(
     });
   };
 
-  // Six grounded, distinct atomic facts are sufficient for the downstream writer and its
-  // fail-closed publication readiness check. Retry a severely under-extracted
-  // full article exactly once; a second short response still fails closed.
-  const minimumFacts = article.bodyOriginal.length >= 1000 ? 6 : 1;
-  let attempts = 1;
   let response: unknown;
   try {
     response = (await complete(false)).data;
   } catch (error) {
     if (!(error instanceof Error) || !/non-JSON output/i.test(error.message)) throw error;
-    attempts = 2;
     response = (await complete(true)).data;
   }
-  let groundedFacts = ground(response);
-  if (groundedFacts.length < minimumFacts && minimumFacts > 1 && attempts < 2) {
-    groundedFacts = ground((await complete(true)).data);
-  }
-  if (groundedFacts.length < minimumFacts) {
-    throw new Error(
-      `Fact extraction returned ${groundedFacts.length} grounded facts; expected at least ${minimumFacts} for a ${article.bodyOriginal.length}-character source`,
-    );
+  const groundedFacts = ground(response);
+  if (groundedFacts.length === 0) {
+    throw new Error("Fact extraction returned no grounded facts");
   }
   return groundedFacts.map((fact) => ({
     factType: fact.fact_type,
