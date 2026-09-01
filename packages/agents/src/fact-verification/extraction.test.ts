@@ -1,5 +1,5 @@
 import { FakeLlmClient, MODEL_TIERS } from "@magyarsportonline/llm";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { extractFacts } from "./extraction";
 
 describe("extractFacts", () => {
@@ -217,6 +217,34 @@ describe("extractFacts", () => {
     ).resolves.toHaveLength(6);
     expect(llm.jsonRequests).toHaveLength(2);
     expect(llm.jsonRequests[1]?.system).toContain("az előző válasz túl kevés");
+  });
+
+  it("retries malformed Cloudflare JSON once without exceeding two attempts", async () => {
+    const llm = new FakeLlmClient();
+    const evidence = Array.from({ length: 6 }, (_, index) => `Evidence ${index + 1}`);
+    vi.spyOn(llm, "completeJson")
+      .mockRejectedValueOnce(new Error("Cloudflare Workers AI returned non-JSON output"))
+      .mockResolvedValueOnce({
+        data: {
+          facts: evidence.map((item, index) => ({
+            fact_type: "other",
+            claim_en: `Grounded fact ${index + 1}.`,
+            evidence_original: item,
+            quote_original: null,
+            quote_speaker: null,
+          })),
+        },
+        inputTokens: 100,
+        outputTokens: 80,
+      });
+
+    await expect(
+      extractFacts(llm, {
+        titleOriginal: "Full article",
+        bodyOriginal: `${evidence.join(". ")}. `.repeat(30),
+      }),
+    ).resolves.toHaveLength(6);
+    expect(llm.completeJson).toHaveBeenCalledTimes(2);
   });
 
   it("accepts six distinct facts for a full article without an expensive retry", async () => {
