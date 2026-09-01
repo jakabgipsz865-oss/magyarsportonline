@@ -7,7 +7,7 @@
  */
 export const MODEL_TIERS = {
   /** Fact Verification Agent: structured extraction from a single RawArticle. */
-  extraction: "@cf/meta/llama-3.1-8b-instruct-fast",
+  extraction: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
   /** Hungarian Writer Agent: self-check pass against the Fact set. */
   selfCheck: "@cf/meta/llama-3.1-8b-instruct-fast",
   /** Hungarian Writer Agent: final Hungarian title/lead/body generation. */
