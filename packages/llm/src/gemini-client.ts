@@ -66,6 +66,11 @@ export function isGeminiDailyQuotaError(error: unknown): boolean {
   );
 }
 
+/** A model-not-found response is rejected before generation and consumes no RPD request. */
+export function isGeminiDefinitelyUnmeteredError(error: unknown): boolean {
+  return error instanceof GeminiApiError && error.status === 404 && error.apiStatus === "NOT_FOUND";
+}
+
 function toGeminiRole(role: LlmMessage["role"]): "user" | "model" {
   return role === "assistant" ? "model" : "user";
 }

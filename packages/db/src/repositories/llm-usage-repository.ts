@@ -91,4 +91,16 @@ export class LlmUsageRepository {
       .set({ inputTokens, outputTokens })
       .where(eq(llmUsage.id, reservationId));
   }
+
+  async releaseRequest(reservationId: string): Promise<void> {
+    await this.db
+      .delete(llmUsage)
+      .where(
+        and(
+          eq(llmUsage.id, reservationId),
+          eq(llmUsage.inputTokens, 0),
+          eq(llmUsage.outputTokens, 0),
+        ),
+      );
+  }
 }

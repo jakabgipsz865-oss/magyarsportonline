@@ -19,9 +19,11 @@ describe("DailyRequestCappedLlmClient", () => {
     const inner = new FakeLlmClient();
     const reserveRequest = vi.fn(async () => null);
     const finalizeRequest = vi.fn(async () => undefined);
+    const releaseRequest = vi.fn(async () => undefined);
     const client = new DailyRequestCappedLlmClient(inner, "gemini", 20, {
       reserveRequest,
       finalizeRequest,
+      releaseRequest,
     });
 
     await expect(client.completeText(request)).rejects.toBeInstanceOf(DailyLlmRequestCapError);
@@ -37,11 +39,55 @@ describe("DailyRequestCappedLlmClient", () => {
     const client = new DailyRequestCappedLlmClient(inner, "gemini", 20, {
       reserveRequest: async () => "reservation-id",
       finalizeRequest,
+      releaseRequest: async () => undefined,
     });
 
     await expect(client.completeText(request)).resolves.toMatchObject({ text: "ok" });
     expect(inner.textRequests).toHaveLength(1);
     expect(finalizeRequest).toHaveBeenCalledWith("reservation-id", 1, 1);
+  });
+
+  it("releases only a failure proven not to consume provider quota", async () => {
+    const failure = new Error("model not found");
+    const inner = {
+      completeText: vi.fn(async () => {
+        throw failure;
+      }),
+      completeJson: vi.fn(),
+    };
+    const releaseRequest = vi.fn(async () => undefined);
+    const client = new DailyRequestCappedLlmClient(
+      inner,
+      "gemini",
+      20,
+      {
+        reserveRequest: async () => "reservation-id",
+        finalizeRequest: async () => undefined,
+        releaseRequest,
+      },
+      (error) => error === failure,
+    );
+
+    await expect(client.completeText(request)).rejects.toBe(failure);
+    expect(releaseRequest).toHaveBeenCalledWith("reservation-id");
+  });
+
+  it("keeps uncertain provider failures counted", async () => {
+    const inner = {
+      completeText: vi.fn(async () => {
+        throw new Error("network failure");
+      }),
+      completeJson: vi.fn(),
+    };
+    const releaseRequest = vi.fn(async () => undefined);
+    const client = new DailyRequestCappedLlmClient(inner, "gemini", 20, {
+      reserveRequest: async () => "reservation-id",
+      finalizeRequest: async () => undefined,
+      releaseRequest,
+    });
+
+    await expect(client.completeText(request)).rejects.toThrow("network failure");
+    expect(releaseRequest).not.toHaveBeenCalled();
   });
 
   it("uses the Pacific quota day and defers until the next Pacific midnight", () => {
