@@ -4,8 +4,8 @@ import { createRepositories } from "./db";
 import { buildDispatcher } from "./pipeline";
 
 const PROOF_STORY_IDS = [
-  "60680bc2-025b-466a-a6c9-7cf9aa2f3af4", // BBC Farke
   "2de216a1-40cd-4a41-80cb-008bf3861950", // Daily Express
+  "60680bc2-025b-466a-a6c9-7cf9aa2f3af4", // BBC Farke
   "3f16d93d-650b-456b-9909-c5bec87a2c2d", // Daily Mirror
 ] as const;
 
