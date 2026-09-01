@@ -90,6 +90,31 @@ describe("DailyRequestCappedLlmClient", () => {
     expect(releaseRequest).not.toHaveBeenCalled();
   });
 
+  it("finalizes token usage when a completed provider response later fails parsing", async () => {
+    const failure = Object.assign(new Error("malformed JSON"), {
+      meteredUsage: { inputTokens: 120, outputTokens: 2048 },
+    });
+    const inner = {
+      completeText: vi.fn(),
+      completeJson: vi.fn(async () => {
+        throw failure;
+      }),
+    };
+    const finalizeRequest = vi.fn(async () => undefined);
+    const releaseRequest = vi.fn(async () => undefined);
+    const client = new DailyRequestCappedLlmClient(inner, "gemini", 20, {
+      reserveRequest: async () => "reservation-id",
+      finalizeRequest,
+      releaseRequest,
+    });
+
+    await expect(client.completeJson({ ...request, jsonSchema: { type: "object" } })).rejects.toBe(
+      failure,
+    );
+    expect(finalizeRequest).toHaveBeenCalledWith("reservation-id", 120, 2048);
+    expect(releaseRequest).not.toHaveBeenCalled();
+  });
+
   it("uses the Pacific quota day and defers until the next Pacific midnight", () => {
     const now = new Date("2026-08-31T10:30:00.000Z");
     expect(geminiQuotaDayStart(now).toISOString()).toBe("2026-08-31T07:00:00.000Z");

@@ -96,12 +96,39 @@ describe("GeminiLlmClient", () => {
     const client = new GeminiLlmClient({
       apiKey: "key",
       fetchImpl: vi.fn(async () =>
-        jsonResponse({ candidates: [{ content: { parts: [{ text: "not-json" }] } }] }),
+        jsonResponse({
+          candidates: [{ content: { parts: [{ text: "not-json" }] }, finishReason: "STOP" }],
+          usageMetadata: { promptTokenCount: 11, candidatesTokenCount: 7 },
+        }),
       ),
     });
     await expect(
       client.completeJson({ ...textRequest, jsonSchema: { type: "object" } }),
-    ).rejects.toMatchObject({ apiStatus: "INVALID_SCHEMA" });
+    ).rejects.toMatchObject({
+      apiStatus: "INVALID_SCHEMA",
+      finishReason: "STOP",
+      meteredUsage: { inputTokens: 11, outputTokens: 7 },
+    });
+  });
+
+  it("classifies MAX_TOKENS as a metered truncated output before JSON parsing", async () => {
+    const client = new GeminiLlmClient({
+      apiKey: "key",
+      fetchImpl: vi.fn(async () =>
+        jsonResponse({
+          candidates: [{ content: { parts: [{ text: '{"cut":' }] }, finishReason: "MAX_TOKENS" }],
+          usageMetadata: { promptTokenCount: 101, candidatesTokenCount: 2048 },
+        }),
+      ),
+    });
+    await expect(
+      client.completeJson({ ...textRequest, jsonSchema: { type: "object" } }),
+    ).rejects.toMatchObject({
+      status: 200,
+      apiStatus: "OUTPUT_TRUNCATED",
+      finishReason: "MAX_TOKENS",
+      meteredUsage: { inputTokens: 101, outputTokens: 2048 },
+    });
   });
 });
 
@@ -116,6 +143,9 @@ describe("describeGeminiError", () => {
     expect(describeGeminiError(new GeminiApiError(0, "BLOCKED", "x"))).toBe("content_blocked");
     expect(describeGeminiError(new GeminiApiError(0, "INVALID_SCHEMA", "x"))).toBe(
       "invalid_schema",
+    );
+    expect(describeGeminiError(new GeminiApiError(200, "OUTPUT_TRUNCATED", "x"))).toBe(
+      "output_truncated",
     );
     expect(describeGeminiError(new GeminiApiError(0, "TIMEOUT", "x"))).toBe("timeout");
     expect(describeGeminiError(new GeminiApiError(503, null, "x"))).toBe("service_unavailable");
