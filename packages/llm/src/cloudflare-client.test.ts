@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import {
   CloudflareApiError,
   CloudflareWorkersAiLlmClient,
+  DEFAULT_CLOUDFLARE_MODEL,
   FAST_CLOUDFLARE_MODEL,
   describeCloudflareError,
   isCloudflareDailyNeuronQuotaError,
 } from "./cloudflare-client";
+import { MODEL_TIERS } from "./model-router";
 
 function jsonResponse(body: unknown, init?: { status?: number }): Response {
   return new Response(JSON.stringify(body), {
@@ -74,11 +76,10 @@ describe("CloudflareWorkersAiLlmClient", () => {
     expect(result).toEqual({ text: "válasz", inputTokens: 10, outputTokens: 5 });
   });
 
-  it("routes the logical extraction tier to the fast Cloudflare model", async () => {
+  it("routes extraction to 70B while self-check stays on 8B", async () => {
+    const requestedUrls: string[] = [];
     const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-      expect(String(url)).toBe(
-        `https://api.cloudflare.com/client/v4/accounts/acc/ai/run/${FAST_CLOUDFLARE_MODEL}`,
-      );
+      requestedUrls.push(String(url));
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
       expect(body).toMatchObject({
         response_format: { type: "json_schema", json_schema: JSON_SCHEMA },
@@ -96,10 +97,19 @@ describe("CloudflareWorkersAiLlmClient", () => {
 
     await client.completeJson({
       ...textRequest,
-      model: "claude-haiku-4-5",
+      model: MODEL_TIERS.extraction,
+      jsonSchema: JSON_SCHEMA,
+    });
+    await client.completeJson({
+      ...textRequest,
+      model: MODEL_TIERS.selfCheck,
       jsonSchema: JSON_SCHEMA,
     });
 
+    expect(requestedUrls).toEqual([
+      `https://api.cloudflare.com/client/v4/accounts/acc/ai/run/${DEFAULT_CLOUDFLARE_MODEL}`,
+      `https://api.cloudflare.com/client/v4/accounts/acc/ai/run/${FAST_CLOUDFLARE_MODEL}`,
+    ]);
     expect(client.modelLabel).toBe(FAST_CLOUDFLARE_MODEL);
   });
 
