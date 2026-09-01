@@ -110,9 +110,9 @@ async function runGenerationCall(
     model: MODEL_TIERS.writing,
     system: system + formatEditorialKnowledgeBlock(knowledge),
     messages: [{ role: "user", content: JSON.stringify(userContent) }],
-    // A kimenet egy korlátos cikk és négy rövid JSON-mező; a 2048 tokenes
-    // plafon a Free Tier Writer-hívásokat is kiszámíthatóan tartja.
-    maxTokens: 2048,
+    // Production evidence showed MAX_TOKENS at 2048; 3072 is the smallest
+    // bounded increase that leaves room for the complete structured article.
+    maxTokens: 3072,
     jsonSchema: GENERATION_JSON_SCHEMA,
   });
 
