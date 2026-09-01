@@ -46,6 +46,8 @@ export interface JsonCompletionRequest {
   system: string;
   messages: LlmMessage[];
   maxTokens: number;
+  /** Provider-specific reasoning budget for Writer calls that support it. */
+  thinkingLevel?: "minimal";
   /** Raw JSON Schema (not a Zod schema) — see structured-outputs limitations: no min/maxLength, `additionalProperties: false` required on every object. */
   jsonSchema: Record<string, unknown>;
 }

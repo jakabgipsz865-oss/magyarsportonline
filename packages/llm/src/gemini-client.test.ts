@@ -62,6 +62,41 @@ describe("GeminiLlmClient", () => {
     expect(result.data).toEqual({ ok: true });
   });
 
+  it("sends minimal thinking for the Gemini Writer request", async () => {
+    const usageLog = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { generationConfig: Record<string, unknown> };
+      expect(body.generationConfig["thinkingConfig"]).toEqual({ thinkingLevel: "minimal" });
+      return jsonResponse({
+        candidates: [{ content: { parts: [{ text: '{"ok":true}' }] }, finishReason: "STOP" }],
+        usageMetadata: {
+          promptTokenCount: 9,
+          thoughtsTokenCount: 1,
+          candidatesTokenCount: 3,
+          totalTokenCount: 13,
+        },
+      });
+    });
+    const client = new GeminiLlmClient({ apiKey: "key", model: "gemini-3.5-flash", fetchImpl });
+    await client.completeJson({
+      ...textRequest,
+      thinkingLevel: "minimal",
+      jsonSchema: { type: "object" },
+    });
+    expect(usageLog).toHaveBeenCalledWith(
+      JSON.stringify({
+        event: "gemini_usage",
+        model: "gemini-3.5-flash",
+        finishReason: "STOP",
+        promptTokenCount: 9,
+        thoughtsTokenCount: 1,
+        candidatesTokenCount: 3,
+        totalTokenCount: 13,
+      }),
+    );
+    usageLog.mockRestore();
+  });
+
   it("throws GeminiApiError with the status and apiStatus on a non-2xx response", async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse(
@@ -117,7 +152,12 @@ describe("GeminiLlmClient", () => {
       fetchImpl: vi.fn(async () =>
         jsonResponse({
           candidates: [{ content: { parts: [{ text: '{"cut":' }] }, finishReason: "MAX_TOKENS" }],
-          usageMetadata: { promptTokenCount: 101, candidatesTokenCount: 2048 },
+          usageMetadata: {
+            promptTokenCount: 101,
+            thoughtsTokenCount: 2900,
+            candidatesTokenCount: 48,
+            totalTokenCount: 3049,
+          },
         }),
       ),
     });
@@ -127,7 +167,9 @@ describe("GeminiLlmClient", () => {
       status: 200,
       apiStatus: "OUTPUT_TRUNCATED",
       finishReason: "MAX_TOKENS",
-      meteredUsage: { inputTokens: 101, outputTokens: 2048 },
+      meteredUsage: { inputTokens: 101, outputTokens: 48 },
+      message:
+        "Gemini output truncated (promptTokens=101, thoughtsTokens=2900, candidateTokens=48, totalTokens=3049)",
     });
   });
 });
