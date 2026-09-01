@@ -4,6 +4,7 @@ import {
   GeminiApiError,
   GeminiLlmClient,
   describeGeminiError,
+  isGeminiDefinitelyUnmeteredError,
 } from "./gemini-client";
 
 function jsonResponse(body: unknown, init?: { status?: number }): Response {
@@ -120,5 +121,15 @@ describe("describeGeminiError", () => {
     expect(describeGeminiError(new GeminiApiError(503, null, "x"))).toBe("service_unavailable");
     expect(describeGeminiError(new GeminiApiError(0, null, "x"))).toBe("network_error");
     expect(describeGeminiError(new Error("boom"))).toBe("unknown_error");
+  });
+});
+
+describe("isGeminiDefinitelyUnmeteredError", () => {
+  it("releases only model-not-found reservations", () => {
+    expect(isGeminiDefinitelyUnmeteredError(new GeminiApiError(404, "NOT_FOUND", "x"))).toBe(true);
+    expect(
+      isGeminiDefinitelyUnmeteredError(new GeminiApiError(429, "RESOURCE_EXHAUSTED", "x")),
+    ).toBe(false);
+    expect(isGeminiDefinitelyUnmeteredError(new GeminiApiError(0, null, "x"))).toBe(false);
   });
 });

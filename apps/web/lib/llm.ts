@@ -7,6 +7,7 @@ import {
   describeCloudflareError,
   describeGeminiError,
   estimateCloudflareCostUsd,
+  isGeminiDefinitelyUnmeteredError,
   type LlmClient,
 } from "@magyarsportonline/llm";
 import { createRepositories } from "./db";
@@ -77,6 +78,7 @@ export function getWriterLlmClient(): LlmClient {
     "gemini",
     env.GEMINI_DAILY_REQUEST_CAP,
     repos.llmUsageRepository,
+    isGeminiDefinitelyUnmeteredError,
   );
   return cachedWriterClient;
 }

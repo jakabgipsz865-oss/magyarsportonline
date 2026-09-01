@@ -19,6 +19,7 @@ export class DailyLlmRequestCapError extends Error {
 export interface DailyRequestUsageReader {
   reserveRequest(provider: string, model: string, since: Date, cap: number): Promise<string | null>;
   finalizeRequest(reservationId: string, inputTokens: number, outputTokens: number): Promise<void>;
+  releaseRequest(reservationId: string): Promise<void>;
 }
 
 const PACIFIC_TIME_ZONE = "America/Los_Angeles";
@@ -83,6 +84,7 @@ export class DailyRequestCappedLlmClient implements LlmClient {
     private readonly provider: string,
     private readonly cap: number,
     private readonly usage: DailyRequestUsageReader,
+    private readonly shouldReleaseReservation: (error: unknown) => boolean = () => false,
   ) {}
 
   get modelLabel(): string | undefined {
@@ -91,16 +93,26 @@ export class DailyRequestCappedLlmClient implements LlmClient {
 
   async completeText(request: TextCompletionRequest): Promise<TextCompletionResult> {
     const reservationId = await this.reserve();
-    const result = await this.inner.completeText(request);
-    await this.finalize(reservationId, result.inputTokens, result.outputTokens);
-    return result;
+    try {
+      const result = await this.inner.completeText(request);
+      await this.finalize(reservationId, result.inputTokens, result.outputTokens);
+      return result;
+    } catch (error) {
+      await this.releaseIfUnmetered(reservationId, error);
+      throw error;
+    }
   }
 
   async completeJson(request: JsonCompletionRequest): Promise<JsonCompletionResult> {
     const reservationId = await this.reserve();
-    const result = await this.inner.completeJson(request);
-    await this.finalize(reservationId, result.inputTokens, result.outputTokens);
-    return result;
+    try {
+      const result = await this.inner.completeJson(request);
+      await this.finalize(reservationId, result.inputTokens, result.outputTokens);
+      return result;
+    } catch (error) {
+      await this.releaseIfUnmetered(reservationId, error);
+      throw error;
+    }
   }
 
   private async reserve(): Promise<string> {
@@ -126,6 +138,15 @@ export class DailyRequestCappedLlmClient implements LlmClient {
     } catch {
       // The reservation already counts toward the hard cap. A metrics update
       // failure must not replay a successful paid/quota-consuming request.
+    }
+  }
+
+  private async releaseIfUnmetered(reservationId: string, error: unknown): Promise<void> {
+    if (!this.shouldReleaseReservation(error)) return;
+    try {
+      await this.usage.releaseRequest(reservationId);
+    } catch {
+      // Release failures remain counted, preserving the fail-closed hard cap.
     }
   }
 }
