@@ -249,6 +249,98 @@ describe("extractFacts", () => {
     expect(llm.completeJson).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps six verbatim grounded facts from an Express-like long-source retry", async () => {
+    const llm = new FakeLlmClient();
+    const bodyOriginal = `${[
+      "Manchester United submitted a £60m bid for the midfielder.",
+      "The selling club rejected the offer on Sunday.",
+      "Michael Carrick signed a three-year contract at Old Trafford.",
+      "The forward scored 12 goals in 34 league appearances last season.",
+      "His medical is scheduled for Monday at Carrington.",
+      "The transfer deadline is Tuesday at 7pm.",
+      "Club officials remain in talks and no final agreement has been announced.",
+    ].join(
+      " ",
+    )} ${"The report describes the talks, the player's record and the club's timetable. ".repeat(18)}`;
+    llm.queueJson({ data: { facts: [] }, inputTokens: 100, outputTokens: 10 });
+    llm.queueJson({
+      data: {
+        facts: [
+          {
+            fact_type: "transfer_status",
+            claim_en: "Manchester United submitted a £60m bid.",
+            evidence_original: "Manchester United submitted a £60m bid",
+            quote_original: null,
+            quote_speaker: null,
+          },
+          {
+            fact_type: "transfer_status",
+            claim_en: "The selling club rejected the offer.",
+            evidence_original: "selling club rejected the offer on Sunday",
+            quote_original: null,
+            quote_speaker: null,
+          },
+          {
+            fact_type: "other",
+            claim_en: "Michael Carrick signed a three-year contract.",
+            evidence_original: "Michael Carrick signed a three-year contract",
+            quote_original: null,
+            quote_speaker: null,
+          },
+          {
+            fact_type: "other",
+            claim_en: "The forward scored 12 goals in 34 league appearances.",
+            evidence_original: "forward scored 12 goals in 34 league appearances",
+            quote_original: null,
+            quote_speaker: null,
+          },
+          {
+            fact_type: "event_time",
+            claim_en: "The medical is scheduled for Monday.",
+            evidence_original: "medical is scheduled for Monday at Carrington",
+            event_time_iso: "2026-08-31T09:00:00.000Z",
+            quote_original: null,
+            quote_speaker: null,
+          },
+          {
+            fact_type: "event_time",
+            claim_en: "The transfer deadline is Tuesday at 7pm.",
+            evidence_original: "transfer deadline is Tuesday at 7pm",
+            event_time_iso: "2026-09-01T19:00:00.000Z",
+            quote_original: null,
+            quote_speaker: null,
+          },
+          {
+            fact_type: "transfer_status",
+            claim_en: "A £75m agreement was completed.",
+            evidence_original: "A £75m agreement was completed",
+            quote_original: null,
+            quote_speaker: null,
+          },
+        ],
+      },
+      inputTokens: 500,
+      outputTokens: 300,
+    });
+
+    const facts = await extractFacts(llm, {
+      titleOriginal: "Manchester United transfer update",
+      bodyOriginal,
+      publishedAtSource: new Date("2026-08-30T12:00:00.000Z"),
+    });
+
+    expect(facts).toHaveLength(6);
+    expect(facts.every((fact) => fact.claimEn && fact.evidenceOriginal)).toBe(true);
+    expect(
+      facts.every((fact) =>
+        bodyOriginal.toLowerCase().includes(fact.evidenceOriginal.toLowerCase()),
+      ),
+    ).toBe(true);
+    expect(facts.some((fact) => fact.claimEn.includes("£75m"))).toBe(false);
+    expect(llm.jsonRequests[0]?.system).not.toContain("pontosan 6");
+    expect(llm.jsonRequests[1]?.system).toContain("pontosan 6");
+  });
+
   it("accepts six distinct facts for a full article without an expensive retry", async () => {
     const llm = new FakeLlmClient();
     const evidence = Array.from({ length: 6 }, (_, index) => `Evidence ${index + 1}`);
