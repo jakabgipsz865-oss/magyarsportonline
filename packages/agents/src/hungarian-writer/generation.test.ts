@@ -33,7 +33,7 @@ describe("generateStoryVersion", () => {
       isFallback: false,
     });
     expect(llm.jsonRequests[0]?.model).toBe(MODEL_TIERS.writing);
-    expect(llm.jsonRequests[0]?.maxTokens).toBe(2048);
+    expect(llm.jsonRequests[0]?.maxTokens).toBe(3072);
     expect(llm.jsonRequests[0]?.system).toContain("6-14 szavas");
     expect(llm.jsonRequests[0]?.system).toContain("ne szenzációhajhász");
   });
