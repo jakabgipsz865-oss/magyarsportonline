@@ -28,6 +28,8 @@ export class GeminiApiError extends Error {
     public readonly status: number,
     public readonly apiStatus: string | null,
     message: string,
+    public readonly meteredUsage: { inputTokens: number; outputTokens: number } | null = null,
+    public readonly finishReason: string | null = null,
   ) {
     super(message);
     this.name = "GeminiApiError";
@@ -46,6 +48,7 @@ export function describeGeminiError(error: unknown): string {
     if (error.apiStatus === "BLOCKED") {
       return "content_blocked";
     }
+    if (error.apiStatus === "OUTPUT_TRUNCATED") return "output_truncated";
     if (error.apiStatus === "INVALID_SCHEMA") return "invalid_schema";
     if (error.apiStatus === "TIMEOUT") return "timeout";
     if (error.status >= 500) {
@@ -148,11 +151,31 @@ export class GeminiLlmClient implements LlmClient {
   async completeJson(request: JsonCompletionRequest): Promise<JsonCompletionResult> {
     const response = await this.generateContent(request, true);
     const text = extractText(response);
+    const finishReason = response.candidates?.[0]?.finishReason ?? null;
+    const meteredUsage = {
+      inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
+      outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
+    };
+    if (finishReason === "MAX_TOKENS") {
+      throw new GeminiApiError(
+        200,
+        "OUTPUT_TRUNCATED",
+        `Gemini output truncated (promptTokens=${meteredUsage.inputTokens}, candidateTokens=${meteredUsage.outputTokens})`,
+        meteredUsage,
+        finishReason,
+      );
+    }
     let data: unknown;
     try {
       data = JSON.parse(stripMarkdownFence(text)) as unknown;
     } catch {
-      throw new GeminiApiError(0, "INVALID_SCHEMA", "Gemini returned malformed JSON");
+      throw new GeminiApiError(
+        200,
+        "INVALID_SCHEMA",
+        `Gemini returned malformed JSON (finishReason=${finishReason ?? "UNKNOWN"}, promptTokens=${meteredUsage.inputTokens}, candidateTokens=${meteredUsage.outputTokens})`,
+        meteredUsage,
+        finishReason,
+      );
     }
     return {
       data,

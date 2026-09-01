@@ -98,7 +98,7 @@ export class DailyRequestCappedLlmClient implements LlmClient {
       await this.finalize(reservationId, result.inputTokens, result.outputTokens);
       return result;
     } catch (error) {
-      await this.releaseIfUnmetered(reservationId, error);
+      await this.finalizeOrRelease(reservationId, error);
       throw error;
     }
   }
@@ -110,7 +110,7 @@ export class DailyRequestCappedLlmClient implements LlmClient {
       await this.finalize(reservationId, result.inputTokens, result.outputTokens);
       return result;
     } catch (error) {
-      await this.releaseIfUnmetered(reservationId, error);
+      await this.finalizeOrRelease(reservationId, error);
       throw error;
     }
   }
@@ -141,7 +141,21 @@ export class DailyRequestCappedLlmClient implements LlmClient {
     }
   }
 
-  private async releaseIfUnmetered(reservationId: string, error: unknown): Promise<void> {
+  private async finalizeOrRelease(reservationId: string, error: unknown): Promise<void> {
+    const usage = (error as { meteredUsage?: unknown } | null)?.meteredUsage;
+    if (
+      usage &&
+      typeof usage === "object" &&
+      typeof (usage as { inputTokens?: unknown }).inputTokens === "number" &&
+      typeof (usage as { outputTokens?: unknown }).outputTokens === "number"
+    ) {
+      await this.finalize(
+        reservationId,
+        (usage as { inputTokens: number }).inputTokens,
+        (usage as { outputTokens: number }).outputTokens,
+      );
+      return;
+    }
     if (!this.shouldReleaseReservation(error)) return;
     try {
       await this.usage.releaseRequest(reservationId);
