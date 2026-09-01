@@ -14,6 +14,10 @@ function jsonResponse(body: unknown, init?: { status?: number }): Response {
   });
 }
 
+function structuredResponse(response: unknown, usage = { prompt_tokens: 3, completion_tokens: 2 }) {
+  return jsonResponse({ result: { response, usage }, success: true, errors: [] });
+}
+
 const textRequest = {
   model: "claude-sonnet-5", // MODEL_TIERS-style logikai név — a kliens Cloudflare production modellre route-olja
   system: "system prompt",
@@ -71,13 +75,18 @@ describe("CloudflareWorkersAiLlmClient", () => {
   });
 
   it("routes the logical extraction tier to the fast Cloudflare model", async () => {
-    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body)) as { model: string };
-      expect(body.model).toBe(FAST_CLOUDFLARE_MODEL);
-      return jsonResponse({
-        choices: [{ message: { content: '{"title_hu":"Cím","lead_hu":"Lead"}' } }],
-        usage: { prompt_tokens: 4, completion_tokens: 3 },
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe(
+        `https://api.cloudflare.com/client/v4/accounts/acc/ai/run/${FAST_CLOUDFLARE_MODEL}`,
+      );
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      expect(body).toMatchObject({
+        response_format: { type: "json_schema", json_schema: JSON_SCHEMA },
       });
+      return structuredResponse(
+        { title_hu: "Cím", lead_hu: "Lead" },
+        { prompt_tokens: 4, completion_tokens: 3 },
+      );
     });
     const client = new CloudflareWorkersAiLlmClient({
       accountId: "acc",
@@ -105,10 +114,7 @@ describe("CloudflareWorkersAiLlmClient", () => {
 
   it("parses JSON completions, including markdown-fenced output", async () => {
     const fetchImpl = vi.fn(async () =>
-      jsonResponse({
-        choices: [{ message: { content: '```json\n{"title_hu": "Cím", "lead_hu": "Lead"}\n```' } }],
-        usage: { prompt_tokens: 3, completion_tokens: 2 },
-      }),
+      structuredResponse('```json\n{"title_hu": "Cím", "lead_hu": "Lead"}\n```'),
     );
     const client = new CloudflareWorkersAiLlmClient({
       accountId: "acc",
@@ -120,12 +126,7 @@ describe("CloudflareWorkersAiLlmClient", () => {
   });
 
   it("accepts JSON Mode content returned by Cloudflare as an object", async () => {
-    const fetchImpl = vi.fn(async () =>
-      jsonResponse({
-        choices: [{ message: { content: { title_hu: "Cím", lead_hu: "Lead" } } }],
-        usage: { prompt_tokens: 3, completion_tokens: 2 },
-      }),
-    );
+    const fetchImpl = vi.fn(async () => structuredResponse({ title_hu: "Cím", lead_hu: "Lead" }));
     const client = new CloudflareWorkersAiLlmClient({
       accountId: "acc",
       apiToken: "tok",
@@ -136,12 +137,7 @@ describe("CloudflareWorkersAiLlmClient", () => {
   });
 
   it("throws a schema_error when a required field is missing from the response", async () => {
-    const fetchImpl = vi.fn(async () =>
-      jsonResponse({
-        choices: [{ message: { content: '{"title_hu": "Cím csak"}' } }],
-        usage: { prompt_tokens: 3, completion_tokens: 2 },
-      }),
-    );
+    const fetchImpl = vi.fn(async () => structuredResponse({ title_hu: "Cím csak" }));
     const client = new CloudflareWorkersAiLlmClient({
       accountId: "acc",
       apiToken: "tok",
@@ -153,12 +149,7 @@ describe("CloudflareWorkersAiLlmClient", () => {
   });
 
   it("throws a parse_error when the response is not valid JSON", async () => {
-    const fetchImpl = vi.fn(async () =>
-      jsonResponse({
-        choices: [{ message: { content: "nem JSON szöveg" } }],
-        usage: { prompt_tokens: 3, completion_tokens: 2 },
-      }),
-    );
+    const fetchImpl = vi.fn(async () => structuredResponse("nem JSON szöveg"));
     const client = new CloudflareWorkersAiLlmClient({
       accountId: "acc",
       apiToken: "tok",
