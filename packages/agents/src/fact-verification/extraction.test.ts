@@ -217,6 +217,8 @@ describe("extractFacts", () => {
     ).resolves.toHaveLength(6);
     expect(llm.jsonRequests).toHaveLength(2);
     expect(llm.jsonRequests[1]?.system).toContain("az előző válasz túl kevés");
+    expect(llm.jsonRequests[1]?.system).toContain("pontosan 6");
+    expect(llm.jsonRequests[1]?.maxTokens).toBe(3072);
   });
 
   it("retries malformed Cloudflare JSON once without exceeding two attempts", async () => {
