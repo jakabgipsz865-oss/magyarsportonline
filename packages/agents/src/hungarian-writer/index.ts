@@ -20,7 +20,7 @@ import {
   type PreviousVersionContent,
 } from "./generation";
 import { assessContentQuality } from "./quality-gate";
-import { selfCheckContent } from "./self-check";
+import { selfCheckContent, type SelfCheckResult } from "./self-check";
 import type { AgentRunRecorder } from "../shared/with-agent-run";
 import { withAgentRun } from "../shared/with-agent-run";
 
@@ -32,6 +32,18 @@ export * from "./self-check";
 export const AGENT_VERSION = "hungarian-writer@0.3.0";
 
 const FALLBACK_UPDATE_SUMMARY = "Frissítés az új információk alapján.";
+const FACT_CONSISTENCY_PASS_THRESHOLD = 0.95;
+const BELOW_THRESHOLD_ISSUE = "fact_consistency_score_below_threshold";
+
+function selfCheckIssuesForAudit(check: SelfCheckResult): string[] {
+  return check.factConsistencyScore < FACT_CONSISTENCY_PASS_THRESHOLD && check.issues.length === 0
+    ? [BELOW_THRESHOLD_ISSUE]
+    : check.issues;
+}
+
+function selfCheckPassed(check: SelfCheckResult): boolean {
+  return check.consistent && check.factConsistencyScore >= FACT_CONSISTENCY_PASS_THRESHOLD;
+}
 
 export interface Emitter {
   emit(event: unknown): Promise<void>;
@@ -108,6 +120,20 @@ export async function handleStoryFactsVerified(
         contextText: knowledgeContext,
         limit: 20,
       });
+      const auditSelfCheck = (result: SelfCheckResult): string[] => {
+        const issues = selfCheckIssuesForAudit(result);
+        deps.logger.info(
+          {
+            correlationId: event.correlation_id,
+            storyId: story.id,
+            consistent: result.consistent,
+            factConsistencyScore: result.factConsistencyScore,
+            issues,
+          },
+          "self-check completed",
+        );
+        return issues;
+      };
 
       let generated = await generateStoryVersion(writerLlm, {
         facts,
@@ -115,17 +141,18 @@ export async function handleStoryFactsVerified(
         knowledge,
       });
       let check = await selfCheckContent(selfCheckLlm, { facts, ...generated });
+      let checkIssues = auditSelfCheck(check);
       let factRepairAttempted = false;
 
       if (
-        !check.consistent &&
+        !selfCheckPassed(check) &&
         !check.isFallback &&
         !generated.isFallback &&
         !(writerLlm instanceof NoLlmClient)
       ) {
         factRepairAttempted = true;
         deps.logger.warn(
-          { correlationId: event.correlation_id, storyId: story.id, issues: check.issues },
+          { correlationId: event.correlation_id, storyId: story.id, issues: checkIssues },
           "self-check flagged the draft as inconsistent; attempting one targeted fact repair",
         );
         generated = await regenerateWithFactRepair(writerLlm, {
@@ -133,13 +160,19 @@ export async function handleStoryFactsVerified(
           previousVersion,
           knowledge,
           previousAttempt: generated,
-          selfCheckIssues: check.issues,
+          selfCheckIssues: checkIssues,
         });
         check = await selfCheckContent(selfCheckLlm, { facts, ...generated });
+        checkIssues = auditSelfCheck(check);
       }
-      if (!check.consistent) {
+      if (!selfCheckPassed(check)) {
         deps.logger.warn(
-          { correlationId: event.correlation_id, storyId: story.id, issues: check.issues },
+          {
+            correlationId: event.correlation_id,
+            storyId: story.id,
+            factConsistencyScore: check.factConsistencyScore,
+            issues: checkIssues,
+          },
           "self-check remains inconsistent; persisting for fail-closed review",
         );
       }
@@ -179,6 +212,7 @@ export async function handleStoryFactsVerified(
           issues: quality.issues,
         });
         check = await selfCheckContent(selfCheckLlm, { facts, ...generated });
+        checkIssues = auditSelfCheck(check);
         quality = assessContentQuality({
           titleHu: generated.titleHu,
           leadHu: generated.leadHu,
