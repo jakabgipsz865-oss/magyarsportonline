@@ -1,4 +1,4 @@
-name: Express production proof (temporary)
+name: Express auth probe and production proof (temporary)
 
 on:
   workflow_dispatch:
@@ -11,21 +11,51 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Reprocess exactly one Express Story
+      - name: Probe auth, then reprocess exactly one Express Story
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           BASE: https://magyarsportonline-web.vercel.app
         run: |
           set -euo pipefail
+          mkdir -p evidence
           test -n "$CRON_SECRET"
-          code=$(curl -sS --max-time 290 -o express-proof.json -w '%{http_code}' \
+
+          set +e
+          auth_status=$(curl -sS --max-time 60 -o evidence/auth-response.json -w '%{http_code}' \
+            -X POST "$BASE/api/internal/reprocess-story" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{}')
+          auth_exit=$?
+          set -e
+          printf '{"curlExit":%s,"httpStatus":"%s"}\n' "$auth_exit" "$auth_status" > evidence/auth-meta.json
+          echo "AUTH CURL EXIT: $auth_exit"
+          echo "AUTH HTTP STATUS: $auth_status"
+          echo "AUTH RESPONSE BODY:"
+          cat evidence/auth-response.json
+          test "$auth_exit" = "0"
+          test "$auth_status" = "400"
+          jq -e '.error == "missing storyId"' evidence/auth-response.json >/dev/null
+
+          set +e
+          express_status=$(curl -sS --max-time 290 -o evidence/express-response.json -w '%{http_code}' \
             -X POST "$BASE/api/internal/reprocess-story" \
             -H "Authorization: Bearer $CRON_SECRET" \
             -H "Content-Type: application/json" \
             -d '{"storyId":"2de216a1-40cd-4a41-80cb-008bf3861950"}')
-          test "$code" = "200"
-          jq . express-proof.json
+          express_exit=$?
+          set -e
+          printf '{"curlExit":%s,"httpStatus":"%s"}\n' "$express_exit" "$express_status" > evidence/express-meta.json
+          echo "EXPRESS CURL EXIT: $express_exit"
+          echo "EXPRESS HTTP STATUS: $express_status"
+          echo "EXPRESS RESPONSE BODY:"
+          cat evidence/express-response.json
+          test "$express_exit" = "0"
+          test "$express_status" = "200"
+          jq -e '.reprocessed == true' evidence/express-response.json >/dev/null
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: express-production-proof
-          path: express-proof.json
+          name: express-auth-and-production-proof
+          path: evidence/
+          if-no-files-found: warn
