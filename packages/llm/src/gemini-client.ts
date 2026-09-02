@@ -10,7 +10,7 @@ import type {
 const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 
 /** Free-tier Writer model; production wraps this client in fail-closed metering. */
-export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
 
 export interface GeminiLlmClientOptions {
   apiKey: string;

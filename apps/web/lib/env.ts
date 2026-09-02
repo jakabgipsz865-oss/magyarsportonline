@@ -49,7 +49,7 @@ export const env = createEnv({
     CLOUDFLARE_AI_MODEL: z.string().min(1).default("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
 
     GEMINI_API_KEY: z.string().min(1).optional(),
-    GEMINI_MODEL: z.string().min(1).default("gemini-2.5-flash"),
+    GEMINI_MODEL: z.string().min(1).default("gemini-3.5-flash-lite"),
     GEMINI_FREE_ONLY: z.literal("true").default("true"),
     GEMINI_DAILY_REQUEST_CAP: z.coerce.number().int().positive().optional(),
 
