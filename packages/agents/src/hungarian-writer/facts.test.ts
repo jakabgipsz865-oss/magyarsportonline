@@ -33,6 +33,7 @@ describe("toWriterFact", () => {
       }),
     );
     expect(result).toEqual({
+      id: "fact-1",
       factType: "score",
       claimEn: "Liverpool won 3-1",
       evidenceOriginal: "Liverpool won 3-1 at Anfield",
@@ -49,6 +50,7 @@ describe("toWriterFact", () => {
   it("defaults to null/empty for a malformed payload instead of throwing", () => {
     const result = toWriterFact(fact({ unexpected: true }));
     expect(result).toEqual({
+      id: "fact-1",
       factType: "score",
       claimEn: "",
       evidenceOriginal: "",
