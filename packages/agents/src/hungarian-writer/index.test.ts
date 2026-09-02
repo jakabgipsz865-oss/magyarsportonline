@@ -279,6 +279,34 @@ describe("handleStoryFactsVerified", () => {
     });
   });
 
+  it("repairs once when a nominally consistent self-check is below 0.95 and audits empty issues", async () => {
+    const deps = buildDeps();
+    const infoSpy = vi.spyOn(deps.logger, "info");
+    queueGeneration(deps.llm, { title_hu: "Első cím" });
+    queueSelfCheck(deps.llm, true, 0.8, false, []);
+    queueGeneration(deps.llm, { title_hu: "Javított cím" });
+    queueSelfCheck(deps.llm, true, 0.94, false, []);
+
+    await handleStoryFactsVerified(deps, triggerEvent());
+
+    expect(deps.llm.jsonRequests).toHaveLength(4);
+    expect(deps.llm.jsonRequests[2]?.messages[0]?.content).toContain(
+      "fact_consistency_score_below_threshold",
+    );
+    expect(deps.createNextVersionCalls[0]).toMatchObject({
+      titleHu: "Javított cím",
+      factConsistencyScore: 0.94,
+    });
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        consistent: true,
+        factConsistencyScore: 0.8,
+        issues: ["fact_consistency_score_below_threshold"],
+      }),
+      "self-check completed",
+    );
+  });
+
   it("fails closed after the single fact repair also fails self-check", async () => {
     const deps = buildDeps();
     queueGeneration(deps.llm, { title_hu: "Rossz cím" });
