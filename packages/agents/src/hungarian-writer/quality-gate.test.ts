@@ -22,23 +22,23 @@ describe("assessContentQuality", () => {
     expect(result).toEqual({ passed: true, issues: [] });
   });
 
-  it("enforces production article length when rich extraction produced at least six facts", () => {
-    const result = assessContentQuality({
-      titleHu: "Anglia nyerte a harmadik helyet a világbajnokságon",
-      leadHu: "Anglia 6-4-re győzött Franciaország ellen.",
-      bodyHu: "Az angol válogatott megnyerte a bronzmérkőzést.",
-      facts: Array.from({ length: 6 }, (_, index) => ({
-        ...FACTS[0]!,
-        detailHu: `${FACTS[0]!.detailHu} (${index + 1})`,
-      })),
-    });
+  it("accepts concise grounded content with six to ten facts", () => {
+    for (const factCount of [6, 10]) {
+      const result = assessContentQuality({
+        titleHu: "Anglia megnyerte a világbajnoki bronzmérkőzést",
+        leadHu:
+          "Az angol válogatott 6-4-re legyőzte Franciaországot a harmadik helyért rendezett találkozón.",
+        bodyHu:
+          "Anglia 6-4-es eredménnyel zárta a Franciaország elleni bronzmérkőzést. A válogatott ezzel megszerezte a világbajnokság harmadik helyét.",
+        facts: Array.from({ length: factCount }, (_, index) => ({
+          ...FACTS[0]!,
+          detailHu: `${FACTS[0]!.detailHu} (${index + 1})`,
+        })),
+      });
 
-    expect(result.issues).toEqual(
-      expect.arrayContaining([
-        { field: "lead", kind: "too_short" },
-        { field: "body", kind: "too_short" },
-      ]),
-    );
+      expect(result).toEqual({ passed: true, issues: [] });
+      expect(result.issues).not.toContainEqual({ field: "body", kind: "too_short" });
+    }
   });
 
   it("flags an empty field", () => {
