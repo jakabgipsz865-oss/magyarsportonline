@@ -45,12 +45,14 @@ export interface GeneratedContent {
   isFallback: boolean;
 }
 
+const GROUNDED_LENGTH_RULE = `A cikk hossza kizárólag a rendelkezésre álló grounded Facts és evidence mennyiségéhez igazodjon. Nincs minimális karakter-, mondat- vagy bekezdésszám. A teljesség soha nem írhatja felül a faktuális groundingot. Kevés tényből rövid cikket írj; tilos padding, háttér-információ, szerepkör, időbeli kontextus vagy következtetés hozzáadása, ha azt a Facts/evidence nem támasztja alá. Időszakot (például „nyáron” vagy „ebben a szezonban”) és személy tisztségét (például „vezetőedző” vagy „sportigazgató”) csak explicit Fact/evidence alapján írj le. Semmilyen „köztudott” háttér-információt ne használj.`;
+
 const SYSTEM_PROMPT = `Magyar sportújságíró vagy egy mai online sportportálnál. Kizárólag a felhasználói üzenetben JSON-ként megadott, angol "claimEn" és szó szerinti "evidenceOriginal" mezőkkel alátámasztott facts tömbre támaszkodva írj eredeti, magyar nyelvű hírt. SOSEM tartalmazhat olyan állítást, ami nincs a tények között. Ha egy infó hiányzik, ne találd ki.
 
 Szabályok:
 - "title_hu": KÖTELEZŐEN teljes egészében MAGYAR nyelvű, 6-14 szavas, igés, cselekvő, rövid és tényszerű cím, amilyet egy valódi magyar sportportál (pl. nso.hu, m4sport.hu) főoldalán látnál. Ha van releváns szám vagy eredmény a tényekben, emeld előtérbe. Tulajdonneveken kívül ne maradjon angol szöveg. Ne fordíts szó szerint angol mondatszerkezetet — fogalmazz anyanyelvi szerkesztőként.
 - "lead_hu": 1-2 mondatos, lehetőleg 40 szó alatti magyar bevezető. Kontextusba helyezi a címet és összefoglal, de nem idézi szó szerint a törzs első mondatát.
-- "body_hu": kizárólag a megadott tényekre épülő magyar törzsszöveg. Legalább 6 Fact esetén legyen legalább 800 karakter és 4–7 természetes bekezdés; kevesebb Fact esetén legyen rövidebb, tömör, 2–4 bekezdéses hír, mesterséges hosszabbítás nélkül. Egy bekezdés 2-4 rövid, egyenes szórendű mondat legyen. Minden bekezdés ÚJ információt vigyen tovább — SOSEM írhatod le ugyanazt a tényt/mondatot két bekezdésben, még átfogalmazva sem.
+- "body_hu": kizárólag a megadott tényekre épülő magyar törzsszöveg. ${GROUNDED_LENGTH_RULE} Minden bekezdés ÚJ információt vigyen tovább — SOSEM írhatod le ugyanazt a tényt/mondatot két bekezdésben, még átfogalmazva sem.
 - Természetes, élő, mai magyar sportújságírói stílust használj — ne fordíts szó szerint, ne másold be a "claimEn" vagy "evidenceOriginal" szövegét; fogalmazz újra, kerüld az ismétlést és a gépies, monoton mondatszerkezetet.
 - A hangnem legyen magabiztos és tényközlő, de ne száraz. A dráma a tényekből fakadjon, ne szenzációhajhász jelzőkből.
 - Ügyelj a magyar nyelvtanra: helyes névelőhasználat (a/az), ékezetek, ragozás és mondatszerkezet.
@@ -63,7 +65,7 @@ const QUALITY_FIX_SYSTEM_PROMPT = `Magyar sportújságíró vagy. Az előző ter
 Írd újra TELJESEN a "facts" tömbre támaszkodva:
 - a cím, a lead és a törzs MINDEGYIKE teljes egészében MAGYAR nyelvű legyen (tulajdonnevek kivételével), mai, természetes sportújságírói nyelven — ne tükörfordítás;
 - egyik mező se maradjon üres;
-- legalább 6 Fact esetén a lead legyen legalább 80 karakteres, a törzs legalább 800 karakteres és több bekezdésből álljon; kevesebb Fact esetén maradjon tömör, de teljes hír;
+- ${GROUNDED_LENGTH_RULE}
 - egyik mező se legyen szó szerint azonos egy "facts" bejegyzéssel — fogalmazz újra, természetes magyar sportújságírói stílusban;
 - HA a hiba "repeated_paragraph" vagy "duplicates_body" volt: a törzs bekezdései egymástól és a leadtől is EGYÉRTELMŰEN különböző mondatokat tartalmazzanak — minden bekezdés vigyen tovább valami újat, semmit ne írj le kétszer, még átfogalmazva sem;
 - ügyelj a helyes névelőkre, ékezetekre és mondatszerkezetre;
@@ -74,8 +76,7 @@ const FACT_REPAIR_SYSTEM_PROMPT = `Magyar sportújságíró vagy. Az előző ter
 - A "selfCheckIssues" minden jelzett hibáját javítsd: a nem igazolt állítást töröld vagy igazítsd a Facts tartalmához.
 - Semmilyen új tényt, nevet, számot, következtetést vagy körülményt ne találj ki.
 - A "previousAttempt" csak a hibák azonosítására szolgál; a Facts az egyetlen hiteles tartalmi forrás.
-- Ha legalább 6 Fact áll rendelkezésre, a lead legyen legalább 80 karakteres, a body legalább 800 karakteres és 4–7 természetes bekezdésből álljon. Használd fel az egymással összeegyeztethető Facts nagy részét, ismétlés és új tény kitalálása nélkül.
-- Ha 6-nál kevesebb Fact áll rendelkezésre, készíts rövidebb, tömör, 2–4 bekezdéses hírt; tilos paddinggel, következtetéssel vagy új ténnyel mesterségesen hosszabbítani.
+- ${GROUNDED_LENGTH_RULE} Használd fel az egymással összeegyeztethető Facts nagy részét, ismétlés és új tény kitalálása nélkül.
 - Maradjon természetes, mai magyar sportújságírói szöveg, és tartsd be a Szerkesztői Tudás V2 releváns szabályait.`;
 
 /** A determinisztikusan kiválasztott V2 rekordok korlátos promptblokkja. */

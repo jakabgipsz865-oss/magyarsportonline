@@ -282,15 +282,13 @@ export function removeGeneratedRepetition(input: { leadHu: string; bodyHu: strin
  * a full language-detection dependency.
  */
 export function assessContentQuality(input: QualityAssessmentInput): QualityAssessment {
-  // Full articles are required to yield at least six facts upstream, so their
-  // writer output must meet the production article-length floor. The second
-  // branch still blocks unmistakable three-field placeholders while allowing
-  // deliberately compact unit fixtures and genuinely short source briefs.
+  // Grounded source material determines article length. Keep only the
+  // unmistakable three-field placeholder guard; fact count must never force
+  // padding or unsupported context into otherwise complete copy.
   const enforceMinimumLength =
-    input.facts.length >= 6 ||
-    (input.titleHu.trim().length < 10 &&
-      input.leadHu.trim().length < 40 &&
-      input.bodyHu.trim().length < 100);
+    input.titleHu.trim().length < 10 &&
+    input.leadHu.trim().length < 40 &&
+    input.bodyHu.trim().length < 100;
   const issues: QualityIssue[] = [
     ...assessField("title", input.titleHu, input.facts, enforceMinimumLength),
     ...assessField("lead", input.leadHu, input.facts, enforceMinimumLength),

@@ -4,7 +4,11 @@ import {
 } from "@magyarsportonline/db";
 import { FakeLlmClient, MODEL_TIERS } from "@magyarsportonline/llm";
 import { describe, expect, it } from "vitest";
-import { generateStoryVersion, regenerateWithFactRepair } from "./generation";
+import {
+  generateStoryVersion,
+  regenerateWithFactRepair,
+  regenerateWithQualityFix,
+} from "./generation";
 
 describe("generateStoryVersion", () => {
   it("uses the writing model and returns the parsed content", async () => {
@@ -134,8 +138,56 @@ describe("generateStoryVersion", () => {
       "A 4-1-es eredmény nincs a Facts között",
     );
     expect(llm.jsonRequests[0]?.system).toContain("Facts az egyetlen hiteles tartalmi forrás");
-    expect(llm.jsonRequests[0]?.system).toContain("body legalább 800 karakteres");
-    expect(llm.jsonRequests[0]?.system).toContain("4–7 természetes bekezdés");
+    expect(llm.jsonRequests[0]?.system).toContain(
+      "Nincs minimális karakter-, mondat- vagy bekezdésszám",
+    );
+    expect(llm.jsonRequests[0]?.system).not.toContain("800 karakter");
+    expect(llm.jsonRequests[0]?.system).not.toContain("4–7");
+  });
+
+  it("uses the same no-padding contract for generation, fact repair and quality fix", async () => {
+    const llm = new FakeLlmClient();
+    const response = {
+      data: {
+        title_hu: "Rövid cím",
+        lead_hu: "Rövid lead",
+        body_hu: "Rövid törzs",
+        change_summary_hu: null,
+      },
+      inputTokens: 1,
+      outputTokens: 1,
+    };
+    llm.queueJson(response);
+    llm.queueJson(response);
+    llm.queueJson(response);
+    const facts = Array.from({ length: 10 }, () => ({
+      factType: "transfer_status",
+      detailHu: "A klub tárgyal a játékossal.",
+      quoteOriginal: null,
+      quoteSpeaker: null,
+    }));
+
+    await generateStoryVersion(llm, { facts, previousVersion: null });
+    await regenerateWithFactRepair(llm, {
+      facts,
+      previousVersion: null,
+      previousAttempt: { titleHu: "Cím", leadHu: "Lead", bodyHu: "Törzs" },
+      selfCheckIssues: ["unsupported context"],
+    });
+    await regenerateWithQualityFix(llm, {
+      facts,
+      previousVersion: null,
+      previousAttempt: { titleHu: "Cím", leadHu: "Lead", bodyHu: "Törzs" },
+      issues: [{ field: "body", kind: "repeated_sentence" }],
+    });
+
+    for (const request of llm.jsonRequests) {
+      expect(request.system).toContain("Nincs minimális karakter-, mondat- vagy bekezdésszám");
+      expect(request.system).toContain("csak explicit Fact/evidence alapján");
+      expect(request.system).toContain("Semmilyen „köztudott” háttér-információt ne használj");
+      expect(request.system).not.toContain("800 karakter");
+      expect(request.system).not.toContain("4–7");
+    }
   });
 });
 
