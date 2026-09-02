@@ -120,7 +120,7 @@ export async function handleStoryFactsVerified(
         contextText: knowledgeContext,
         limit: 20,
       });
-      const auditSelfCheck = (result: SelfCheckResult): string[] => {
+      const auditSelfCheck = async (result: SelfCheckResult): Promise<string[]> => {
         const issues = selfCheckIssuesForAudit(result);
         deps.logger.info(
           {
@@ -132,6 +132,18 @@ export async function handleStoryFactsVerified(
           },
           "self-check completed",
         );
+        await deps.agentRunRepository.record({
+          agentName: "hungarian-writer-self-check",
+          storyId: story.id,
+          correlationId: event.correlation_id,
+          triggerEvent: "writer/self-check.completed",
+          status: "success",
+          errorMessage: JSON.stringify({
+            consistent: result.consistent,
+            factConsistencyScore: result.factConsistencyScore,
+            sentenceVerdicts: result.sentenceVerdicts,
+          }),
+        });
         return issues;
       };
 
@@ -141,7 +153,7 @@ export async function handleStoryFactsVerified(
         knowledge,
       });
       let check = await selfCheckContent(selfCheckLlm, { facts, ...generated });
-      let checkIssues = auditSelfCheck(check);
+      let checkIssues = await auditSelfCheck(check);
       let factRepairAttempted = false;
 
       if (
@@ -163,7 +175,7 @@ export async function handleStoryFactsVerified(
           selfCheckIssues: checkIssues,
         });
         check = await selfCheckContent(selfCheckLlm, { facts, ...generated });
-        checkIssues = auditSelfCheck(check);
+        checkIssues = await auditSelfCheck(check);
       }
       if (!selfCheckPassed(check)) {
         deps.logger.warn(
@@ -212,7 +224,7 @@ export async function handleStoryFactsVerified(
           issues: quality.issues,
         });
         check = await selfCheckContent(selfCheckLlm, { facts, ...generated });
-        checkIssues = auditSelfCheck(check);
+        checkIssues = await auditSelfCheck(check);
         quality = assessContentQuality({
           titleHu: generated.titleHu,
           leadHu: generated.leadHu,

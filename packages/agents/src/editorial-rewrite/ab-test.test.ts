@@ -2,6 +2,15 @@ import { FakeLlmClient } from "@magyarsportonline/llm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runAbComparison } from "./ab-test";
 
+function selfCheckVerdicts(supported: boolean) {
+  return Array.from({ length: 3 }, (_, index) => ({
+    sentence_id: `S${index + 1}`,
+    supported,
+    supporting_fact_ids: supported ? ["F1"] : [],
+    issue: supported ? null : "hallucinated fact",
+  }));
+}
+
 function baseInput() {
   return {
     storyId: "story-1",
@@ -30,7 +39,7 @@ describe("runAbComparison", () => {
       outputTokens: 5,
     });
     llm.queueJson({
-      data: { consistent: true, fact_consistency_score: 0.95, issues: [] },
+      data: { verdicts: selfCheckVerdicts(true) },
       inputTokens: 8,
       outputTokens: 3,
     });
@@ -91,7 +100,7 @@ describe("runAbComparison", () => {
       outputTokens: 1,
     });
     llm.queueJson({
-      data: { consistent: false, fact_consistency_score: 0.1, issues: ["hallucinated fact"] },
+      data: { verdicts: selfCheckVerdicts(false) },
       inputTokens: 1,
       outputTokens: 1,
     });
@@ -100,7 +109,11 @@ describe("runAbComparison", () => {
 
     expect(result.pipelineB.rewriteAccepted).toBe(false);
     expect(result.pipelineB.rejectionKind).toBe("fact_check_failed");
-    expect(result.pipelineB.rejectionReason).toEqual(["hallucinated fact"]);
+    expect(result.pipelineB.rejectionReason).toEqual([
+      "S1: hallucinated fact [supporting_fact_ids: ]",
+      "S2: hallucinated fact [supporting_fact_ids: ]",
+      "S3: hallucinated fact [supporting_fact_ids: ]",
+    ]);
     expect(result.pipelineB.titleHu).toBe(result.pipelineA.titleHu);
     expect(result.judge).toBeNull();
     expect(result.perCallUsage.judge).toBeNull(); // no judge call made
@@ -120,7 +133,7 @@ describe("runAbComparison", () => {
       fallbackReason: "quota_exceeded",
     });
     llm.queueJson({
-      data: { consistent: true, fact_consistency_score: 1, issues: [] },
+      data: { verdicts: selfCheckVerdicts(true) },
       inputTokens: 0,
       outputTokens: 0,
     });

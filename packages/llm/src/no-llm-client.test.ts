@@ -23,11 +23,9 @@ const GENERATION_SCHEMA = {
 const SELF_CHECK_SCHEMA = {
   type: "object",
   properties: {
-    consistent: { type: "boolean" },
-    fact_consistency_score: { type: "number" },
-    issues: { type: "array" },
+    verdicts: { type: "array" },
   },
-  required: ["consistent", "fact_consistency_score", "issues"],
+  required: ["verdicts"],
   additionalProperties: false,
 };
 
@@ -153,17 +151,26 @@ describe("NoLlmClient", () => {
     expect(body).toContain("Second body");
   });
 
-  it("always reports the passthrough content as fact-consistent", async () => {
+  it("returns fail-closed sentence verdicts for passthrough content", async () => {
     const client = new NoLlmClient();
     const result = await client.completeJson({
       model: "m",
       system: "s",
       maxTokens: 10,
       jsonSchema: SELF_CHECK_SCHEMA,
-      messages: [{ role: "user", content: "{}" }],
+      messages: [{ role: "user", content: JSON.stringify({ sentences: [{ id: "S1" }] }) }],
     });
 
-    expect(result.data).toEqual({ consistent: true, fact_consistency_score: 1, issues: [] });
+    expect(result.data).toEqual({
+      verdicts: [
+        {
+          sentence_id: "S1",
+          supported: false,
+          supporting_fact_ids: [],
+          issue: "no_llm_self_check_fallback",
+        },
+      ],
+    });
   });
 
   it("echoes the title/lead/body back unchanged for the editorial rewrite call site", async () => {
