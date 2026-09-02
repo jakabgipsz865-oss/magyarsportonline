@@ -1,4 +1,4 @@
-name: Recover migration proof Stories
+name: Express production proof (temporary)
 
 on:
   workflow_dispatch:
@@ -11,18 +11,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Recover three allowlisted proof Stories
+      - name: Reprocess exactly one Express Story
         env:
-          RECOVERY_TOKEN: ${{ secrets.BBC_REPAIR_TOKEN }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
           BASE: https://magyarsportonline-web.vercel.app
         run: |
-          test -n "$RECOVERY_TOKEN"
-          curl -fsS --max-time 290 -X POST \
-            "$BASE/api/internal/recover-migration-proof-stories" \
-            -H "Authorization: Bearer $RECOVERY_TOKEN" \
-            -o recovery.json
-          cat recovery.json
+          set -euo pipefail
+          test -n "$CRON_SECRET"
+          code=$(curl -sS --max-time 290 -o express-proof.json -w '%{http_code}' \
+            -X POST "$BASE/api/internal/reprocess-story" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"storyId":"2de216a1-40cd-4a41-80cb-008bf3861950"}')
+          test "$code" = "200"
+          jq . express-proof.json
       - uses: actions/upload-artifact@v4
         with:
-          name: migration-proof-recovery-evidence
-          path: recovery.json
+          name: express-production-proof
+          path: express-proof.json
