@@ -5,18 +5,34 @@ import type { WriterFact } from "./facts";
 const SELF_CHECK_JSON_SCHEMA = {
   type: "object",
   properties: {
-    consistent: { type: "boolean" },
-    fact_consistency_score: { type: "number" },
-    issues: { type: "array", items: { type: "string" } },
+    verdicts: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          sentence_id: { type: "string" },
+          supported: { type: "boolean" },
+          supporting_fact_ids: { type: "array", items: { type: "string" } },
+          issue: { type: ["string", "null"] },
+        },
+        required: ["sentence_id", "supported", "supporting_fact_ids", "issue"],
+        additionalProperties: false,
+      },
+    },
   },
-  required: ["consistent", "fact_consistency_score", "issues"],
+  required: ["verdicts"],
   additionalProperties: false,
 } as const;
 
 const selfCheckResponseSchema = z.object({
-  consistent: z.boolean(),
-  fact_consistency_score: z.number().min(0).max(1),
-  issues: z.array(z.string()),
+  verdicts: z.array(
+    z.object({
+      sentence_id: z.string(),
+      supported: z.boolean(),
+      supporting_fact_ids: z.array(z.string()),
+      issue: z.string().nullable(),
+    }),
+  ),
 });
 
 export interface SelfCheckInput {
@@ -30,23 +46,44 @@ export interface SelfCheckResult {
   consistent: boolean;
   factConsistencyScore: number;
   issues: string[];
+  sentenceVerdicts: SelfCheckSentenceVerdict[];
   /** true, ha ez a válasz egy LLM-hiba miatti fallback-válaszból származik — lásd generation.ts GeneratedContent.isFallback. */
   isFallback: boolean;
 }
 
-const SYSTEM_PROMPT = `Tényellenőr vagy. A felhasználói üzenet egy JSON "facts" tömböt és egy legenerált magyar nyelvű "title_hu"/"lead_hu"/"body_hu" hírszöveget tartalmaz. Ellenőrizd MONDATRÓL MONDATRA, hogy a szöveg minden állítása alátámasztható-e a "facts" tömbben szereplő tényekkel.
+export interface SelfCheckSentenceVerdict {
+  sentenceId: string;
+  sentence: string;
+  supported: boolean;
+  supportingFactIds: string[];
+  issue: string | null;
+}
+
+export function segmentArticleSentences(input: Omit<SelfCheckInput, "facts">) {
+  const parts = [input.titleHu, input.leadHu, input.bodyHu]
+    .flatMap((text) => text.split(/(?<=[.!?])\s+|\n+/u))
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  return parts.map((sentence, index) => ({ id: `S${index + 1}`, sentence }));
+}
+
+const SYSTEM_PROMPT = `Tényellenőr vagy. A felhasználói üzenet stabil azonosítójú "facts" és "sentences" tömböt tartalmaz. Minden mondatra pontosan egy verdictet adj, és kizárólag létező Fact ID-kre hivatkozz.
 
 Minden Fact angol "claimEn" állítást és a forrásból szó szerint megőrzött "evidenceOriginal" bizonyítékot tartalmaz. Az ellenőrzést mindkettőhöz végezd el; a magyar szöveget ne tekintsd igazoltnak pusztán attól, hogy egy claim megfogalmazása hasonló.
 
-- "consistent": false, ha a szövegben van OLYAN állítás, ami nincs a tények között (hallucináció) vagy ellentmond egyténynek.
-- "fact_consistency_score": 0.0-1.0 közötti szám, 1.0 = tökéletes egyezés.
-- "issues": rövid, magyar nyelvű lista a talált problémákról (üres tömb, ha nincs probléma).`;
+- "sentence_id": a kapott mondat változatlan ID-ja.
+- "supported": csak akkor true, ha a mondat minden tényszerű állítását közvetlenül alátámasztja legalább egy megadott Fact.
+- "supporting_fact_ids": az alátámasztó Fact ID-k; true verdictnél nem lehet üres.
+- "issue": unsupported mondatnál konkrét, rövid magyar indok; supported mondatnál null.
+Ne adj összesített score-t vagy consistent mezőt; ezeket az alkalmazás számolja.`;
 
 /** Hungarian Writer Agent's self-check step (docs/architecture/02-agents.md §2.5): a second, cheaper LLM call re-verifies the generated text against the Fact set. */
 export async function selfCheckContent(
   llm: LlmClient,
   input: SelfCheckInput,
 ): Promise<SelfCheckResult> {
+  const sentences = segmentArticleSentences(input);
+  const facts = input.facts.map((fact, index) => ({ ...fact, id: fact.id ?? `F${index + 1}` }));
   const result = await llm.completeJson({
     model: MODEL_TIERS.selfCheck,
     system: SYSTEM_PROMPT,
@@ -54,10 +91,8 @@ export async function selfCheckContent(
       {
         role: "user",
         content: JSON.stringify({
-          facts: input.facts,
-          title_hu: input.titleHu,
-          lead_hu: input.leadHu,
-          body_hu: input.bodyHu,
+          facts,
+          sentences,
         }),
       },
     ],
@@ -68,10 +103,50 @@ export async function selfCheckContent(
   });
 
   const parsed = selfCheckResponseSchema.parse(result.data);
+  const factIds = new Set(facts.map((fact) => fact.id));
+  const verdictsById = new Map<string, typeof parsed.verdicts>();
+  for (const verdict of parsed.verdicts) {
+    verdictsById.set(verdict.sentence_id, [
+      ...(verdictsById.get(verdict.sentence_id) ?? []),
+      verdict,
+    ]);
+  }
+  const hasUnknownSentence = parsed.verdicts.some(
+    (verdict) => !sentences.some((sentence) => sentence.id === verdict.sentence_id),
+  );
+  const sentenceVerdicts = sentences.map<SelfCheckSentenceVerdict>((sentence, index) => {
+    const matches = verdictsById.get(sentence.id) ?? [];
+    const verdict = matches[0];
+    const valid =
+      matches.length === 1 &&
+      verdict !== undefined &&
+      verdict.supporting_fact_ids.every((id) => factIds.has(id)) &&
+      (verdict.supported
+        ? verdict.supporting_fact_ids.length > 0 && verdict.issue === null
+        : Boolean(verdict.issue));
+    const forceInvalid = hasUnknownSentence && index === 0;
+    return {
+      sentenceId: sentence.id,
+      sentence: sentence.sentence,
+      supported: valid && !forceInvalid ? verdict.supported : false,
+      supportingFactIds: valid && !forceInvalid ? verdict.supporting_fact_ids : [],
+      issue: valid && !forceInvalid ? verdict.issue : "missing_or_invalid_sentence_verdict",
+    };
+  });
+  const supportedCount = sentenceVerdicts.filter((verdict) => verdict.supported).length;
+  const factConsistencyScore =
+    sentenceVerdicts.length > 0 ? supportedCount / sentenceVerdicts.length : 0;
+  const issues = sentenceVerdicts
+    .filter((verdict) => !verdict.supported)
+    .map(
+      (verdict) =>
+        `${verdict.sentenceId}: ${verdict.issue} [supporting_fact_ids: ${verdict.supportingFactIds.join(",")}]`,
+    );
   return {
-    consistent: parsed.consistent,
-    factConsistencyScore: parsed.fact_consistency_score,
-    issues: parsed.issues,
+    consistent: sentenceVerdicts.length > 0 && supportedCount === sentenceVerdicts.length,
+    factConsistencyScore,
+    issues,
+    sentenceVerdicts,
     isFallback: result.isFallback ?? false,
   };
 }

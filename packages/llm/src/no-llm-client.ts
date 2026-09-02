@@ -111,8 +111,8 @@ export class NoLlmClient implements LlmClient {
     if (hasSchemaProperty(request.jsonSchema, "title_hu")) {
       return this.generationFallback(userContent);
     }
-    if (hasSchemaProperty(request.jsonSchema, "consistent")) {
-      return this.selfCheckFallback();
+    if (hasSchemaProperty(request.jsonSchema, "verdicts")) {
+      return this.selfCheckFallback(userContent);
     }
     if (hasSchemaProperty(request.jsonSchema, "rewritten_title_hu")) {
       return this.editorialRewriteFallback(userContent);
@@ -166,9 +166,17 @@ export class NoLlmClient implements LlmClient {
     };
   }
 
-  private selfCheckFallback(): JsonCompletionResult {
+  private selfCheckFallback(userContent: string): JsonCompletionResult {
+    const parsed = JSON.parse(userContent) as { sentences?: Array<{ id?: string }> };
     return {
-      data: { consistent: true, fact_consistency_score: 1, issues: [] },
+      data: {
+        verdicts: (parsed.sentences ?? []).map((sentence) => ({
+          sentence_id: sentence.id ?? "invalid",
+          supported: false,
+          supporting_fact_ids: [],
+          issue: "no_llm_self_check_fallback",
+        })),
+      },
       inputTokens: 0,
       outputTokens: 0,
     };

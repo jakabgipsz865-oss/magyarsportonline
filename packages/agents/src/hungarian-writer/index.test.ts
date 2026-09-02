@@ -212,8 +212,16 @@ function queueSelfCheck(
   isFallback?: boolean,
   issues: string[] = consistent ? [] : ["hiba"],
 ) {
+  const supportedCount = consistent ? 4 : Math.round(score * 4);
   llm.queueJson({
-    data: { consistent, fact_consistency_score: score, issues },
+    data: {
+      verdicts: Array.from({ length: 4 }, (_, index) => ({
+        sentence_id: `S${index + 1}`,
+        supported: index < supportedCount,
+        supporting_fact_ids: index < supportedCount ? ["fact-1"] : [],
+        issue: index < supportedCount ? null : (issues[0] ?? "hiba"),
+      })),
+    },
     inputTokens: 5,
     outputTokens: 5,
     isFallback,
@@ -232,7 +240,7 @@ describe("handleStoryFactsVerified", () => {
       expect.objectContaining({
         storyId: STORY.id,
         changeSummaryHu: null,
-        factConsistencyScore: 0.95,
+        factConsistencyScore: 1,
       }),
     ]);
     expect(deps.emitted).toEqual([
@@ -241,7 +249,7 @@ describe("handleStoryFactsVerified", () => {
         payload: {
           story_id: STORY.id,
           story_version_id: "new-version",
-          fact_consistency_score: 0.95,
+          fact_consistency_score: 1,
         },
       }),
     ]);
@@ -279,31 +287,36 @@ describe("handleStoryFactsVerified", () => {
     });
   });
 
-  it("repairs once when a nominally consistent self-check is below 0.95 and audits empty issues", async () => {
+  it("repairs once when a deterministic sentence verdict is unsupported and audits it", async () => {
     const deps = buildDeps();
     const infoSpy = vi.spyOn(deps.logger, "info");
     queueGeneration(deps.llm, { title_hu: "Első cím" });
-    queueSelfCheck(deps.llm, true, 0.8, false, []);
+    queueSelfCheck(deps.llm, false, 0.8, false, ["S4 unsupported"]);
     queueGeneration(deps.llm, { title_hu: "Javított cím" });
-    queueSelfCheck(deps.llm, true, 0.94, false, []);
+    queueSelfCheck(deps.llm, false, 0.8, false, ["S4 still unsupported"]);
 
     await handleStoryFactsVerified(deps, triggerEvent());
 
     expect(deps.llm.jsonRequests).toHaveLength(4);
-    expect(deps.llm.jsonRequests[2]?.messages[0]?.content).toContain(
-      "fact_consistency_score_below_threshold",
-    );
+    expect(deps.llm.jsonRequests[2]?.messages[0]?.content).toContain("S4 unsupported");
     expect(deps.createNextVersionCalls[0]).toMatchObject({
       titleHu: "Javított cím",
-      factConsistencyScore: 0.94,
+      factConsistencyScore: 0.75,
     });
     expect(infoSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        consistent: true,
-        factConsistencyScore: 0.8,
-        issues: ["fact_consistency_score_below_threshold"],
+        consistent: false,
+        factConsistencyScore: 0.75,
+        issues: [expect.stringContaining("S4: S4 unsupported")],
       }),
       "self-check completed",
+    );
+    expect(deps.agentRunRepository.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentName: "hungarian-writer-self-check",
+        status: "success",
+        errorMessage: expect.stringContaining('"sentenceId":"S4"'),
+      }),
     );
   });
 
@@ -319,7 +332,7 @@ describe("handleStoryFactsVerified", () => {
     expect(deps.llm.jsonRequests).toHaveLength(4);
     expect(deps.createNextVersionCalls[0]).toMatchObject({
       titleHu: "Még mindig hibás cím",
-      factConsistencyScore: 0.4,
+      factConsistencyScore: 0.5,
     });
   });
 
@@ -336,7 +349,7 @@ describe("handleStoryFactsVerified", () => {
     await handleStoryFactsVerified(deps, triggerEvent());
 
     expect(deps.llm.jsonRequests).toHaveLength(2);
-    expect(deps.createNextVersionCalls[0]).toMatchObject({ factConsistencyScore: 0.2 });
+    expect(deps.createNextVersionCalls[0]).toMatchObject({ factConsistencyScore: 0 });
   });
 
   it("labels the version as not-AI-generated when deps.llm is the NoLlmClient adapter", async () => {
