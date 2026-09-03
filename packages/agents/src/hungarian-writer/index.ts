@@ -13,14 +13,9 @@ import {
 } from "@magyarsportonline/llm";
 import type { Logger } from "@magyarsportonline/observability";
 import { toWriterFact } from "./facts";
-import {
-  generateStoryVersion,
-  regenerateWithFactRepair,
-  regenerateWithQualityFix,
-  type PreviousVersionContent,
-} from "./generation";
+import { generateStoryVersion, type PreviousVersionContent } from "./generation";
 import { assessContentQuality } from "./quality-gate";
-import { selfCheckContent, type SelfCheckResult } from "./self-check";
+import { validateGeneratedProvenance, type ProvenanceValidationResult } from "./self-check";
 import type { AgentRunRecorder } from "../shared/with-agent-run";
 import { withAgentRun } from "../shared/with-agent-run";
 
@@ -32,19 +27,6 @@ export * from "./self-check";
 export const AGENT_VERSION = "hungarian-writer@0.3.0";
 
 const FALLBACK_UPDATE_SUMMARY = "Frissítés az új információk alapján.";
-const FACT_CONSISTENCY_PASS_THRESHOLD = 0.95;
-const BELOW_THRESHOLD_ISSUE = "fact_consistency_score_below_threshold";
-
-function selfCheckIssuesForAudit(check: SelfCheckResult): string[] {
-  return check.factConsistencyScore < FACT_CONSISTENCY_PASS_THRESHOLD && check.issues.length === 0
-    ? [BELOW_THRESHOLD_ISSUE]
-    : check.issues;
-}
-
-function selfCheckPassed(check: SelfCheckResult): boolean {
-  return check.consistent && check.factConsistencyScore >= FACT_CONSISTENCY_PASS_THRESHOLD;
-}
-
 export interface Emitter {
   emit(event: unknown): Promise<void>;
 }
@@ -55,7 +37,6 @@ export interface HungarianWriterDeps {
   factRepository: Pick<FactRepository, "listByStoryId">;
   editorialKnowledgeRepository: Pick<EditorialKnowledgeRepository, "findRelevant">;
   writerLlm?: LlmClient;
-  selfCheckLlm?: LlmClient;
   /** Legacy test/local wiring only; production passes explicit role clients. */
   llm?: LlmClient;
   agentRunRepository: AgentRunRecorder;
@@ -67,11 +48,9 @@ type Trigger = Extract<SportsNewsEvent, { type: "story/facts.verified" }>;
 
 /**
  * Hungarian Writer Agent (docs/architecture/02-agents.md §2.5). Generates
- * from the Fact set only (never raw source text — see facts.ts), then
- * re-verifies its own output against the same Fact set (self-check.ts).
- * An inconsistent draft is persisted with its low score for auditability,
- * but is never blindly regenerated: the Publish Gate blocks it. This avoids
- * spending two more Cloudflare calls on a result that still requires review.
+ * from the Fact set only (never raw source text — see facts.ts). The same
+ * Gemini response carries sentence-level Fact provenance, which is checked
+ * deterministically before the fail-closed Publish Gate sees the draft.
  */
 export async function handleStoryFactsVerified(
   deps: HungarianWriterDeps,
@@ -87,9 +66,7 @@ export async function handleStoryFactsVerified(
     },
     async () => {
       const writerLlm = deps.writerLlm ?? deps.llm;
-      const selfCheckLlm = deps.selfCheckLlm ?? deps.llm;
-      if (!writerLlm || !selfCheckLlm)
-        throw new Error("Writer and self-check LLM clients are required");
+      if (!writerLlm) throw new Error("Writer LLM client is required");
       const story = await deps.storyRepository.getById(event.payload.story_id);
       if (!story) {
         throw new Error(`Story "${event.payload.story_id}" not found`);
@@ -120,23 +97,22 @@ export async function handleStoryFactsVerified(
         contextText: knowledgeContext,
         limit: 20,
       });
-      const auditSelfCheck = async (result: SelfCheckResult): Promise<string[]> => {
-        const issues = selfCheckIssuesForAudit(result);
+      const auditValidation = async (result: ProvenanceValidationResult): Promise<void> => {
         deps.logger.info(
           {
             correlationId: event.correlation_id,
             storyId: story.id,
             consistent: result.consistent,
             factConsistencyScore: result.factConsistencyScore,
-            issues,
+            issues: result.issues,
           },
-          "self-check completed",
+          "deterministic provenance validation completed",
         );
         await deps.agentRunRepository.record({
-          agentName: "hungarian-writer-self-check",
+          agentName: "hungarian-writer-provenance-validation",
           storyId: story.id,
           correlationId: event.correlation_id,
-          triggerEvent: "writer/self-check.completed",
+          triggerEvent: "writer/provenance-validation.completed",
           status: "success",
           errorMessage: JSON.stringify({
             consistent: result.consistent,
@@ -144,94 +120,40 @@ export async function handleStoryFactsVerified(
             sentenceVerdicts: result.sentenceVerdicts,
           }),
         });
-        return issues;
       };
 
-      let generated = await generateStoryVersion(writerLlm, {
+      const generated = await generateStoryVersion(writerLlm, {
         facts,
         previousVersion,
         knowledge,
       });
-      let check = await selfCheckContent(selfCheckLlm, { facts, ...generated });
-      let checkIssues = await auditSelfCheck(check);
-      let factRepairAttempted = false;
-
-      if (
-        !selfCheckPassed(check) &&
-        !check.isFallback &&
-        !generated.isFallback &&
-        !(writerLlm instanceof NoLlmClient)
-      ) {
-        factRepairAttempted = true;
-        deps.logger.warn(
-          { correlationId: event.correlation_id, storyId: story.id, issues: checkIssues },
-          "self-check flagged the draft as inconsistent; attempting one targeted fact repair",
-        );
-        generated = await regenerateWithFactRepair(writerLlm, {
-          facts,
-          previousVersion,
-          knowledge,
-          previousAttempt: generated,
-          selfCheckIssues: checkIssues,
-        });
-        check = await selfCheckContent(selfCheckLlm, { facts, ...generated });
-        checkIssues = await auditSelfCheck(check);
-      }
-      if (!selfCheckPassed(check)) {
+      const validation = validateGeneratedProvenance({
+        facts,
+        sentenceProvenance: generated.sentenceProvenance,
+      });
+      await auditValidation(validation);
+      if (!validation.consistent) {
         deps.logger.warn(
           {
             correlationId: event.correlation_id,
             storyId: story.id,
-            factConsistencyScore: check.factConsistencyScore,
-            issues: checkIssues,
+            factConsistencyScore: validation.factConsistencyScore,
+            issues: validation.issues,
           },
-          "self-check remains inconsistent; persisting for fail-closed review",
+          "provenance validation failed; persisting for fail-closed review",
         );
       }
 
       // Content Quality Gate (Content Quality & Reliability Hardening
       // sprint): catches empty/still-English/source-verbatim fields that a
-      // schema-valid, non-fallback response can still have (e.g. Fact
-      // Verification's own No-LLM fallback silently poisoning canonical Facts
-      // with English passthrough text — see no-llm-client.ts
-      // `extractionFallback`). Only worth retrying when the draft is real —
-      // a No-LLM passthrough has nothing to "fix".
-      let quality = assessContentQuality({
+      // schema-valid response can still have. This is deterministic and does
+      // not start a second Writer or repair call.
+      const quality = assessContentQuality({
         titleHu: generated.titleHu,
         leadHu: generated.leadHu,
         bodyHu: generated.bodyHu,
         facts,
       });
-      if (
-        !quality.passed &&
-        !factRepairAttempted &&
-        !generated.isFallback &&
-        !(writerLlm instanceof NoLlmClient)
-      ) {
-        deps.logger.warn(
-          { correlationId: event.correlation_id, storyId: story.id, issues: quality.issues },
-          "content quality gate failed, attempting one targeted fix-up call",
-        );
-        generated = await regenerateWithQualityFix(writerLlm, {
-          facts,
-          previousVersion,
-          knowledge,
-          previousAttempt: {
-            titleHu: generated.titleHu,
-            leadHu: generated.leadHu,
-            bodyHu: generated.bodyHu,
-          },
-          issues: quality.issues,
-        });
-        check = await selfCheckContent(selfCheckLlm, { facts, ...generated });
-        checkIssues = await auditSelfCheck(check);
-        quality = assessContentQuality({
-          titleHu: generated.titleHu,
-          leadHu: generated.leadHu,
-          bodyHu: generated.bodyHu,
-          facts,
-        });
-      }
 
       const changeSummaryHu = previousVersion
         ? (generated.changeSummaryHu ?? FALLBACK_UPDATE_SUMMARY)
@@ -246,11 +168,7 @@ export async function handleStoryFactsVerified(
       // even when ITS OWN fallback branch served this exact content — so we
       // also check the per-call `isFallback` flag (client.ts's
       // `LlmUsage.isFallback`, threaded through generation.ts) on the call
-      // that actually produced this version's title/lead/body. Deliberately
-      // NOT gated on the self-check step's own fallback status — self-check
-      // only validates the already-real generated content, it doesn't
-      // produce it, so its fallback status must never flip real AI content
-      // to "not AI-generated".
+      // that actually produced this version's title/lead/body.
       const isAiGenerated = !(writerLlm instanceof NoLlmClient) && !generated.isFallback;
 
       // A production kliens a tényleges Cloudflare modellt jelzi; a logikai
@@ -265,8 +183,8 @@ export async function handleStoryFactsVerified(
           : NO_LLM_MODEL_LABEL,
         isAiGenerated,
         promptVersion: AGENT_VERSION,
-        factConsistencyScore: check.factConsistencyScore,
-        selfCheckFallback: check.isFallback,
+        factConsistencyScore: validation.factConsistencyScore,
+        selfCheckFallback: false,
         qualityIssues: quality.issues,
       });
 
@@ -276,7 +194,7 @@ export async function handleStoryFactsVerified(
         payload: {
           story_id: story.id,
           story_version_id: version.id,
-          fact_consistency_score: check.factConsistencyScore,
+          fact_consistency_score: validation.factConsistencyScore,
         },
       });
 

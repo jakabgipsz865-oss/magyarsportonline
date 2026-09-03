@@ -10,16 +10,37 @@ import {
   regenerateWithQualityFix,
 } from "./generation";
 
+function generationData(input?: {
+  title?: string;
+  lead?: string;
+  body?: string;
+  bodyParagraphs?: string[][];
+  changeSummary?: string | null;
+}) {
+  let bodySentenceIndex = 0;
+  return {
+    title: { text: input?.title ?? "T", supporting_fact_ids: ["fact-1"] },
+    lead_sentences: [{ id: "L1", text: input?.lead ?? "L", supporting_fact_ids: ["fact-1"] }],
+    body_paragraphs: (input?.bodyParagraphs ?? [[input?.body ?? "B"]]).map((sentences) => ({
+      sentences: sentences.map((text) => ({
+        id: `B${++bodySentenceIndex}`,
+        text,
+        supporting_fact_ids: ["fact-1"],
+      })),
+    })),
+    change_summary_hu: input?.changeSummary ?? null,
+  };
+}
+
 describe("generateStoryVersion", () => {
   it("uses the writing model and returns the parsed content", async () => {
     const llm = new FakeLlmClient();
     llm.queueJson({
-      data: {
-        title_hu: "Liverpool nagy győzelmet aratott",
-        lead_hu: "A csapat magabiztosan nyert.",
-        body_hu: "Részletek a mérkőzésről.",
-        change_summary_hu: null,
-      },
+      data: generationData({
+        title: "Liverpool nagy győzelmet aratott",
+        lead: "A csapat magabiztosan nyert.",
+        body: "Részletek a mérkőzésről.",
+      }),
       inputTokens: 50,
       outputTokens: 40,
     });
@@ -34,6 +55,26 @@ describe("generateStoryVersion", () => {
       leadHu: "A csapat magabiztosan nyert.",
       bodyHu: "Részletek a mérkőzésről.",
       changeSummaryHu: null,
+      sentenceProvenance: [
+        {
+          sentenceId: "T1",
+          section: "title",
+          text: "Liverpool nagy győzelmet aratott",
+          supportingFactIds: ["fact-1"],
+        },
+        {
+          sentenceId: "L1",
+          section: "lead",
+          text: "A csapat magabiztosan nyert.",
+          supportingFactIds: ["fact-1"],
+        },
+        {
+          sentenceId: "B1",
+          section: "body",
+          text: "Részletek a mérkőzésről.",
+          supportingFactIds: ["fact-1"],
+        },
+      ],
       isFallback: false,
     });
     expect(llm.jsonRequests[0]?.model).toBe(MODEL_TIERS.writing);
@@ -41,12 +82,32 @@ describe("generateStoryVersion", () => {
     expect(llm.jsonRequests[0]?.thinkingLevel).toBe("minimal");
     expect(llm.jsonRequests[0]?.system).toContain("6-14 szavas");
     expect(llm.jsonRequests[0]?.system).toContain("ne szenzációhajhász");
+    expect(llm.jsonRequests[0]?.system).toContain("idézőjel nélküli parafrázisként");
+    expect(llm.jsonRequests[0]?.system).toContain(
+      "Magyar fordítást ne tegyél közvetlen idézőjelbe",
+    );
+  });
+
+  it("preserves structured body paragraph breaks exactly", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: generationData({
+        bodyParagraphs: [["Az első mondat."], ["A második mondat.", "A harmadik mondat."]],
+      }),
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+
+    const result = await generateStoryVersion(llm, { facts: [], previousVersion: null });
+
+    expect(result.bodyHu).toBe("Az első mondat.\n\nA második mondat. A harmadik mondat.");
+    expect(result.sentenceProvenance.filter((item) => item.section === "body")).toHaveLength(3);
   });
 
   it("propagates isFallback when the LLM client served this call from a fallback", async () => {
     const llm = new FakeLlmClient();
     llm.queueJson({
-      data: { title_hu: "T", lead_hu: "L", body_hu: "B", change_summary_hu: null },
+      data: generationData(),
       inputTokens: 0,
       outputTokens: 0,
       isFallback: true,
@@ -60,12 +121,7 @@ describe("generateStoryVersion", () => {
   it("includes the previous version in the request when updating", async () => {
     const llm = new FakeLlmClient();
     llm.queueJson({
-      data: {
-        title_hu: "T",
-        lead_hu: "L",
-        body_hu: "B",
-        change_summary_hu: "Frissült az eredmény.",
-      },
+      data: generationData({ changeSummary: "Frissült az eredmény." }),
       inputTokens: 1,
       outputTokens: 1,
     });
@@ -82,7 +138,7 @@ describe("generateStoryVersion", () => {
   it("adds only the supplied V2 knowledge to the system prompt", async () => {
     const llm = new FakeLlmClient();
     llm.queueJson({
-      data: { title_hu: "T", lead_hu: "L", body_hu: "B", change_summary_hu: null },
+      data: generationData(),
       inputTokens: 1,
       outputTokens: 1,
     });
@@ -103,7 +159,7 @@ describe("generateStoryVersion", () => {
   it("keeps an empty V2 knowledge store out of the generated prompt", async () => {
     const llm = new FakeLlmClient();
     llm.queueJson({
-      data: { title_hu: "T", lead_hu: "L", body_hu: "B", change_summary_hu: null },
+      data: generationData(),
       inputTokens: 1,
       outputTokens: 1,
     });
@@ -117,12 +173,7 @@ describe("generateStoryVersion", () => {
   it("passes the previous draft and self-check issues to the fact-repair prompt", async () => {
     const llm = new FakeLlmClient();
     llm.queueJson({
-      data: {
-        title_hu: "Javított",
-        lead_hu: "Javított lead",
-        body_hu: "Javított törzs",
-        change_summary_hu: null,
-      },
+      data: generationData({ title: "Javított", lead: "Javított lead", body: "Javított törzs" }),
       inputTokens: 1,
       outputTokens: 1,
     });
@@ -148,12 +199,7 @@ describe("generateStoryVersion", () => {
   it("uses the same no-padding contract for generation, fact repair and quality fix", async () => {
     const llm = new FakeLlmClient();
     const response = {
-      data: {
-        title_hu: "Rövid cím",
-        lead_hu: "Rövid lead",
-        body_hu: "Rövid törzs",
-        change_summary_hu: null,
-      },
+      data: generationData({ title: "Rövid cím", lead: "Rövid lead", body: "Rövid törzs" }),
       inputTokens: 1,
       outputTokens: 1,
     };
