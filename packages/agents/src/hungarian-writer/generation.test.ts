@@ -14,12 +14,20 @@ function generationData(input?: {
   title?: string;
   lead?: string;
   body?: string;
+  bodyParagraphs?: string[][];
   changeSummary?: string | null;
 }) {
+  let bodySentenceIndex = 0;
   return {
     title: { text: input?.title ?? "T", supporting_fact_ids: ["fact-1"] },
     lead_sentences: [{ id: "L1", text: input?.lead ?? "L", supporting_fact_ids: ["fact-1"] }],
-    body_sentences: [{ id: "B1", text: input?.body ?? "B", supporting_fact_ids: ["fact-1"] }],
+    body_paragraphs: (input?.bodyParagraphs ?? [[input?.body ?? "B"]]).map((sentences) => ({
+      sentences: sentences.map((text) => ({
+        id: `B${++bodySentenceIndex}`,
+        text,
+        supporting_fact_ids: ["fact-1"],
+      })),
+    })),
     change_summary_hu: input?.changeSummary ?? null,
   };
 }
@@ -74,6 +82,26 @@ describe("generateStoryVersion", () => {
     expect(llm.jsonRequests[0]?.thinkingLevel).toBe("minimal");
     expect(llm.jsonRequests[0]?.system).toContain("6-14 szavas");
     expect(llm.jsonRequests[0]?.system).toContain("ne szenzációhajhász");
+    expect(llm.jsonRequests[0]?.system).toContain("idézőjel nélküli parafrázisként");
+    expect(llm.jsonRequests[0]?.system).toContain(
+      "Magyar fordítást ne tegyél közvetlen idézőjelbe",
+    );
+  });
+
+  it("preserves structured body paragraph breaks exactly", async () => {
+    const llm = new FakeLlmClient();
+    llm.queueJson({
+      data: generationData({
+        bodyParagraphs: [["Az első mondat."], ["A második mondat.", "A harmadik mondat."]],
+      }),
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+
+    const result = await generateStoryVersion(llm, { facts: [], previousVersion: null });
+
+    expect(result.bodyHu).toBe("Az első mondat.\n\nA második mondat. A harmadik mondat.");
+    expect(result.sentenceProvenance.filter((item) => item.section === "body")).toHaveLength(3);
   });
 
   it("propagates isFallback when the LLM client served this call from a fallback", async () => {

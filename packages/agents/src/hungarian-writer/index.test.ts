@@ -125,11 +125,15 @@ function queueGeneration(
           supporting_fact_ids: ["fact-1"],
         },
       ],
-      body_sentences: [
+      body_paragraphs: [
         {
-          id: "B1",
-          text: input?.body ?? "A Liverpool három gólt szerezve győzte le az Arsenalt.",
-          supporting_fact_ids: ["fact-1"],
+          sentences: [
+            {
+              id: "B1",
+              text: input?.body ?? "A Liverpool három gólt szerezve győzte le az Arsenalt.",
+              supporting_fact_ids: ["fact-1"],
+            },
+          ],
         },
       ],
       change_summary_hu: null,

@@ -124,6 +124,30 @@ describe("validateGeneratedProvenance", () => {
     expect(result.sentenceVerdicts[4]?.issue).toContain("unsupported_explicit_name");
   });
 
+  it("allows a Hungarian paraphrase of an English quote without quotation marks", () => {
+    const sentences = provenance();
+    sentences[3] = {
+      ...sentences[3]!,
+      text: "Erik ten Hag szerint a csapat készen áll.",
+    };
+
+    const result = validateGeneratedProvenance({ facts: FACTS, sentenceProvenance: sentences });
+
+    expect(result.sentenceVerdicts[3]).toMatchObject({ supported: true, issue: null });
+  });
+
+  it("rejects a translated Hungarian direct quote", () => {
+    const sentences = provenance();
+    sentences[3] = {
+      ...sentences[3]!,
+      text: "Erik ten Hag kijelentette: „Készen állunk.”",
+    };
+
+    const result = validateGeneratedProvenance({ facts: FACTS, sentenceProvenance: sentences });
+
+    expect(result.sentenceVerdicts[3]?.issue).toContain("unsupported_direct_quote");
+  });
+
   it("rejects non-sequential sentence IDs deterministically", () => {
     const sentences = provenance();
     sentences[4] = { ...sentences[4]!, sentenceId: "B4" };
