@@ -3,6 +3,7 @@ import type { Fact } from "@magyarsportonline/db";
 /** The Fact shape the Writer/self-check LLM calls actually see — the agent contract's "never raw source text" boundary. */
 export interface WriterFact {
   id?: string;
+  isContradicted?: boolean;
   factType: string;
   claimEn?: string;
   evidenceOriginal?: string;
@@ -39,6 +40,7 @@ export function toWriterFact(fact: Fact): WriterFact {
 
   return {
     id: fact.id,
+    isContradicted: fact.isContradicted,
     factType: fact.factType,
     claimEn: value("claim_en") ?? "",
     evidenceOriginal: value("evidence_original") ?? "",

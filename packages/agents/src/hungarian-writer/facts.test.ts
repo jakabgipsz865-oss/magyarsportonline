@@ -34,6 +34,7 @@ describe("toWriterFact", () => {
     );
     expect(result).toEqual({
       id: "fact-1",
+      isContradicted: false,
       factType: "score",
       claimEn: "Liverpool won 3-1",
       evidenceOriginal: "Liverpool won 3-1 at Anfield",
@@ -51,6 +52,7 @@ describe("toWriterFact", () => {
     const result = toWriterFact(fact({ unexpected: true }));
     expect(result).toEqual({
       id: "fact-1",
+      isContradicted: false,
       factType: "score",
       claimEn: "",
       evidenceOriginal: "",
