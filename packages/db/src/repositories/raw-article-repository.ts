@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "../client";
-import { rawArticles } from "../schema/index";
+import { pipelineJobs, rawArticles } from "../schema/index";
 
 export type RawArticle = typeof rawArticles.$inferSelect;
 export type NewRawArticle = typeof rawArticles.$inferInsert;
@@ -11,6 +11,71 @@ export type NewRawArticle = typeof rawArticles.$inferInsert;
  */
 export class RawArticleRepository {
   constructor(private readonly db: Database) {}
+
+  /** Serialize deliveries for one article, including the single writer call. */
+  async withTabloidLock<T>(id: string, work: () => Promise<T>): Promise<T> {
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${"tabloid:" + id}, 0))`);
+      return work();
+    });
+  }
+
+  /** Exact source URL/GUID uniqueness is enforced by two database indexes.
+   * Article and queue event are committed together, so a retry cannot lose work. */
+  async insertTabloid(data: NewRawArticle, enqueue: boolean): Promise<RawArticle | null> {
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx.insert(rawArticles).values(data).onConflictDoNothing().returning();
+      if (!row) return null;
+      if (enqueue) {
+        await tx.insert(pipelineJobs).values({
+          event: {
+            id: crypto.randomUUID(),
+            correlation_id: crypto.randomUUID(),
+            occurred_at: new Date().toISOString(),
+            version: 1,
+            trace_id: crypto.randomUUID(),
+            type: "source/article.ingested",
+            payload: { raw_article_id: row.id, source_id: row.sourceId },
+          },
+        });
+      }
+      return row;
+    });
+  }
+
+  async findTabloidProof(language: string): Promise<RawArticle | null> {
+    const [row] = await this.db
+      .select()
+      .from(rawArticles)
+      .where(sql`${rawArticles.extractedEntities}->>'tabloidProofLanguage' = ${language}`)
+      .limit(1);
+    return row ?? null;
+  }
+
+  async claimTabloidWriter(id: string): Promise<boolean> {
+    const rows = await this.db
+      .update(rawArticles)
+      .set({
+        extractedEntities: sql`coalesce(${rawArticles.extractedEntities}, '{}'::jsonb) || '{"tabloidWriterAttempted":true}'::jsonb`,
+      })
+      .where(
+        and(
+          eq(rawArticles.id, id),
+          sql`coalesce(${rawArticles.extractedEntities}->>'tabloidWriterAttempted', 'false') <> 'true'`,
+        ),
+      )
+      .returning({ id: rawArticles.id });
+    return rows.length > 0;
+  }
+
+  async releaseTabloidQuotaDeferral(id: string): Promise<void> {
+    await this.db
+      .update(rawArticles)
+      .set({
+        extractedEntities: sql`${rawArticles.extractedEntities} - 'tabloidWriterAttempted'`,
+      })
+      .where(eq(rawArticles.id, id));
+  }
 
   async getContentHealth(): Promise<{
     total: number;

@@ -1,0 +1,382 @@
+[
+  {
+    "name": "Daily Mail Football",
+    "url": "https://www.dailymail.co.uk/sport/football/index.rss",
+    "language": "en",
+    "http": 200,
+    "finalUrl": "https://www.dailymail.com/sport/football/index.rss",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 150,
+    "newest": "2026-09-10T18:37:55+00:00"
+  },
+  {
+    "name": "Daily Mail Sport fallback — csak az egyiket aktiváld",
+    "url": "https://www.dailymail.com/sport/index.rss",
+    "language": "en",
+    "http": 200,
+    "finalUrl": "https://www.dailymail.com/sport/index.rss",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 150,
+    "newest": "2026-09-10T18:41:13+00:00"
+  },
+  {
+    "name": "talkSPORT Football",
+    "url": "https://talksport.com/football/feed",
+    "language": "en",
+    "http": 200,
+    "finalUrl": "https://talksport.com/football/feed/",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 100,
+    "newest": "2026-09-10T16:57:25+00:00"
+  },
+  {
+    "name": "Daily Mirror Sport",
+    "url": "https://www.mirror.co.uk/sport/?service=rss",
+    "language": "en",
+    "http": 200,
+    "finalUrl": "https://www.mirror.co.uk/sport/?service=rss",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 25,
+    "newest": "2026-09-10T18:28:44+00:00"
+  },
+  {
+    "name": "Daily Star Football",
+    "url": "https://www.dailystar.co.uk/sport/football/?service=rss",
+    "language": "en",
+    "http": 200,
+    "finalUrl": "https://www.dailystar.co.uk/sport/football/?service=rss",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 25,
+    "newest": "2026-09-10T14:59:22+00:00"
+  },
+  {
+    "name": "Football365",
+    "url": "https://www.football365.com/feed",
+    "language": "en",
+    "status": "SKIP",
+    "reason": "HTTP 404"
+  },
+  {
+    "name": "101 Great Goals",
+    "url": "https://www.101greatgoals.com/feed",
+    "language": "en",
+    "http": 200,
+    "finalUrl": "https://www.101greatgoals.com/feed/",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 16,
+    "newest": "2026-09-10T18:20:00+00:00"
+  },
+  {
+    "name": "90min",
+    "url": "https://www.90min.com/posts.rss",
+    "language": "en",
+    "http": 200,
+    "finalUrl": "https://www.90min.com/posts.rss",
+    "status": "SKIP",
+    "reason": "stale feed",
+    "count": 90,
+    "newest": "2025-09-29T08:55:00+00:00"
+  },
+  {
+    "name": "CaughtOffside",
+    "url": "https://www.caughtoffside.com/feed",
+    "language": "en",
+    "http": 200,
+    "finalUrl": "https://www.caughtoffside.com/feed/",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 10,
+    "newest": "2026-09-10T18:30:00+00:00"
+  },
+  {
+    "name": "FootballFanCast",
+    "url": "https://www.footballfancast.com/feed",
+    "language": "en",
+    "http": 200,
+    "finalUrl": "https://www.footballfancast.com/feed/",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 10,
+    "newest": "2026-09-10T18:40:11+00:00"
+  },
+  {
+    "name": "Sportslens",
+    "url": "https://sportslens.com/feed",
+    "language": "en",
+    "status": "SKIP",
+    "reason": "HTTP 403"
+  },
+  {
+    "name": "GiveMeSport",
+    "url": "https://www.givemesport.com/feed",
+    "language": "en",
+    "http": 200,
+    "finalUrl": "https://www.givemesport.com/feed/",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 10,
+    "newest": "2026-09-10T18:15:12+00:00"
+  },
+  {
+    "name": "HITC",
+    "url": "https://www.hitc.com/news/feed",
+    "language": "en",
+    "http": 200,
+    "finalUrl": "https://www.hitc.com/news/feed/",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 20,
+    "newest": "2026-09-10T11:28:28+00:00"
+  },
+  {
+    "name": "MARCA — Primera División",
+    "url": "https://e00-marca.uecdn.es/rss/futbol/primera-division.xml",
+    "language": "es",
+    "http": 200,
+    "finalUrl": "https://e00-marca.uecdn.es/rss/futbol/primera-division.xml",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 50,
+    "newest": "2026-09-10T20:46:57+02:00"
+  },
+  {
+    "name": "MARCA — Más fútbol",
+    "url": "https://e00-marca.uecdn.es/rss/futbol/mas-futbol.xml",
+    "language": "es",
+    "http": 200,
+    "finalUrl": "https://e00-marca.uecdn.es/rss/futbol/mas-futbol.xml",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 49,
+    "newest": "2026-09-10T14:03:49+02:00"
+  },
+  {
+    "name": "MARCA — Fútbol Internacional",
+    "url": "https://e00-marca.uecdn.es/rss/futbol/futbol-internacional.xml",
+    "language": "es",
+    "http": 200,
+    "finalUrl": "https://e00-marca.uecdn.es/rss/futbol/futbol-internacional.xml",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 39,
+    "newest": "2026-09-10T18:55:57+02:00"
+  },
+  {
+    "name": "SPORT — latest news",
+    "url": "https://www.sport.es/es/rss/last-news/news.xml",
+    "language": "es",
+    "http": 200,
+    "finalUrl": "https://www.sport.es/es/rss/last-news/news.xml",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 49,
+    "newest": null
+  },
+  {
+    "name": "Mundo Deportivo — Fútbol",
+    "url": "https://www.mundodeportivo.com/feed/rss/futbol",
+    "language": "es",
+    "http": 200,
+    "finalUrl": "https://www.mundodeportivo.com/feed/rss/futbol",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 100,
+    "newest": "2026-09-10T20:30:00+02:00"
+  },
+  {
+    "name": "Mundo Deportivo — Fútbol Internacional",
+    "url": "https://www.mundodeportivo.com/feed/rss/futbol/internacional",
+    "language": "es",
+    "http": 200,
+    "finalUrl": "https://www.mundodeportivo.com/feed/rss/futbol/internacional",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 100,
+    "newest": "2026-09-10T19:20:29+02:00"
+  },
+  {
+    "name": "Bernabéu Digital",
+    "url": "https://www.bernabeudigital.com/rss",
+    "language": "es",
+    "http": 200,
+    "finalUrl": "https://www.bernabeudigital.com/rss/",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 20,
+    "newest": "2026-09-10T20:30:37+02:00"
+  },
+  {
+    "name": "Panenka",
+    "url": "https://www.panenka.org/feed/",
+    "language": "es",
+    "http": 200,
+    "finalUrl": "https://www.panenka.org/feed/",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 10,
+    "newest": "2026-09-10T08:46:26+00:00"
+  },
+  {
+    "name": "Corriere dello Sport — Calcio",
+    "url": "https://www.corrieredellosport.it/rss/calcio",
+    "language": "it",
+    "http": 200,
+    "finalUrl": "https://www.corrieredellosport.it/rss/calcio",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 30,
+    "newest": "2026-09-10T18:19:39+00:00"
+  },
+  {
+    "name": "Tuttosport — Calcio",
+    "url": "https://www.tuttosport.com/rss/calcio",
+    "language": "it",
+    "http": 200,
+    "finalUrl": "https://www.tuttosport.com/rss/calcio",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 30,
+    "newest": "2026-09-10T18:23:27+00:00"
+  },
+  {
+    "name": "La Gazzetta dello Sport — Calcio",
+    "url": "https://www.gazzetta.it/dynamic-feed/rss/section/Calcio.xml",
+    "language": "it",
+    "http": 200,
+    "finalUrl": "https://www.gazzetta.it/dynamic-feed/rss/section/Calcio.xml",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 30,
+    "newest": "2026-09-10T20:23:49+02:00"
+  },
+  {
+    "name": "FCInter1908",
+    "url": "https://www.fcinter1908.it/feed",
+    "language": "it",
+    "http": 200,
+    "finalUrl": "https://www.fcinter1908.it/feed",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 50,
+    "newest": "2026-09-10T20:45:16+02:00"
+  },
+  {
+    "name": "CalcioNapoli24",
+    "url": "https://www.calcionapoli24.it/feed",
+    "language": "it",
+    "http": 200,
+    "finalUrl": "https://www.calcionapoli24.it/feed",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 190,
+    "newest": "2026-09-10T20:36:00+02:00"
+  },
+  {
+    "name": "Spazio Napoli",
+    "url": "https://www.spazionapoli.it/feed",
+    "language": "it",
+    "http": 200,
+    "finalUrl": "https://www.spazionapoli.it/feed/",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 30,
+    "newest": "2026-09-10T18:30:49+00:00"
+  },
+  {
+    "name": "TuttoNapoli",
+    "url": "https://www.tuttonapoli.net/rss",
+    "language": "it",
+    "http": 200,
+    "finalUrl": "https://www.tuttonapoli.net/rss/",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 20,
+    "newest": "2026-09-10T20:42:47+02:00"
+  },
+  {
+    "name": "IamNaples",
+    "url": "https://www.iamnaples.it/feed",
+    "language": "it",
+    "http": 200,
+    "finalUrl": "https://www.iamnaples.it/feed/",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 20,
+    "newest": "2026-09-10T18:34:18+00:00"
+  },
+  {
+    "name": "Golssip",
+    "url": "https://www.golssip.it/feed/",
+    "language": "it",
+    "http": 200,
+    "finalUrl": "https://www.golssip.it/feed",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 50,
+    "newest": "2026-09-10T19:30:21+02:00"
+  },
+  {
+    "name": "BILD — all feed, football-tabloid filter szükséges",
+    "url": "https://www.bild.de/feed/alles.xml",
+    "language": "de",
+    "http": 200,
+    "finalUrl": "https://www.bild.de/feed/alles.xml",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 50,
+    "newest": "2026-09-10T20:39:18+00:00"
+  },
+  {
+    "name": "SPORT BILD — football feed candidate",
+    "url": "https://sportbild.bild.de/rss/vw-fussball/vw-fussball-45036878,sort=1,view=rss2.sport.xml",
+    "language": "de",
+    "http": 200,
+    "finalUrl": "https://sportbild.bild.de/feed/fussball.xml",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 50,
+    "newest": "2026-09-10T20:18:39+00:00"
+  },
+  {
+    "name": "Blick — Fussball",
+    "url": "https://www.blick.ch/sport/fussball/rss.xml",
+    "language": "de",
+    "status": "SKIP",
+    "reason": "HTTP 403"
+  },
+  {
+    "name": "Kronen Zeitung — feed, football filter szükséges",
+    "url": "https://api.krone.at/v1/rss/rssfeed-google.xml?id=2311992",
+    "language": "de",
+    "http": 200,
+    "finalUrl": "https://api.krone.at/v1/rss/rssfeed-google.xml?id=2311992",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 200,
+    "newest": "2026-09-10T18:45:11+00:00"
+  },
+  {
+    "name": "SPOX — Fussball",
+    "url": "https://www.spox.com/pub/rss/fussball.xml",
+    "language": "de",
+    "status": "SKIP",
+    "reason": "HTTP 404"
+  },
+  {
+    "name": "SPOX fallback/general",
+    "url": "https://feeds.feedburner.com/spox-sport/",
+    "language": "de",
+    "http": 200,
+    "finalUrl": "https://feeds.feedburner.com/spox-sport/",
+    "status": "PASS",
+    "reason": "valid RSS/Atom",
+    "count": 50,
+    "newest": null
+  }
+]

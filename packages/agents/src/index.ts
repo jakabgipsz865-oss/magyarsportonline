@@ -11,3 +11,5 @@ export * as footballLexicon from "./shared/football-lexicon";
 export * as editorialCorrections from "./shared/editorial-corrections";
 export * as correctionEffectiveness from "./shared/correction-effectiveness";
 export * as correctionSimilarity from "./shared/correction-similarity";
+
+export * as tabloid from "./tabloid";

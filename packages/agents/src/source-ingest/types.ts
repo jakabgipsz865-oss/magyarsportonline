@@ -1,5 +1,6 @@
 export interface NormalizedArticle {
   sourceUrl: string;
+  guid?: string;
   /** Original RSS detection URL when enrichment resolves to a better canonical report URL. */
   detectedSourceUrl?: string;
   titleOriginal: string;
