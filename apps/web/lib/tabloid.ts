@@ -6,12 +6,16 @@ import { revalidatePath } from "next/cache";
 import { createRepositories, type Repositories } from "./db";
 import { getWriterLlmClient } from "./llm";
 import { getLogger } from "./logger";
+import { env } from "./env";
+import { TABLOID_PUBLIC_START } from "@magyarsportonline/shared";
 
 /** One accepted raw article owns one Story. Retries reuse its persisted draft. */
 export async function publishTabloid(rawId: string, repos: Repositories = createRepositories()) {
+  if (!env.TABLOID_AUTO_PUBLISH) return { paused: true, llmCalls: 0 };
   return repos.rawArticleRepository.withTabloidLock(rawId, async () => {
     const raw = await repos.rawArticleRepository.getById(rawId);
     if (!raw) throw new Error("Tabloid source article missing");
+    if (raw.ingestedAt < new Date(TABLOID_PUBLIC_START)) return { skipped: true };
     const source = await repos.sourceRepository.getById(raw.sourceId);
     if (!source) throw new Error("Tabloid source missing");
     const config = source.fetchConfig as { tabloid?: boolean; footballFeed?: boolean };
@@ -34,6 +38,7 @@ export async function publishTabloid(rawId: string, repos: Repositories = create
     await repos.rawArticleRepository.linkToStory(raw.id, story.id);
     await repos.storySourceRepository.link(story.id, raw.id, "initial");
     let version = await repos.storyVersionRepository.getLatest(story.id);
+    if (version && version.promptVersion !== tabloid.TABLOID_PROMPT) return { skipped: true };
     if (!version) {
       if (!(await repos.rawArticleRepository.claimTabloidWriter(raw.id)))
         throw new Error("Tabloid writer already attempted; manual inspection required");
@@ -98,6 +103,7 @@ export async function publishTabloid(rawId: string, repos: Repositories = create
 
 /** RSS requests run concurrently; extraction is optional, RSS content is sufficient. */
 export async function ingestTabloid(repos: Repositories = createRepositories()) {
+  if (!env.TABLOID_AUTO_PUBLISH) return { paused: true, llmCalls: 0 };
   const queueBefore = await repos.pipelineJobRepository.getStatusCounts();
   let budget = Math.max(0, 36 - queueBefore.pending - queueBefore.inProgress);
   const ingestBudget = Math.min(12, budget);

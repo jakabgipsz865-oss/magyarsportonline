@@ -1762,3 +1762,16 @@ main {
     grid-template-columns: 94px minmax(0, 1fr);
   }
 }
+
+/* The tabloid homepage has no fixtures or unrelated sidebars. */
+.home-hero-layout--tabloid {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+.home-empty-grid--tabloid {
+  grid-template-columns: 1fr;
+}
+@media (max-width: 760px) {
+  .home-hero-layout--tabloid {
+    grid-template-columns: 1fr;
+  }
+}

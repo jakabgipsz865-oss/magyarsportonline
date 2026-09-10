@@ -48,6 +48,12 @@ export const env = createEnv({
     // a fail-safe alapmodellre cseréli.
     CLOUDFLARE_AI_MODEL: z.string().min(1).default("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
 
+    // Keep v2 paused until the deterministic RSS review is approved.
+    TABLOID_AUTO_PUBLISH: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+
     GEMINI_API_KEY: z.string().min(1).optional(),
     GEMINI_MODEL: z.string().min(1).default("gemini-3.5-flash-lite"),
     GEMINI_FREE_ONLY: z.literal("true").default("true"),

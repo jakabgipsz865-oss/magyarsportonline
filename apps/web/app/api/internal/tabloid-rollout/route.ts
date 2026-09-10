@@ -34,6 +34,8 @@ async function status() {
   );
   return {
     proofs,
+    autoPublish: env.TABLOID_AUTO_PUBLISH,
+    promptVersion: tabloid.TABLOID_PROMPT,
     databaseHost: new URL(env.DATABASE_URL).hostname,
     databaseName: new URL(env.DATABASE_URL).pathname.slice(1),
     model: tabloid.TABLOID_MODEL,
@@ -53,6 +55,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const parsed = requestSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: "invalid request" }, { status: 400 });
+  if (!env.TABLOID_AUTO_PUBLISH)
+    return NextResponse.json({ paused: true, llmCalls: 0 }, { status: 409 });
   const repos = createRepositories();
   const command = parsed.data;
   if (command.action === "register") {

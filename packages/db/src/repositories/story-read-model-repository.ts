@@ -1,4 +1,5 @@
-import { desc, eq } from "drizzle-orm";
+import { TABLOID_PUBLIC_PROMPT, TABLOID_PUBLIC_START } from "@magyarsportonline/shared";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import type { Database } from "../client";
 import { storyReadModel } from "../schema/index";
 
@@ -11,6 +12,13 @@ export type NewStoryReadModelRow = typeof storyReadModel.$inferInsert;
  * it reads/writes exclusively the denormalized `story_read_model` projection,
  * never the normalized write-side tables.
  */
+const publicGeneration = and(
+  gte(storyReadModel.publishedAt, new Date(TABLOID_PUBLIC_START)),
+  sql`${storyReadModel.versionHistorySummary} @> ${JSON.stringify([
+    { prompt_version: TABLOID_PUBLIC_PROMPT, is_current: true },
+  ])}::jsonb`,
+);
+
 export class StoryReadModelRepository {
   constructor(private readonly db: Database) {}
 
@@ -25,7 +33,7 @@ export class StoryReadModelRepository {
     const [row] = await this.db
       .select()
       .from(storyReadModel)
-      .where(eq(storyReadModel.slug, slug))
+      .where(and(eq(storyReadModel.slug, slug), publicGeneration))
       .limit(1);
     return row ?? null;
   }
@@ -34,6 +42,7 @@ export class StoryReadModelRepository {
     return this.db
       .select()
       .from(storyReadModel)
+      .where(publicGeneration)
       .orderBy(desc(storyReadModel.publishedAt))
       .limit(params.limit)
       .offset(params.offset);

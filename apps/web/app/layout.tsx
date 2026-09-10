@@ -8,11 +8,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL(env.SITE_URL),
   title: {
-    default: "MagyarSportOnline — Sporthírek",
+    default: "MagyarSportOnline — Futballbulvár",
     template: "%s — MagyarSportOnline",
   },
   description:
-    "A legfrissebb labdarúgó-hírek magyarul: átigazolások, mérkőzés-eredmények és klubhírek, több forrásból összevetve.",
+    "Friss futballbulvár magyarul: személyes történetek, botrányok és pályán kívüli események.",
   alternates: {
     types: { "application/rss+xml": [{ url: "/rss.xml", title: "MagyarSportOnline RSS" }] },
   },

@@ -55,6 +55,9 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  if (!env.TABLOID_AUTO_PUBLISH)
+    return NextResponse.json({ paused: true, processed: 0, llmCalls: 0 });
+
   const repos = createRepositories();
   const emitter = buildQueueingEmitter(repos.pipelineJobRepository);
   const logger = getLogger();
