@@ -13,14 +13,8 @@ import { toStoryDetailView, toStorySummaryView } from "../../../lib/story-view";
 
 const { matchPrimaryEntity } = deduplication;
 
-// Story updates stay near-real-time while repeat readers avoid rebuilding the
-// same read-model projection on every request.
-export const revalidate = 10;
-
-// No build-time DB scan: each slug is generated and cached on first request.
-export function generateStaticParams(): Array<{ slug: string }> {
-  return [];
-}
+// Recheck public generation on every request, including old bookmarked slugs.
+export const dynamic = "force-dynamic";
 
 const RELATED_CANDIDATES_LIMIT = 20;
 

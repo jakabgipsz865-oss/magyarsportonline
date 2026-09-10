@@ -149,12 +149,30 @@ describe("handleStoryPublished", () => {
         versionHistorySummary: [
           {
             version_number: 1,
+            prompt_version: "hungarian-writer@0.1.0",
+            is_current: true,
             created_at: version().createdAt.toISOString(),
             change_summary: null,
           },
         ],
       }),
     ]);
+  });
+
+  it("marks only the projected version as current, retaining its exact generation", async () => {
+    const deps = buildDeps({
+      versions: [
+        version({ promptVersion: "tabloid-hu@2" }),
+        version({ id: "v2", versionNumber: 2, promptVersion: "tabloid-hu@1" }),
+      ],
+    });
+    await handleStoryPublished(deps, publishedEvent());
+    expect(deps.upserts[0]).toMatchObject({
+      versionHistorySummary: [
+        { prompt_version: "tabloid-hu@2", is_current: true },
+        { prompt_version: "tabloid-hu@1", is_current: false },
+      ],
+    });
   });
 
   it("includes a source breakdown and score breakdown in the projected credibilitySummary", async () => {

@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { LlmClient } from "@magyarsportonline/llm";
 
 export const TABLOID_MODEL = "gemini-3.5-flash-lite";
-export const TABLOID_PROMPT = "tabloid-hu@1";
+export { TABLOID_PUBLIC_PROMPT as TABLOID_PROMPT } from "@magyarsportonline/shared";
 export const tabloidOutputSchema = z
   .object({
     title_hu: z.string().trim().min(1),
@@ -11,18 +11,35 @@ export const tabloidOutputSchema = z
   })
   .strict();
 
-/** Only clear exclusions are rejected. Mixed stories retain their human angle. */
+/** Precision first: football context, hard exclusions, then a positive human angle. */
 export function isFootballTabloid(title: string, content: string, footballFeed = true): boolean {
-  const text = `${title} ${content}`.toLowerCase();
+  const normalize = (value: string) =>
+    value.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/ß/g, "ss");
+  const headline = normalize(title);
+  const text = `${headline} ${normalize(content)}`
+    // An embedded publisher widget is not evidence of a social-media story.
+    .replace(/(?:visualizza questo post su|view this post on) instagram/g, "")
+    .replace(/(?:un post condiviso da|a post shared by)[^.!?]*(?:[.!?]|$)/g, "");
+  if (
+    /\b(american football|nfl|super bowl|quarterback|basketballkorb|schulterpolster)\b/.test(text)
+  )
+    return false;
   const football =
-    /football|soccer|futbol|fútbol|calcio|fußball|fussball|bundesliga|premier league|champions league|la liga|serie a|fifa|uefa|real madrid|barcelona|liverpool|arsenal|manchester|juventus|bayern|dortmund|ronaldo|messi|mbapp[eé]|haaland/;
-  if (!footballFeed && !football.test(text)) return false;
-  const humanAngle =
-    /scandal|controvers|row\b|clash|furious|blast|slams?|wife|girlfriend|husband|divorce|wedding|luxury|police|arrest|court|ban\b|banned|suspend|viral|fans? react|dressing room|insult|escándalo|polémic|enfad|crític|novia|esposa|pareja|denuncia|detenid|vestuario|scandalo|polemica|litig|accusa|fidanzat|moglie|marito|spogliatoio|arrest|skandal|streit|zoff|kritik|ehefrau|freundin|polizei|anzeige|kabine|wütend|luxus/;
-  if (humanAngle.test(text)) return true;
+    /\b(football|soccer|futbol|futbolista\w*|calcio|calciator\w*|fussball\w*|bundesliga|premier league|champions league|la ?liga|serie a|fifa|uefa|real madrid|barcelona|liverpool|arsenal|manchester|juventus|bayern|dortmund|chelsea|tottenham|psg|atletico|inter milan|ac milan|as roma|napoli|ronaldo|messi|mbappe|haaland)\b/;
+  const footballRole =
+    /\b(striker|goalkeeper|midfielder|defender|footballer|vestuario|spogliatoio|kabinen\w*|futbolista\w*|calciator\w*|torwart|stuermer)\b/;
+  if (!football.test(text) && !(footballFeed && footballRole.test(text))) return false;
+
+  // Exclusions inspect the RSS body too and ALWAYS override a positive signal.
   const excluded =
-    /\b(transfer|transfers|signing|signs|signed|loan deal|fichaje|fichajes|traspaso|mercato|calciomercato|ingaggio|ablöse|wechsel|verpflichtung)\b|\b(line.?ups?|fixtures?|standings|match report|highlights|live score|results|alineaciones|clasificación|crónica|pagelle|formazioni|risultati|spielbericht|aufstellung|spielplan|tabelle|ergebnisse)\b/;
-  return !excluded.test(title.toLowerCase());
+    /\b(transfer\w*|signing\w*|signs|signed|loan|loans|fichaj\w*|traspas\w*|cesion\w*|cedido|mercato|calciomercato|ingaggio|prestito|ufficializzato|ablaese|ablose|wechsel\w*|verpflicht\w*|leihe|leihgeschaft|line.?ups?|fixtures?|standings|match report|match preview|preview|highlights|live scores?|results?|kick.?off|ahead of|set to face|ready to face|hosts?|pre.?match|se enfrenta|recibe|visita del|affronta|scende in campo|trifft auf|gastiert|empfangt|anpfiff|team news|starting xi|alineacion\w*|clasificacion\w*|cronica|resultados?|previa|calendario|once inicial|pagelle|formazion\w*|risultat\w*|classifica|calendario|spielbericht\w*|aufstellung\w*|spielplan|tabelle|ergebnis\w*|vorschau|live.?ticker|official statement|club statement|club announces|appointed|appointment|new job|wage bill|weekly wages|salary list|sponsorship|sponsor\w*|preisgeld\w*|complete a move|move away|rip up.{0,20}contract|nuevo futbolista|titularidad|pronostic\w*|favorito|subentra|infortunio|problema muscolare|problema fisico|hat.?trick|doblete|triplete|anniversario|si ritira|comunicado oficial|comunicato ufficiale|offizielle mitteilung|vereinsmitteilung)\b/;
+  const matchNews =
+    /\b(scores?|scored|goals?|beats?|beaten|defeats?|defeated|wins?|won|victor(?:y|ies)|draws?|drawn|stats?|statistics|goles?|goleada|gana|ganan|vence|victoria|empate|estadistica\w*|gol|vince|vittoria|pareggio|statistiche|sieg\w*|siegt|gewinnt|unentschieden|tore?|statistik\w*)\b|\b\d{1,2}\s*[-:]\s*\d{1,2}\b/;
+  if (excluded.test(text) || matchNews.test(text)) return false;
+
+  const humanAngle =
+    /\b(scandal\w*|controvers\w*|row|feud\w*|clash(?:ed|es)? with|dressing.room clash|tunnel clash|angry|furious|slams?|blasts?|dressing.room (?:conflict|row|split)|police|arrest\w*|court|disciplinary|wife|girlfriend|husband|divorc\w*|wedding|relationship|party|parties|nightclub|alcohol|luxury|car|cars|mansion|money|instagram|social media|viral|fans? (?:outrage|react\w*)|bizarre|shock\w*|embarrass\w*|apolog\w*|tears|private life|personal drama|escandalo\w*|polemic\w*|pelea\w*|enfad\w*|furioso\w*|arremet\w*|policia|detenid\w*|detencion|tribunal|denuncia\w*|disciplinari\w*|novia|esposa|pareja sentimental|divorcio|boda|fiesta|discoteca|alcohol|lujo|coche|mansion|dinero|redes sociales|indignacion|insolit\w*|vergonz\w*|disculp\w*|lagrimas|vida privada|scandal\w*|polemich?\w*|litig\w*|rissa|furios\w*|accusa\w*|polizia|arrest\w*|tribunale|disciplinar\w*|fidanzat\w*|moglie|marito|divorzio|matrimonio|festa|discoteca|alcol|luss\w*|automobile|villa|soldi|social|tifosi infuriati|bizzarr\w*|vergogn\w*|scuse|lacrime|vita privata|skandal\w*|streit\w*|zoff|wutend|wut|tobt|polizei|festgenomm\w*|verhaft\w*|gericht|disziplinar\w*|ehefrau|freundin|scheidung|hochzeit|beziehung|nachtclub|alkohol|luxus\w*|auto|autos|geld|soziale medien|fan.?wut|empoer\w*|empor\w*|kurios\w*|bizarr\w*|schock\w*|peinlich\w*|entschuldig\w*|tranen|privatleben)\b/;
+  return humanAngle.test(text);
 }
 
 export async function writeTabloid(

@@ -6,7 +6,9 @@ const mocks = vi.hoisted(() => ({
   project: vi.fn(),
   revalidate: vi.fn(),
   llm: {},
+  env: { TABLOID_AUTO_PUBLISH: true },
 }));
+vi.mock("./env", () => ({ env: mocks.env }));
 vi.mock("./db", () => ({ createRepositories: vi.fn() }));
 vi.mock("./logger", () => ({ getLogger: () => ({ info: vi.fn() }) }));
 vi.mock("./llm", () => ({ getWriterLlmClient: () => mocks.llm }));
@@ -16,13 +18,13 @@ vi.mock("@magyarsportonline/agents", () => ({
     writeTabloid: mocks.write,
     isFootballTabloid: () => true,
     TABLOID_MODEL: "gemini-3.5-flash-lite",
-    TABLOID_PROMPT: "tabloid-hu@1",
+    TABLOID_PROMPT: "tabloid-hu@2",
   },
   seo: { slugify: () => "magyar-hir" },
   readModelProjector: { handleStoryPublished: mocks.project },
   sourceIngest: {},
 }));
-import { publishTabloid } from "./tabloid";
+import { ingestTabloid, publishTabloid } from "./tabloid";
 
 function fixtures() {
   const raws = new Map(
@@ -37,6 +39,7 @@ function fixtures() {
         sourceUrl: "https://example.com/same",
         imageUrl: null,
         publishedAtSource: null,
+        ingestedAt: new Date("2026-09-11T00:00:00Z"),
       },
     ]),
   );
@@ -85,12 +88,32 @@ function fixtures() {
 describe("tabloid publication", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.env.TABLOID_AUTO_PUBLISH = true;
     mocks.write.mockResolvedValue({
       title_hu: "Magyar hír",
       lead_hu: "Személyes történet.",
       body_hu: "A játékos a családjáról beszélt.",
     });
     mocks.project.mockResolvedValue(undefined);
+  });
+  it("pauses ingest and publication before any repository or writer access", async () => {
+    mocks.env.TABLOID_AUTO_PUBLISH = false;
+    const repos = {} as Repositories;
+    expect(await publishTabloid("one", repos)).toEqual({ paused: true, llmCalls: 0 });
+    expect(await ingestTabloid(repos)).toEqual({ paused: true, llmCalls: 0 });
+    expect(mocks.write).not.toHaveBeenCalled();
+    expect(mocks.project).not.toHaveBeenCalled();
+  });
+  it("never republishes a persisted v1 draft", async () => {
+    const { repos, versions } = fixtures();
+    mocks.project.mockRejectedValueOnce(new Error("projection"));
+    await expect(publishTabloid("one", repos)).rejects.toThrow("projection");
+    for (const version of versions.values()) version["promptVersion"] = "tabloid-hu@1";
+    mocks.write.mockClear();
+    mocks.project.mockClear();
+    expect(await publishTabloid("one", repos)).toEqual({ skipped: true });
+    expect(mocks.write).not.toHaveBeenCalled();
+    expect(mocks.project).not.toHaveBeenCalled();
   });
   it("keeps different sources separate even when content and URL are identical", async () => {
     const { repos, stories } = fixtures();

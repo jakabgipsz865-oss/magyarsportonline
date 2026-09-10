@@ -66,6 +66,8 @@ export async function handleStoryPublished(
     .filter((version) => version.isPublished)
     .map((version) => ({
       version_number: version.versionNumber,
+      prompt_version: version.promptVersion,
+      is_current: version.id === publishedVersion.id,
       created_at: version.createdAt.toISOString(),
       change_summary: version.changeSummaryHu,
     }));

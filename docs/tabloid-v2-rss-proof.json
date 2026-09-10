@@ -1,0 +1,267 @@
+{
+  "fetchedAt": "2026-09-10T20:12:37.978Z",
+  "generation": "tabloid-hu@2",
+  "llmCalls": 0,
+  "feedsAttempted": 30,
+  "staleOrUndatedExcluded": 549,
+  "failures": [],
+  "byLanguage": {
+    "en": {
+      "scanned": 229,
+      "acceptedCount": 11,
+      "accepted": [
+        {
+          "title": "Graeme Souness to tackle gruelling three-day fundraising challenge",
+          "url": "https://www.mirror.co.uk/news/uk-news/graeme-souness-charity-fundraising-peaks-37647602",
+          "source": "Daily Mirror Sport"
+        },
+        {
+          "title": "Porto star 'grabbed Erling Haaland's bum' after Champions League tunnel chaos",
+          "url": "https://www.dailystar.co.uk/sport/football/erling-haaland-man-city-porto-37645169",
+          "source": "Daily Star Football"
+        },
+        {
+          "title": "Jaw-dropping footballer goes viral as fans say 'she's definitely a keeper'",
+          "url": "https://www.dailystar.co.uk/sport/football/jaw-dropping-footballer-goes-viral-37641406",
+          "source": "Daily Star Football"
+        },
+        {
+          "title": "Arsenal fans told to 'hide shirts' by club or be hunted by terrifying football firm",
+          "url": "https://www.dailystar.co.uk/sport/football/arsenal-napoli-stabbings-hooligans-warning-37641832",
+          "source": "Daily Star Football"
+        },
+        {
+          "title": "Cole Palmer's jaw-dropping WAG told 'red is your colour' thanks to 'juicy' pics",
+          "url": "https://www.dailystar.co.uk/sport/football/cole-palmer-wag-olivia-holder-37640853",
+          "source": "Daily Star Football"
+        },
+        {
+          "title": "West Ham midfielder Edson Alvarez furiously rejects allegations he was involved in a kidnapping plot",
+          "url": "https://talksport.com/football/4573277/west-ham-edson-alvarez-kidnapping-allegations-statement/",
+          "source": "talkSPORT Football"
+        },
+        {
+          "title": "Manchester United facing ANOTHER protest... as furious local residents hit back over club's plans to open fanzone behind the Stretford End",
+          "url": "https://www.dailymail.com/sport/football/article-16120705/Manchester-United-facing-protest-furious-locals.html?ns_mchannel=rss&ns_campaign=1490&ito=1490",
+          "source": "Daily Mail Football"
+        },
+        {
+          "title": "Rodri apologises after leaked video showed Barcelona star brutally ridiculing Spanish rivals Valencia",
+          "url": "https://www.dailymail.com/sport/football/article-16119895/Rodri-apologises-leaked-video-showed-Barcelona-star-brutally-ridiculing-Spanish-rivals-Valencia.html?ns_mchannel=rss&ns_campaign=1490&ito=1490",
+          "source": "Daily Mail Football"
+        },
+        {
+          "title": "Mauricio Pochettino reignites Mike Dean spat following his 'stupid' remark in 2019 - as he claims referee is now 'showing people how he was' after his controversial 'minigames' claims while officiating Premier League games",
+          "url": "https://www.dailymail.com/sport/football/article-16119979/Mauricio-Pochettino-reignites-Mike-Dean-spat-following-stupid-remark-2019-claims-referee-showing-people-controversial-minigames-claims-officiating-Premier-League-games.html?ns_mchannel=rss&ns_campaign=1490&ito=1490",
+          "source": "Daily Mail Football"
+        },
+        {
+          "title": "Hilarious moment sees Micah Richards run out of the CBS studio when Kylian Mbappe names him his favourite pundit - after he wrote him a poem and they shared bizarre virtual hug",
+          "url": "https://www.dailymail.com/sport/football/article-16116775/Hilarious-moment-Micah-Richards-runs-TV-studio-Kylian-Mbappe-names-favourite-pundit.html?ns_mchannel=rss&ns_campaign=1490&ito=1490",
+          "source": "Daily Mail Football"
+        }
+      ],
+      "rejected": [
+        {
+          "title": "Premier League star admits he would CYCLE to Man Utd after transfer collapse",
+          "url": "https://www.mirror.co.uk/sport/football/transfer-news/man-utd-transfer-sunderland-meunier-37649647",
+          "source": "Daily Mirror Sport"
+        },
+        {
+          "title": "Man Utd receive explanation from Barcelona for Marcus Rashford transfer snub",
+          "url": "https://www.mirror.co.uk/sport/football/news/rashford-gordon-barcelona-man-utd-37648990",
+          "source": "Daily Mirror Sport"
+        },
+        {
+          "title": "Bayern Munich chief comes clean on Bradley Barcola transfer with Luis Diaz dig at Liverpool",
+          "url": "https://www.mirror.co.uk/sport/football/transfer-news/bradley-barcola-diaz-liverpool-bayern-37647977",
+          "source": "Daily Mirror Sport"
+        },
+        {
+          "title": "Liverpool beat Man Utd and 28 clubs to transfer after player went 'weeks without sleep'",
+          "url": "https://www.dailystar.co.uk/sport/football/liverpool-transfer-news-man-utd-37647601",
+          "source": "Daily Star Football"
+        },
+        {
+          "title": "Liverpool news: Transfer target's £130m release clause emerges as huge decision awaits",
+          "url": "https://www.dailystar.co.uk/sport/football/liverpool-news-transfers-barcola-rayan-37646340",
+          "source": "Daily Star Football"
+        }
+      ]
+    },
+    "es": {
+      "scanned": 206,
+      "acceptedCount": 5,
+      "accepted": [
+        {
+          "title": "LaLiga denuncia ¡14 partidos! por insultos",
+          "url": "https://www.marca.com/futbol/primera-division/2026/09/10/laliga-denuncia-14-partidos-insultos.html",
+          "source": "MARCA"
+        },
+        {
+          "title": "Tebas confirma que denunciarán los cánticos racistas en los aledaños del Bernabéu: \"Lo llevaremos a los organismos correspondientes\"",
+          "url": "https://www.marca.com/futbol/primera-division/2026/09/09/tebas-confirma-denunciaran-canticos-racistas-aledanos-bernabeu-llevaremos-organismos-correspondientes.html",
+          "source": "MARCA"
+        },
+        {
+          "title": "Rodri se disculpa con Gayà tras el \"son malísimos\" referido al Valencia en Mestalla",
+          "url": "https://www.marca.com/futbol/valencia/2026/09/09/rodri-disculpa-gaya-son-malisimos-referido-valencia-mestalla.html",
+          "source": "MARCA"
+        },
+        {
+          "title": "La batalla por la final del Mundial 2030 sigue abierta",
+          "url": "https://www.mundodeportivo.com/futbol/20260910/1004225624/batalla-final-mundial-2030-sigue-abierta.html",
+          "source": "Mundo Deportivo"
+        },
+        {
+          "title": "Mijatovic y los pitos del Bernabéu: \"El comportamiento de ciertos futbolistas también enfada al aficionado\"",
+          "url": "https://www.mundodeportivo.com/futbol/real-madrid/20260910/1004225532/mijatovic-pitos-bernabeu-comportamiento-futbolistas-enfada-aficionado.html",
+          "source": "Mundo Deportivo"
+        }
+      ],
+      "rejected": [
+        {
+          "title": "Partidos de Champions League hoy, jueves 10 de septiembre: resultados, horarios y dónde ver",
+          "url": "https://www.marca.com/futbol/champions-league/2026/09/10/partidos-champions-league-hoy-jueves-10-septiembre-resultados-horarios-ver.html",
+          "source": "MARCA"
+        },
+        {
+          "title": "Desvelan motivo que bloqueó un fichajes en la medular del Real Madrid",
+          "url": "https://www.bernabeudigital.com/mercado/desvelan-motivo-bloqueo-fichajes-galacticos-medular-real-madrid-346593",
+          "source": "Bernabéu Digital"
+        },
+        {
+          "title": "Mercado de fichajes | El Liverpool se une al Real Madrid en la carrera por Olise",
+          "url": "https://www.bernabeudigital.com/primer-plano/mercado-fichajes-liverpool-une-real-madrid-carrera-olise-346570",
+          "source": "Bernabéu Digital"
+        },
+        {
+          "title": "Vargas viaja a Madrid para revisar su rodilla",
+          "url": "https://www.marca.com/futbol/sevilla/2026/09/10/vargas-viaja-madrid-revisar-rodilla.html",
+          "source": "MARCA"
+        },
+        {
+          "title": "Agoumé, el puntal silencioso del Sevilla",
+          "url": "https://www.marca.com/futbol/sevilla/2026/09/10/agoume-puntal-silencioso-sevilla.html",
+          "source": "MARCA"
+        }
+      ]
+    },
+    "it": {
+      "scanned": 400,
+      "acceptedCount": 9,
+      "accepted": [
+        {
+          "title": "Okafor si congeda dalla Svizzera: \"Con Yakin non voglio pi&ugrave; giocare\"",
+          "url": "https://www.corrieredellosport.it/news/calcio/2026/09/10-151150779/okafor_si_congenda_dalla_svizzera_con_yakin_non_voglio_pi_giocare/",
+          "source": "Corriere dello Sport"
+        },
+        {
+          "title": "Dybala, paura nella notte. Si sveglia e trova la moglie cos&igrave;: \"Traumatizzato\"",
+          "url": "https://www.corrieredellosport.it/news/calcio/serie-a/roma/dybala/2026/09/10-151147856/dybala_paura_nella_notte_si_sveglia_e_trova_la_moglie_cos_traumatizzato/",
+          "source": "Corriere dello Sport"
+        },
+        {
+          "title": "\"Non potevo continuare cos&igrave; e rovinare mio figlio\". Lavezzi shock: \"Mi hanno convinto a...\"",
+          "url": "https://www.tuttosport.com/news/calcio/serie-a/napoli/2026/09/10-151148800/non_potevo_continuare_cos_e_rovinare_mio_figlio_lavezzi_shock_mi_hanno_convinto_a_/",
+          "source": "Tuttosport"
+        },
+        {
+          "title": "Lavezzi: \"Mi voleva la Juve, ma ho scelto Napoli per Diego. Primo giorno in citt&agrave;: mi &egrave; venuta a prendere la polizia!\"",
+          "url": "https://www.calcionapoli24.it/le_interviste/lavezzi-mi-voleva-la-juve-ma-ho-scelto-napoli-per-diego-primo-n698124.html",
+          "source": "CalcioNapoli24"
+        },
+        {
+          "title": "Prosegue la tensione tra gli ultras ed ADL: partono cori vergognosi contro il patron del Napoli",
+          "url": "https://www.calcionapoli24.it/brevi/prosegue-la-tensione-tra-gli-ultras-ed-adl-partono-cori-vergognosi-contro-n697990.html",
+          "source": "CalcioNapoli24"
+        },
+        {
+          "title": "Juventus, Douglas Luiz come non lo avete mai visto: piange per la convocazione con il Brasile",
+          "url": "https://video.gazzetta.it/video-juventus-douglas-luiz-in-lacrime-per-la-convocazione-con-il-brasile/f8e67dc2-3e9a-4050-84f4-e123a7a41xlk",
+          "source": "La Gazzetta dello Sport"
+        },
+        {
+          "title": "Napoli multato dalla UEFA per la coreografia degli Ultras: la ricostruzione",
+          "url": "https://www.spazionapoli.it/2026/09/10/napoli-multato-dalla-uefa-per-la-coreografia-degli-ultras-la-ricostruzione/",
+          "source": "Spazio Napoli"
+        },
+        {
+          "title": "Ma che fine ha fatto Viva El Futbol? Parpiglia: \"Adani pronto a lasciare e a sbarcare su...\"",
+          "url": "https://www.golssip.it/news/ma-che-fine-ha-fatto-viva-el-futbol-parpiglia-adani/",
+          "source": "Golssip"
+        },
+        {
+          "title": "Nel 2023 aggressione e rapina a casa Donnarumma: in Francia parte il processo",
+          "url": "https://www.golssip.it/gossip/calcio/donnarumma-rapina-francia-processo/",
+          "source": "Golssip"
+        }
+      ],
+      "rejected": [
+        {
+          "title": "Il mercato della Lazio non &egrave; chiuso: ecco tutte le opzioni",
+          "url": "https://www.corrieredellosport.it/news/calcio/calcio-mercato/lazio/2026/09/10-151148129/il_mercato_della_lazio_non_chiuso_ecco_tutte_le_opzioni/",
+          "source": "Corriere dello Sport"
+        },
+        {
+          "title": "De Rossi verso Genoa-Frosinone: \"Pressione giusta\". E sul mercato: \"Non avevamo Robben e Ribery\"",
+          "url": "https://www.tuttosport.com/news/calcio/serie-a/genoa/2026/09/10-151151775/de_rossi_verso_genoa-frosinone_pressione_giusta_e_sul_mercato_non_avevamo_robben_e_ribery/",
+          "source": "Tuttosport"
+        },
+        {
+          "title": "DIRETTA - Diretta gol Champions League: risultati live",
+          "url": "https://www.calcionapoli24.it/champions_league/diretta-diretta-gol-champions-league-risultati-live-n618689.html",
+          "source": "CalcioNapoli24"
+        },
+        {
+          "title": "Caso Lang, Gazzetta: oggi si allener&agrave; per evitare di ritrovarsi a gennaio sul mercato!",
+          "url": "https://www.calcionapoli24.it/rassegna_stampa/caso-lang-gazzetta-oggi-si-allener-per-evitare-di-ritrovarsi-a-gennaio-n698073.html",
+          "source": "CalcioNapoli24"
+        },
+        {
+          "title": "Arsenal, Arteta a TNT: \"La prestazione non rispecchia il risultato, abbiamo creato molte occasioni contro un avversario ostico! Era difficile scardinare la loro difesa\"",
+          "url": "https://www.calcionapoli24.it/le_interviste/arsenal-arteta-a-tnt-la-prestazione-non-rispecchia-il-risultato-abbiamo-creato-n698008.html",
+          "source": "CalcioNapoli24"
+        }
+      ]
+    },
+    "de": {
+      "scanned": 199,
+      "acceptedCount": 1,
+      "accepted": [
+        {
+          "title": "Nicht ganz dicht - Barcas Milliarden-Projekt Stadion: Es regnet rein",
+          "url": "https://www.krone.at/4289963",
+          "source": "Kronen Zeitung"
+        }
+      ],
+      "rejected": [
+        {
+          "title": "Programmwechsel - Neue Ära für Burg auf dem Kanzianiberg beginnt",
+          "url": "https://www.krone.at/4289225",
+          "source": "Kronen Zeitung"
+        },
+        {
+          "title": "3 Tore in 12 Minuten - „Unfassbar!“ CL-Hattrick-Held in elitärem Kreis",
+          "url": "https://www.krone.at/4289358",
+          "source": "Kronen Zeitung"
+        },
+        {
+          "title": "Bluttat in Graz - Schwester beschützt – dann mit Hammer erschlagen",
+          "url": "https://www.krone.at/4290175",
+          "source": "Kronen Zeitung"
+        },
+        {
+          "title": "Nach neun Jahren - Paukenschlag! Schöttel steht vor Aus beim ÖFB",
+          "url": "https://www.krone.at/4290451",
+          "source": "Kronen Zeitung"
+        },
+        {
+          "title": "Am Weg nach Österreich - Busunglück fordert „mehrere Tote“ in der Schweiz",
+          "url": "https://www.krone.at/4290456",
+          "source": "Kronen Zeitung"
+        }
+      ]
+    }
+  }
+}
