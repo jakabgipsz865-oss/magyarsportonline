@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RssSourceAdapter, type RssParserLike } from "./rss-adapter";
+import { RssSourceAdapter, createDefaultParser, type RssParserLike } from "./rss-adapter";
 
 describe("RssSourceAdapter", () => {
   it("normalizes RSS items into NormalizedArticle, stripping HTML", async () => {
@@ -36,7 +36,7 @@ describe("RssSourceAdapter", () => {
     ]);
   });
 
-  it("prefers a native enclosure image over media:thumbnail", async () => {
+  it("does not trust dimensionless enclosure or thumbnail quality", async () => {
     const fakeParser: RssParserLike = {
       parseURL: async () => ({
         items: [
@@ -51,10 +51,10 @@ describe("RssSourceAdapter", () => {
     };
     const adapter = new RssSourceAdapter(fakeParser);
     const [article] = await adapter.fetch({ url: "https://feeds.example.com/football.xml" });
-    expect(article?.imageUrl).toBe("https://example.com/enclosure.jpg");
+    expect(article?.imageUrl).toBeNull();
   });
 
-  it("falls back to the first media:thumbnail when there is no enclosure, including array form", async () => {
+  it("uses a placeholder for dimensionless RSS thumbnails", async () => {
     const fakeParser: RssParserLike = {
       parseURL: async () => ({
         items: [
@@ -71,9 +71,107 @@ describe("RssSourceAdapter", () => {
     };
     const adapter = new RssSourceAdapter(fakeParser);
     const [article] = await adapter.fetch({ url: "https://feeds.example.com/football.xml" });
-    expect(article?.imageUrl).toBe("https://example.com/thumb-1.jpg");
+    expect(article?.imageUrl).toBeNull();
   });
 
+  it.each([
+    [
+      {
+        enclosure: {
+          url: "https://publisher.test/small.jpg",
+          width: "150",
+          height: "84",
+          type: "image/jpeg",
+        },
+        mediaContent: [
+          {
+            $: {
+              url: "https://publisher.test/large.jpg?width=1200&signature=abc",
+              width: "1200",
+              height: "675",
+              type: "image/jpeg",
+            },
+          },
+        ],
+      },
+      "https://publisher.test/large.jpg?width=1200&signature=abc",
+    ],
+    [
+      {
+        mediaThumbnail: [
+          { $: { url: "https://publisher.test/300.jpg", width: "300", height: "169" } },
+          { $: { url: "https://publisher.test/1024.jpg", width: "1024", height: "576" } },
+        ],
+      },
+      "https://publisher.test/1024.jpg",
+    ],
+    [
+      {
+        enclosure: { url: "https://publisher.test/tiny.jpg", width: "150", height: "84" },
+        mediaThumbnail: [
+          { $: { url: "https://publisher.test/300.jpg", width: "300", height: "169" } },
+        ],
+      },
+      null,
+    ],
+    [
+      {
+        mediaContent: [
+          {
+            $: {
+              url: "https://publisher.test/video.mp4",
+              width: "1920",
+              height: "1080",
+              type: "video/mp4",
+            },
+          },
+        ],
+      },
+      null,
+    ],
+  ])(
+    "selects declared large publisher images and preserves their exact URL",
+    async (images, expected) => {
+      const adapter = new RssSourceAdapter({
+        parseURL: async () => ({
+          items: [{ link: "https://publisher.test/article", title: "Football", ...images }],
+        }),
+      });
+      const [article] = await adapter.fetch({ url: "https://publisher.test/rss" });
+      expect(article?.imageUrl).toBe(expected);
+      if (expected) expect(article?.image?.url).toBe(expected);
+    },
+  );
+  it("keeps every media content/thumbnail element when parsing real XML", async () => {
+    const parser = createDefaultParser() as ReturnType<typeof createDefaultParser> & {
+      parseString(xml: string): ReturnType<RssParserLike["parseURL"]>;
+    };
+    const feed = await parser.parseString(
+      `<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel><title>Football</title><item><title>Football</title><link>https://publisher.test/a</link><enclosure url="https://publisher.test/tiny.jpg" type="image/jpeg" width="150" height="84"/><media:content url="https://publisher.test/800.jpg" type="image/jpeg" width="800" height="450"/><media:content url="https://publisher.test/1200.jpg" type="image/jpeg" width="1200" height="675"/><media:thumbnail url="https://publisher.test/300.jpg" width="300" height="169"/><media:thumbnail url="https://publisher.test/1024.jpg" width="1024" height="576"/></item></channel></rss>`,
+    );
+    const adapter = new RssSourceAdapter({ parseURL: async () => feed });
+    const [article] = await adapter.fetch({ url: "https://publisher.test/feed" });
+    expect(article?.imageUrl).toBe("https://publisher.test/1200.jpg");
+    expect(article?.image?.source).toBe("media:content");
+  });
+  it("parses publisher CEST dates", async () => {
+    const adapter = new RssSourceAdapter({
+      parseURL: async () => ({
+        items: [
+          {
+            link: "https://publisher.test/a",
+            title: "Football",
+            pubDate: "Thu, 10 Sep 2026 23:00:53 CEST",
+          },
+        ],
+      }),
+    });
+    expect(
+      (
+        await adapter.fetch({ url: "https://publisher.test/feed" })
+      )[0]?.publishedAtSource?.toISOString(),
+    ).toBe("2026-09-10T21:00:53.000Z");
+  });
   it("sets imageUrl to null when neither enclosure nor media:thumbnail is present", async () => {
     const fakeParser: RssParserLike = {
       parseURL: async () => ({ items: [{ link: "https://example.com/a", title: "A" }] }),

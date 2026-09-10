@@ -4,12 +4,14 @@ import { z } from "zod";
 import { createRepositories } from "../../../../lib/db";
 import { env } from "../../../../lib/env";
 import { publishTabloid } from "../../../../lib/tabloid";
+import type { TabloidSourceMode } from "@magyarsportonline/shared";
 import registry from "../../../../lib/tabloid-sources.json";
 
 export const maxDuration = 300;
 const languages = ["en", "es", "it", "de"] as const;
 const requestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("register") }),
+  z.object({ action: z.literal("reset-sources"), sourceIds: z.array(z.string().uuid()).max(40) }),
   z.object({ action: z.literal("proof"), language: z.enum(languages) }),
   z.object({ action: z.literal("activate") }),
 ]);
@@ -41,6 +43,15 @@ async function status() {
     model: tabloid.TABLOID_MODEL,
     freeOnly: env.GEMINI_FREE_ONLY,
     dailyCap: env.GEMINI_DAILY_REQUEST_CAP,
+    activeSources: (await repos.sourceRepository.listActive()).map((source) => ({
+      id: source.id,
+      name: source.name,
+    })),
+    configuredSources: registry.map((source) => ({
+      id: source.id,
+      name: source.name,
+      mode: source.mode,
+    })),
   };
 }
 
@@ -55,6 +66,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const parsed = requestSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: "invalid request" }, { status: 400 });
+  if (parsed.data.action === "reset-sources") {
+    if (env.TABLOID_AUTO_PUBLISH)
+      return NextResponse.json(
+        { error: "Pause publication before resetting sources" },
+        { status: 409 },
+      );
+    const requestedIds = parsed.data.sourceIds;
+    if (requestedIds.some((id) => !registry.some((source) => source.id === id)))
+      return NextResponse.json(
+        { error: "Only configured source IDs are allowed" },
+        { status: 400 },
+      );
+    const repos = createRepositories();
+    await repos.sourceRepository.pauseTabloidSources();
+    for (const source of registry.filter((source) => requestedIds.includes(source.id)))
+      await repos.sourceRepository.registerTabloidSource(source);
+    return NextResponse.json({ registered: requestedIds.length, active: false, llmCalls: 0 });
+  }
   if (!env.TABLOID_AUTO_PUBLISH)
     return NextResponse.json({ paused: true, llmCalls: 0 }, { status: 409 });
   const repos = createRepositories();
@@ -105,7 +134,12 @@ export async function POST(request: NextRequest) {
           const article = articles.find(
             (item) =>
               item.bodyOriginal.trim() &&
-              tabloid.isFootballTabloid(item.titleOriginal, item.bodyOriginal, source.footballFeed),
+              tabloid.isFootballTabloid(
+                item.titleOriginal,
+                item.bodyOriginal,
+                source.footballFeed,
+                source.mode as TabloidSourceMode,
+              ),
           );
           if (!article) continue;
           const raw = await repos.rawArticleRepository.insertTabloid(

@@ -7,6 +7,8 @@ import { createRepositories, type Repositories } from "./db";
 import { getWriterLlmClient } from "./llm";
 import { getLogger } from "./logger";
 import { env } from "./env";
+import registry from "./tabloid-sources.json";
+import type { TabloidSourceMode } from "@magyarsportonline/shared";
 import { TABLOID_PUBLIC_START } from "@magyarsportonline/shared";
 
 /** One accepted raw article owns one Story. Retries reuse its persisted draft. */
@@ -18,10 +20,20 @@ export async function publishTabloid(rawId: string, repos: Repositories = create
     if (raw.ingestedAt < new Date(TABLOID_PUBLIC_START)) return { skipped: true };
     const source = await repos.sourceRepository.getById(raw.sourceId);
     if (!source) throw new Error("Tabloid source missing");
-    const config = source.fetchConfig as { tabloid?: boolean; footballFeed?: boolean };
-    if (!config.tabloid) return { skipped: true };
+    const config = source.fetchConfig as {
+      tabloid?: boolean;
+      footballFeed?: boolean;
+      mode?: TabloidSourceMode;
+    };
+    if (!config.tabloid || !registry.some((item) => item.id === source.id))
+      return { skipped: true };
     if (
-      !tabloid.isFootballTabloid(raw.titleOriginal, raw.bodyOriginal, config.footballFeed !== false)
+      !tabloid.isFootballTabloid(
+        raw.titleOriginal,
+        raw.bodyOriginal,
+        config.footballFeed !== false,
+        config.mode,
+      )
     )
       return { skipped: true };
     const { story } = await repos.storyRepository.createOrMatchByFingerprint(
@@ -108,9 +120,17 @@ export async function ingestTabloid(repos: Repositories = createRepositories()) 
   let budget = Math.max(0, 36 - queueBefore.pending - queueBefore.inProgress);
   const ingestBudget = Math.min(12, budget);
   budget = ingestBudget;
-  const sources = (await repos.sourceRepository.listActive()).filter(
-    (source) => (source.fetchConfig as { tabloid?: boolean }).tabloid === true,
-  );
+  const sources = (await repos.sourceRepository.listActive())
+    .filter(
+      (source) =>
+        (source.fetchConfig as { tabloid?: boolean }).tabloid === true &&
+        registry.some((item) => item.id === source.id),
+    )
+    .sort((a, b) => {
+      const priority = (source: typeof a) =>
+        (source.fetchConfig as { mode?: string }).mode === "DIRECT_GOSSIP" ? 0 : 1;
+      return priority(a) - priority(b);
+    });
   const results: Array<{
     sourceId: string;
     sourceName: string;
@@ -125,6 +145,7 @@ export async function ingestTabloid(repos: Repositories = createRepositories()) 
         let count = 0;
         try {
           const config = source.fetchConfig as {
+            mode?: TabloidSourceMode;
             footballFeed?: boolean;
             feedUrls?: string[];
             url: string;
@@ -149,8 +170,14 @@ export async function ingestTabloid(repos: Repositories = createRepositories()) 
               article.titleOriginal,
               article.bodyOriginal,
               config.footballFeed !== false,
+              config.mode,
             );
             if (accepted) budget--;
+            const image =
+              article.image ??
+              (accepted
+                ? await sourceIngest.fetchArticleImage(article.sourceUrl, config.url)
+                : null);
             const raw = await repos.rawArticleRepository.insertTabloid(
               {
                 sourceId: source.id,
@@ -159,7 +186,7 @@ export async function ingestTabloid(repos: Repositories = createRepositories()) 
                 bodyOriginal: article.bodyOriginal,
                 subtitleOriginal: article.subtitleOriginal,
                 authorOriginal: article.authorOriginal,
-                imageUrl: article.imageUrl,
+                imageUrl: image?.url ?? null,
                 language: source.language,
                 publishedAtSource: article.publishedAtSource,
                 contentOrigin: article.contentOrigin,

@@ -7,8 +7,12 @@ const mocks = vi.hoisted(() => ({
   revalidate: vi.fn(),
   llm: {},
   env: { TABLOID_AUTO_PUBLISH: true },
+  accepted: vi.fn((_title: string) => true),
+  fetchImages: vi.fn(),
+  fetchRss: vi.fn(),
 }));
 vi.mock("./env", () => ({ env: mocks.env }));
+vi.mock("./tabloid-sources.json", () => ({ default: [{ id: "source-0" }, { id: "source-1" }] }));
 vi.mock("./db", () => ({ createRepositories: vi.fn() }));
 vi.mock("./logger", () => ({ getLogger: () => ({ info: vi.fn() }) }));
 vi.mock("./llm", () => ({ getWriterLlmClient: () => mocks.llm }));
@@ -16,13 +20,18 @@ vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
 vi.mock("@magyarsportonline/agents", () => ({
   tabloid: {
     writeTabloid: mocks.write,
-    isFootballTabloid: () => true,
+    isFootballTabloid: mocks.accepted,
     TABLOID_MODEL: "gemini-3.5-flash-lite",
     TABLOID_PROMPT: "tabloid-hu@2",
   },
   seo: { slugify: () => "magyar-hir" },
   readModelProjector: { handleStoryPublished: mocks.project },
-  sourceIngest: {},
+  sourceIngest: {
+    fetchArticleImage: mocks.fetchImages,
+    RssSourceAdapter: class {
+      fetch = mocks.fetchRss;
+    },
+  },
 }));
 import { ingestTabloid, publishTabloid } from "./tabloid";
 
@@ -59,7 +68,11 @@ function fixtures() {
       releaseTabloidQuotaDeferral: vi.fn(),
     },
     sourceRepository: {
-      getById: () => ({ name: "Source", fetchConfig: { tabloid: true, footballFeed: true } }),
+      getById: (id: string) => ({
+        id,
+        name: "Source",
+        fetchConfig: { tabloid: true, footballFeed: true },
+      }),
     },
     storyRepository: {
       createOrMatchByFingerprint: async (key: string) => {
@@ -89,6 +102,7 @@ describe("tabloid publication", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.env.TABLOID_AUTO_PUBLISH = true;
+    mocks.accepted.mockReturnValue(true);
     mocks.write.mockResolvedValue({
       title_hu: "Magyar hír",
       lead_hu: "Személyes történet.",
@@ -114,6 +128,59 @@ describe("tabloid publication", () => {
     expect(await publishTabloid("one", repos)).toEqual({ skipped: true });
     expect(mocks.write).not.toHaveBeenCalled();
     expect(mocks.project).not.toHaveBeenCalled();
+  });
+  it("stores rejected raw items without a queue job or an HTML/image request, and preserves selected remote URLs", async () => {
+    const url = "https://publisher.test/photo.jpg?width=1200&signature=unchanged";
+    mocks.accepted.mockImplementation((title) => title === "accepted");
+    mocks.fetchRss.mockResolvedValue([
+      {
+        titleOriginal: "rejected",
+        bodyOriginal: "transfer news",
+        sourceUrl: "https://publisher.test/rejected",
+        publishedAtSource: new Date(),
+        imageUrl: null,
+      },
+      {
+        titleOriginal: "accepted",
+        bodyOriginal: "personal story",
+        sourceUrl: "https://publisher.test/accepted",
+        publishedAtSource: new Date(),
+        imageUrl: url,
+        image: { url, source: "media:content", width: 1200, height: 675 },
+      },
+    ]);
+    const insert = vi.fn(async () => ({ id: "raw" }));
+    const repos = {
+      pipelineJobRepository: { getStatusCounts: async () => ({ pending: 0, inProgress: 0 }) },
+      sourceRepository: {
+        listActive: async () => [
+          {
+            id: "source-0",
+            name: "Publisher",
+            language: "en",
+            fetchConfig: {
+              tabloid: true,
+              mode: "DIRECT_GOSSIP",
+              footballFeed: true,
+              url: "https://publisher.test/feed",
+            },
+          },
+        ],
+        recordFetchResult: vi.fn(),
+      },
+      rawArticleRepository: { insertTabloid: insert },
+    } as unknown as Repositories;
+    await ingestTabloid(repos);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ titleOriginal: "rejected" }),
+      false,
+    );
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ titleOriginal: "accepted", imageUrl: url }),
+      true,
+    );
+    expect(mocks.fetchImages).not.toHaveBeenCalled();
+    expect(mocks.write).not.toHaveBeenCalled();
   });
   it("keeps different sources separate even when content and URL are identical", async () => {
     const { repos, stories } = fixtures();

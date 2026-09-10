@@ -1,227 +1,202 @@
 [
   {
-    "id": "5416c5b2-fc48-4994-ac0f-fcc966b9cb83",
-    "name": "Daily Mail Football",
-    "url": "https://www.dailymail.co.uk/sport/football/index.rss",
-    "feedUrls": ["https://www.dailymail.co.uk/sport/football/index.rss"],
+    "id": "19294270-000c-597d-9c68-d6ad9c5e8950",
+    "name": "The Sun / SunSport Football",
     "language": "en",
-    "footballFeed": true
-  },
-  {
-    "id": "9800abd7-7b83-42bb-acf3-a6c5177d1ca3",
-    "name": "talkSPORT Football",
-    "url": "https://talksport.com/football/feed",
-    "feedUrls": ["https://talksport.com/football/feed"],
-    "language": "en",
-    "footballFeed": true
-  },
-  {
-    "id": "63ea73b1-d0c8-40f4-a2b9-a28a188fe3b9",
-    "name": "Daily Mirror Sport",
-    "url": "https://www.mirror.co.uk/sport/?service=rss",
-    "feedUrls": ["https://www.mirror.co.uk/sport/?service=rss"],
-    "language": "en",
-    "footballFeed": false
+    "mode": "BROAD_TABLOID_FOOTBALL",
+    "tier": "CORE",
+    "url": "https://www.thesun.co.uk/sport/football/feed/",
+    "feedUrls": ["https://www.thesun.co.uk/sport/football/feed/"],
+    "footballFeed": true,
+    "enabled": true
   },
   {
     "id": "f069373a-d1c9-484f-aa7a-4e9f5bc0976b",
     "name": "Daily Star Football",
+    "language": "en",
+    "mode": "BROAD_TABLOID_FOOTBALL",
+    "tier": "CORE",
     "url": "https://www.dailystar.co.uk/sport/football/?service=rss",
     "feedUrls": ["https://www.dailystar.co.uk/sport/football/?service=rss"],
-    "language": "en",
-    "footballFeed": true
+    "footballFeed": true,
+    "enabled": true
   },
   {
-    "id": "4249ab1b-d599-4734-a36a-7008f5f6deb7",
-    "name": "101 Great Goals",
-    "url": "https://www.101greatgoals.com/feed",
-    "feedUrls": ["https://www.101greatgoals.com/feed"],
+    "id": "5416c5b2-fc48-4994-ac0f-fcc966b9cb83",
+    "name": "Daily Mail Football",
     "language": "en",
-    "footballFeed": true
+    "mode": "BROAD_TABLOID_FOOTBALL",
+    "tier": "CORE",
+    "url": "https://www.dailymail.com/sport/football/index.rss",
+    "feedUrls": ["https://www.dailymail.com/sport/football/index.rss"],
+    "footballFeed": true,
+    "enabled": true
   },
   {
-    "id": "f90c9797-d442-4a39-a56c-c91ef431ec98",
-    "name": "CaughtOffside",
-    "url": "https://www.caughtoffside.com/feed",
-    "feedUrls": ["https://www.caughtoffside.com/feed"],
+    "id": "200bba72-cf0a-563e-b49f-fe440c2d1f3f",
+    "name": "Daily Mirror Football",
     "language": "en",
-    "footballFeed": true
+    "mode": "BROAD_TABLOID_FOOTBALL",
+    "tier": "CORE",
+    "url": "https://www.mirror.co.uk/sport/football/?service=rss",
+    "feedUrls": ["https://www.mirror.co.uk/sport/football/?service=rss"],
+    "footballFeed": true,
+    "enabled": true
   },
   {
-    "id": "f2a28368-121e-468c-a982-7be40100ea21",
-    "name": "FootballFanCast",
-    "url": "https://www.footballfancast.com/feed",
-    "feedUrls": ["https://www.footballfancast.com/feed"],
+    "id": "25205fef-c4a1-5749-a061-75cc05b73d47",
+    "name": "SPORTbible Football",
     "language": "en",
-    "footballFeed": true
+    "mode": "BROAD_TABLOID_FOOTBALL",
+    "tier": "CORE",
+    "url": "https://www.sportbible.com/football.rss",
+    "feedUrls": ["https://www.sportbible.com/football.rss"],
+    "footballFeed": true,
+    "enabled": true
   },
   {
-    "id": "fda67a83-08ed-43ac-aae4-58eaebf43d3e",
-    "name": "GiveMeSport",
-    "url": "https://www.givemesport.com/feed",
-    "feedUrls": ["https://www.givemesport.com/feed"],
+    "id": "8d36f522-b315-5e4f-81aa-0af41634c716",
+    "name": "Daily Express Football",
     "language": "en",
-    "footballFeed": false
+    "mode": "BROAD_TABLOID_FOOTBALL",
+    "tier": "CORE",
+    "url": "https://www.express.co.uk/posts/rss/67/football",
+    "feedUrls": ["https://www.express.co.uk/posts/rss/67/football"],
+    "footballFeed": true,
+    "enabled": true
   },
   {
-    "id": "59059c32-0b6e-490f-a989-0bdfc36f7b8c",
-    "name": "HITC",
-    "url": "https://www.hitc.com/news/feed",
-    "feedUrls": ["https://www.hitc.com/news/feed"],
+    "id": "c2cf522b-53d2-52a8-a488-39995352613b",
+    "name": "Metro Football",
     "language": "en",
-    "footballFeed": false
+    "mode": "BROAD_TABLOID_FOOTBALL",
+    "tier": "CORE",
+    "url": "https://metro.co.uk/sport/football/feed/",
+    "feedUrls": ["https://metro.co.uk/sport/football/feed/"],
+    "footballFeed": true,
+    "enabled": true
   },
   {
-    "id": "e5697a48-25fc-4792-a6f1-d61a8da7d700",
-    "name": "MARCA",
-    "url": "https://e00-marca.uecdn.es/rss/futbol/primera-division.xml",
-    "feedUrls": [
-      "https://e00-marca.uecdn.es/rss/futbol/primera-division.xml",
-      "https://e00-marca.uecdn.es/rss/futbol/mas-futbol.xml",
-      "https://e00-marca.uecdn.es/rss/futbol/futbol-internacional.xml"
-    ],
+    "id": "9800abd7-7b83-42bb-acf3-a6c5177d1ca3",
+    "name": "talkSPORT Football",
+    "language": "en",
+    "mode": "BROAD_TABLOID_FOOTBALL",
+    "tier": "SECONDARY",
+    "url": "https://talksport.com/football/feed",
+    "feedUrls": ["https://talksport.com/football/feed"],
+    "footballFeed": true,
+    "enabled": true
+  },
+  {
+    "id": "3ea38ef8-ae93-50e3-b15e-5d4ee9581f17",
+    "name": "OKDIARIO Fútbol",
     "language": "es",
-    "footballFeed": true
+    "mode": "BROAD_TABLOID_FOOTBALL",
+    "tier": "SECONDARY",
+    "url": "https://okdiario.com/deportes/futbol/feed",
+    "feedUrls": ["https://okdiario.com/deportes/futbol/feed"],
+    "footballFeed": true,
+    "enabled": true
   },
   {
-    "id": "acf98333-7010-492c-a5e5-97af436f3d24",
-    "name": "SPORT",
-    "url": "https://www.sport.es/es/rss/last-news/news.xml",
-    "feedUrls": ["https://www.sport.es/es/rss/last-news/news.xml"],
+    "id": "07056b24-0d7b-5435-bf9d-4286fc9994e5",
+    "name": "Mundo Deportivo El Otro Mundo",
     "language": "es",
-    "footballFeed": true
-  },
-  {
-    "id": "57ef4e59-76da-4825-a89c-5aa439cc0928",
-    "name": "Mundo Deportivo",
-    "url": "https://www.mundodeportivo.com/feed/rss/futbol",
-    "feedUrls": [
-      "https://www.mundodeportivo.com/feed/rss/futbol",
-      "https://www.mundodeportivo.com/feed/rss/futbol/internacional"
-    ],
-    "language": "es",
-    "footballFeed": true
-  },
-  {
-    "id": "74235f6c-020d-4189-ab53-56d1b35a2789",
-    "name": "Bernabéu Digital",
-    "url": "https://www.bernabeudigital.com/rss",
-    "feedUrls": ["https://www.bernabeudigital.com/rss"],
-    "language": "es",
-    "footballFeed": true
-  },
-  {
-    "id": "585496cc-0e47-4197-a1ca-fef8ab78eff0",
-    "name": "Panenka",
-    "url": "https://www.panenka.org/feed/",
-    "feedUrls": ["https://www.panenka.org/feed/"],
-    "language": "es",
-    "footballFeed": true
-  },
-  {
-    "id": "6ec938be-ca80-489d-a096-8912bc397e52",
-    "name": "Corriere dello Sport",
-    "url": "https://www.corrieredellosport.it/rss/calcio",
-    "feedUrls": ["https://www.corrieredellosport.it/rss/calcio"],
-    "language": "it",
-    "footballFeed": true
-  },
-  {
-    "id": "b73ffdcd-e1bc-42be-a8db-22970606dc57",
-    "name": "Tuttosport",
-    "url": "https://www.tuttosport.com/rss/calcio",
-    "feedUrls": ["https://www.tuttosport.com/rss/calcio"],
-    "language": "it",
-    "footballFeed": true
-  },
-  {
-    "id": "98941b64-9c63-4996-a4da-c5a02a1f2de3",
-    "name": "La Gazzetta dello Sport",
-    "url": "https://www.gazzetta.it/dynamic-feed/rss/section/Calcio.xml",
-    "feedUrls": ["https://www.gazzetta.it/dynamic-feed/rss/section/Calcio.xml"],
-    "language": "it",
-    "footballFeed": true
-  },
-  {
-    "id": "5de17dc3-d7d8-4187-a316-7c4b82afdb3d",
-    "name": "FCInter1908",
-    "url": "https://www.fcinter1908.it/feed",
-    "feedUrls": ["https://www.fcinter1908.it/feed"],
-    "language": "it",
-    "footballFeed": true
-  },
-  {
-    "id": "b6178d80-96c3-4d14-a7a2-4094ad0c74c3",
-    "name": "CalcioNapoli24",
-    "url": "https://www.calcionapoli24.it/feed",
-    "feedUrls": ["https://www.calcionapoli24.it/feed"],
-    "language": "it",
-    "footballFeed": true
-  },
-  {
-    "id": "a089090d-3e55-41fc-ad62-e0569aea128b",
-    "name": "Spazio Napoli",
-    "url": "https://www.spazionapoli.it/feed",
-    "feedUrls": ["https://www.spazionapoli.it/feed"],
-    "language": "it",
-    "footballFeed": true
-  },
-  {
-    "id": "c92bf736-9f46-4d5a-a679-537e98035a12",
-    "name": "TuttoNapoli",
-    "url": "https://www.tuttonapoli.net/rss",
-    "feedUrls": ["https://www.tuttonapoli.net/rss"],
-    "language": "it",
-    "footballFeed": true
-  },
-  {
-    "id": "fc1d7a0c-0d1f-4c74-a8d4-5a0487a7bb57",
-    "name": "IamNaples",
-    "url": "https://www.iamnaples.it/feed",
-    "feedUrls": ["https://www.iamnaples.it/feed"],
-    "language": "it",
-    "footballFeed": true
+    "mode": "DIRECT_GOSSIP",
+    "tier": "SECONDARY",
+    "url": "https://www.mundodeportivo.com/feed/rss/elotromundo",
+    "feedUrls": ["https://www.mundodeportivo.com/feed/rss/elotromundo"],
+    "footballFeed": false,
+    "enabled": true
   },
   {
     "id": "d9b5c007-3d31-40ae-a642-697dfe445a87",
     "name": "Golssip",
+    "language": "it",
+    "mode": "DIRECT_GOSSIP",
+    "tier": "CORE",
     "url": "https://www.golssip.it/feed/",
     "feedUrls": ["https://www.golssip.it/feed/"],
+    "footballFeed": false,
+    "enabled": true
+  },
+  {
+    "id": "fa4a7098-03d0-5432-81ff-9d622609285d",
+    "name": "Virgilio Sport Gossip",
     "language": "it",
-    "footballFeed": false
+    "mode": "DIRECT_GOSSIP",
+    "tier": "CORE",
+    "url": "https://sport.virgilio.it/feed/rss/gossip/",
+    "feedUrls": ["https://sport.virgilio.it/feed/rss/gossip/"],
+    "footballFeed": false,
+    "enabled": true
+  },
+  {
+    "id": "b73ffdcd-e1bc-42be-a8db-22970606dc57",
+    "name": "Tuttosport Calcio",
+    "language": "it",
+    "mode": "BROAD_TABLOID_FOOTBALL",
+    "tier": "SECONDARY",
+    "url": "https://www.tuttosport.com/rss/calcio",
+    "feedUrls": ["https://www.tuttosport.com/rss/calcio"],
+    "footballFeed": true,
+    "enabled": true
+  },
+  {
+    "id": "98941b64-9c63-4996-a4da-c5a02a1f2de3",
+    "name": "Gazzetta Calcio",
+    "language": "it",
+    "mode": "BROAD_TABLOID_FOOTBALL",
+    "tier": "SECONDARY",
+    "url": "https://www.gazzetta.it/dynamic-feed/rss/section/Calcio.xml",
+    "feedUrls": ["https://www.gazzetta.it/dynamic-feed/rss/section/Calcio.xml"],
+    "footballFeed": true,
+    "enabled": true
+  },
+  {
+    "id": "6ec938be-ca80-489d-a096-8912bc397e52",
+    "name": "Corriere dello Sport Calcio",
+    "language": "it",
+    "mode": "BROAD_TABLOID_FOOTBALL",
+    "tier": "SECONDARY",
+    "url": "https://www.corrieredellosport.it/rss/calcio",
+    "feedUrls": ["https://www.corrieredellosport.it/rss/calcio"],
+    "footballFeed": true,
+    "enabled": true
   },
   {
     "id": "0bbb09ae-4ae2-49d1-a837-0259dc2d21d2",
     "name": "BILD",
+    "language": "de",
+    "mode": "BROAD_TABLOID_FOOTBALL",
+    "tier": "CORE",
     "url": "https://www.bild.de/feed/alles.xml",
     "feedUrls": ["https://www.bild.de/feed/alles.xml"],
-    "language": "de",
-    "footballFeed": false
+    "footballFeed": false,
+    "enabled": true
   },
   {
     "id": "071eea13-6ae7-4455-af18-1d3a150c28ad",
-    "name": "SPORT BILD",
+    "name": "SPORT BILD Football",
+    "language": "de",
+    "mode": "BROAD_TABLOID_FOOTBALL",
+    "tier": "CORE",
     "url": "https://sportbild.bild.de/rss/vw-fussball/vw-fussball-45036878,sort=1,view=rss2.sport.xml",
     "feedUrls": [
       "https://sportbild.bild.de/rss/vw-fussball/vw-fussball-45036878,sort=1,view=rss2.sport.xml"
     ],
-    "language": "de",
-    "footballFeed": true
+    "footballFeed": true,
+    "enabled": true
   },
   {
     "id": "45367605-f18e-47c3-a585-9741b6c8ff8f",
-    "name": "Kronen Zeitung",
-    "url": "https://api.krone.at/v1/rss/rssfeed-google.xml?id=2311992",
-    "feedUrls": ["https://api.krone.at/v1/rss/rssfeed-google.xml?id=2311992"],
+    "name": "Kronen Zeitung Fussball",
     "language": "de",
-    "footballFeed": false
-  },
-  {
-    "id": "b8893629-db05-43d2-aa56-282793a7bd0a",
-    "name": "SPOX fallback/general",
-    "url": "https://feeds.feedburner.com/spox-sport/",
-    "feedUrls": ["https://feeds.feedburner.com/spox-sport/"],
-    "language": "de",
-    "footballFeed": false
+    "mode": "BROAD_TABLOID_FOOTBALL",
+    "tier": "CORE",
+    "url": "https://api.krone.at/v1/rss/rssfeed-google.xml?id=958",
+    "feedUrls": ["https://api.krone.at/v1/rss/rssfeed-google.xml?id=958"],
+    "footballFeed": true,
+    "enabled": true
   }
 ]
