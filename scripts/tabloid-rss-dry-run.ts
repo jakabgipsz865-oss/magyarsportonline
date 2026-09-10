@@ -43,6 +43,7 @@ for (let offset = 0; offset < feeds.length; offset += 8) {
               article.titleOriginal,
               article.bodyOriginal,
               source.footballFeed,
+              source.mode as "DIRECT_GOSSIP" | "BROAD_TABLOID_FOOTBALL",
             ),
           });
         }

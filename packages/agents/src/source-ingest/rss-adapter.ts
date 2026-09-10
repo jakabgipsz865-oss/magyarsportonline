@@ -1,4 +1,10 @@
 import Parser from "rss-parser";
+import {
+  imageDimension,
+  remoteImageUrl,
+  selectRemoteImage,
+  type RemoteImage,
+} from "./remote-image";
 import { z } from "zod";
 import { withRetry } from "../shared/retry";
 import { stripHtml } from "../shared/strip-html";
@@ -8,7 +14,7 @@ const rssFetchConfigSchema = z.object({ url: z.string().url() });
 
 /** A single `<media:thumbnail url="..." .../>` tag as parsed by rss-parser's customFields (xml2js attribute convention: `$`). */
 interface MediaThumbnail {
-  $?: { url?: string; width?: string; height?: string };
+  $?: { url?: string; width?: string; height?: string; type?: string; medium?: string };
 }
 
 interface RssFeedItem {
@@ -21,7 +27,9 @@ interface RssFeedItem {
   isoDate?: string;
   pubDate?: string;
   /** Native rss-parser support, no customFields needed. */
-  enclosure?: { url?: string };
+  enclosure?: { url?: string; width?: string; height?: string; type?: string };
+  enclosures?: MediaThumbnail[];
+  mediaContent?: MediaThumbnail | MediaThumbnail[];
   /** BBC-style `<media:thumbnail>` — only present when the parser is configured with the matching customField (see `createDefaultParser` below). Feeds with multiple sizes give an array; a single tag gives one object. */
   mediaThumbnail?: MediaThumbnail | MediaThumbnail[];
 }
@@ -31,36 +39,49 @@ export interface RssParserLike {
   parseURL(url: string): Promise<{ items: RssFeedItem[] }>;
 }
 
-function createDefaultParser(): RssParserLike {
+export function createDefaultParser(): RssParserLike {
   return new Parser({
     timeout: 8000,
-    customFields: { item: [["media:thumbnail", "mediaThumbnail"]] },
+    customFields: {
+      item: [
+        ["media:thumbnail", "mediaThumbnail", { keepArray: true }],
+        ["media:content", "mediaContent", { keepArray: true }],
+        ["enclosure", "enclosures", { keepArray: true }],
+      ],
+    },
   });
 }
 
-function extractImageUrl(item: RssFeedItem): string | null {
-  if (item.enclosure?.url) {
-    return item.enclosure.url;
-  }
-  const thumbnails = (
-    Array.isArray(item.mediaThumbnail) ? item.mediaThumbnail : [item.mediaThumbnail]
-  ).filter((thumbnail): thumbnail is MediaThumbnail => Boolean(thumbnail?.$?.url));
-  const area = (thumbnail: MediaThumbnail) => {
-    const width = Number(thumbnail.$?.width);
-    const height = Number(thumbnail.$?.height);
-    return width > 0 && height > 0 && width <= 10_000 && height <= 10_000 ? width * height : 0;
+function extractImage(item: RssFeedItem): RemoteImage | null {
+  const candidates: RemoteImage[] = [];
+  const add = (attributes: MediaThumbnail["$"], source: RemoteImage["source"]) => {
+    if (!attributes || !remoteImageUrl(attributes.url)) return;
+    if (attributes.type && !attributes.type.startsWith("image/")) return;
+    if (attributes.medium && attributes.medium !== "image") return;
+    candidates.push({
+      url: attributes.url!,
+      source,
+      width: imageDimension(attributes.width),
+      height: imageDimension(attributes.height),
+    });
   };
-  const thumbnail = thumbnails.some((candidate) => area(candidate) > 0)
-    ? thumbnails.reduce((largest, candidate) =>
-        area(candidate) > area(largest) ? candidate : largest,
-      )
-    : thumbnails[0];
-  return thumbnail?.$?.url ?? null;
+  const many = (value: MediaThumbnail | MediaThumbnail[] | undefined) =>
+    Array.isArray(value) ? value : value ? [value] : [];
+  for (const image of many(item.mediaContent)) add(image.$, "media:content");
+  for (const image of many(item.mediaThumbnail)) add(image.$, "thumbnail");
+  for (const image of item.enclosures ?? []) add(image.$, "enclosure");
+  add(item.enclosure, "enclosure");
+  return selectRemoteImage(candidates);
 }
 
 function parsePublishedDate(value: string | undefined): Date | null {
   if (!value) return null;
-  const parsed = new Date(value.replace(/\sBST$/, " +0100"));
+  const parsed = new Date(
+    value
+      .replace(/\sBST$/, " +0100")
+      .replace(/\sCEST$/, " +0200")
+      .replace(/\sCET$/, " +0100"),
+  );
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
@@ -98,6 +119,7 @@ export class RssSourceAdapter implements SourceAdapter {
         );
         const publishedAtSource = parsePublishedDate(item.isoDate ?? item.pubDate);
 
+        const image = extractImage(item);
         return {
           sourceUrl,
           ...(item.guid ? { guid: item.guid } : {}),
@@ -110,7 +132,8 @@ export class RssSourceAdapter implements SourceAdapter {
           bodyOriginal,
           authorOriginal: null,
           publishedAtSource,
-          imageUrl: extractImageUrl(item),
+          imageUrl: image?.url ?? null,
+          ...(image ? { image } : {}),
           contentOrigin: "rss_snippet",
         };
       })

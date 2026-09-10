@@ -1,0 +1,952 @@
+{
+  "observedAt": "2026-09-10T21:18:14.680Z",
+  "readOnly": true,
+  "llmCalls": 0,
+  "imageFileRequests": 0,
+  "rows": [
+    {
+      "id": "19294270-000c-597d-9c68-d6ad9c5e8950",
+      "source": "The Sun / SunSport Football",
+      "language": "en",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "CORE",
+      "url": "https://www.thesun.co.uk/sport/football/feed/",
+      "rss": "PASS",
+      "currentItems": 24,
+      "acceptedCount": 1,
+      "eligible": true,
+      "reason": null,
+      "accepted": [
+        "Diletta Leotta puts on busty display in elegant black dress as she returns to screens for Champions League"
+      ],
+      "rejected": [
+        "‘What do you mean?’ – Champions League star’s stunned reaction after being told manager resigned in post-match interview",
+        "Man Utd ratings: Mainoo is best player for second game running at Old Trafford but Mazraoui won’t dislodge dubious Dalot",
+        "Man Utd 4 Sabah 0: Carrick’s changed side breeze past minnows for first Champions League win in nearly three years",
+        "Tottenham and Bournemouth came close to signing LaLiga boss praised by Jose Mourinho, Luis Enrique and Diego Simeone",
+        "Hull boss gives brilliant two-word response when asked how to deal with free-scoring Chelsea"
+      ]
+    },
+    {
+      "id": "f069373a-d1c9-484f-aa7a-4e9f5bc0976b",
+      "source": "Daily Star Football",
+      "language": "en",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "CORE",
+      "url": "https://www.dailystar.co.uk/sport/football/?service=rss",
+      "rss": "PASS",
+      "currentItems": 25,
+      "acceptedCount": 3,
+      "eligible": true,
+      "reason": null,
+      "accepted": [
+        "Porto star 'grabbed Erling Haaland's bum' after Champions League tunnel chaos",
+        "Jaw-dropping footballer goes viral as fans say 'she's definitely a keeper'",
+        "Arsenal fans told to 'hide shirts' by club or be hunted by terrifying football firm"
+      ],
+      "rejected": [
+        "Michael Carrick's key tactical decision as Man Utd make emphatic Champions League return",
+        "West Ham star issues strong statement over wild kidnap plot claims",
+        "Liverpool star Alisson hit with massive fine after actions during Premier League clash",
+        "Wrexham's Prem dream gets serious as ex-Newcastle chief arrives — is Parkinson at risk?",
+        "'Argentina stars who can't speak English are pathetic – learn the lingo or get out'"
+      ]
+    },
+    {
+      "id": "5416c5b2-fc48-4994-ac0f-fcc966b9cb83",
+      "source": "Daily Mail Football",
+      "language": "en",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "CORE",
+      "url": "https://www.dailymail.com/sport/football/index.rss",
+      "rss": "PASS",
+      "currentItems": 73,
+      "acceptedCount": 7,
+      "eligible": true,
+      "reason": null,
+      "accepted": [
+        "Manchester United facing ANOTHER protest... as furious local residents hit back over club's plans to open fanzone behind the Stretford End",
+        "Rodri apologises after leaked video showed Barcelona star brutally ridiculing Spanish rivals Valencia",
+        "Manchester United facing ANOTHER protest... as furious local residents hit back over club's plans to open fanzone behind the Stretford End",
+        "Mauricio Pochettino reignites Mike Dean spat following his 'stupid' remark in 2019 - as he claims referee is now 'showing people how he was' after his controversial 'minigames' claims while officiating Premier League games",
+        "Rodri apologises after leaked video showed Barcelona star brutally ridiculing Spanish rivals Valencia"
+      ],
+      "rejected": [
+        "Manchester United vs Sabah - Champions League LIVE: Four different scorers help hosts record comfortable win",
+        "Boxing Day bonanza is back with SEVEN games as Premier League confirm TV dates for festive period - following last season's backlash with just one fixture played",
+        "Barcelona sporting director Deco reveals why LaLiga giants chose to sign Anthony Gordon after overlooking Marcus Rashford - and explains what the team were missing last season",
+        "Liverpool star Alisson Becker hit with £8,000 fine after furiously lashing out at fourth official's board following penalty decision during Reds' 2-2 draw with Nottingham Forest",
+        "Leeds star Noah Okafor QUITS international football aged just 26 after explosive bust up with Switzerland manager"
+      ]
+    },
+    {
+      "id": "200bba72-cf0a-563e-b49f-fe440c2d1f3f",
+      "source": "Daily Mirror Football",
+      "language": "en",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "CORE",
+      "url": "https://www.mirror.co.uk/sport/football/?service=rss",
+      "rss": "PASS",
+      "currentItems": 25,
+      "acceptedCount": 0,
+      "eligible": true,
+      "reason": null,
+      "accepted": [],
+      "rejected": [
+        "Benjamin Sesko sends clear message to Michael Carrick on night of few revelations for Man Utd",
+        "Man Utd batter Sabah to enjoy dream Champions League return - 5 talking points",
+        "UFC star Paddy Pimblett admits he wants to ‘beat up’ Arsenal boss Mikel Arteta as challenge laid out",
+        "Todd Boehly era at Chelsea nearly over with talks accelerating for duo to sell shares",
+        "Premier League star admits he would CYCLE to Man Utd after transfer collapse"
+      ]
+    },
+    {
+      "id": "25205fef-c4a1-5749-a061-75cc05b73d47",
+      "source": "SPORTbible Football",
+      "language": "en",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "CORE",
+      "url": "https://www.sportbible.com/football.rss",
+      "rss": "PASS",
+      "currentItems": 22,
+      "acceptedCount": 0,
+      "eligible": true,
+      "reason": null,
+      "accepted": [],
+      "rejected": [
+        "Archie Brown finds out during post-match interview that Fenerbahce manager Ismail Kartal has resigned",
+        "Why Bryan Mbeumo, Patrick Dorgu and Leny Yoro are wearing different kits to Man Utd teammates vs Sabah",
+        "Marcus Rashford receives explanation from Barcelona behind decision to snub him for Anthony Gordon",
+        "What would actually happen if Chelsea were stripped of 2017 Premier League title after Mauricio Pochettino demand",
+        "FPL expert builds perfect wildcard team for GW4 that will help every manager climb their mini league"
+      ]
+    },
+    {
+      "id": "8d36f522-b315-5e4f-81aa-0af41634c716",
+      "source": "Daily Express Football",
+      "language": "en",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "CORE",
+      "url": "https://www.express.co.uk/posts/rss/67/football",
+      "rss": "PASS",
+      "currentItems": 10,
+      "acceptedCount": 0,
+      "eligible": true,
+      "reason": null,
+      "accepted": [],
+      "rejected": [
+        "Man Utd player ratings vs Sabah: Bruno Fernandes the standout as six 7/10s shine",
+        "Premier League chiefs respond as Mauricio Pochettino demands Chelsea are stripped of title",
+        "JJ Gabriel sends clear message to Man Utd boss Michael Carrick after sensational debut",
+        "Mauricio Pochettino risks Argentina wrath after making 'controversial' England admission",
+        "Champions League manager resigns immediately after full-time as players stunned"
+      ]
+    },
+    {
+      "id": "c2cf522b-53d2-52a8-a488-39995352613b",
+      "source": "Metro Football",
+      "language": "en",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "CORE",
+      "url": "https://metro.co.uk/sport/football/feed/",
+      "rss": "PASS",
+      "currentItems": 28,
+      "acceptedCount": 0,
+      "eligible": true,
+      "reason": null,
+      "accepted": [],
+      "rejected": [
+        "Owen Hargreaves claims Man Utd star can become ‘best in the world’ after Champions League win",
+        "Mauricio Pochettino makes Mikel Arteta claim and Arsenal Premier League prediction",
+        "Regis Le Bris makes huge Arsenal Premier League claim ahead of Sunderland clash",
+        "Arsenal legend Thierry Henry says Champions League team are ‘unplayable’",
+        "Deco explains why Barcelona wanted Anthony Gordon more than Marcus Rashford"
+      ]
+    },
+    {
+      "id": "535dae11-19b8-5eb9-9f09-16186a3d8e49",
+      "source": "Metro Oddballs",
+      "language": "en",
+      "mode": "DIRECT_GOSSIP",
+      "tier": "CORE",
+      "url": "https://metro.co.uk/sport/oddballs/feed/",
+      "rss": "FAIL",
+      "currentItems": 0,
+      "acceptedCount": 0,
+      "eligible": false,
+      "reason": "SKIP: no dated items in the last 48 hours",
+      "accepted": [],
+      "rejected": []
+    },
+    {
+      "id": "9800abd7-7b83-42bb-acf3-a6c5177d1ca3",
+      "source": "talkSPORT Football",
+      "language": "en",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "SECONDARY",
+      "url": "https://talksport.com/football/feed",
+      "rss": "PASS",
+      "currentItems": 47,
+      "acceptedCount": 1,
+      "eligible": true,
+      "reason": null,
+      "accepted": [
+        "West Ham midfielder Edson Alvarez furiously rejects allegations he was involved in a kidnapping plot"
+      ],
+      "rejected": [
+        "Champions League manager immediately resigns minutes after opening match",
+        "15-year-old wonderkid makes Manchester United history with stunning debut hat-trick",
+        "Leicester warned they&#8217;re heading for &#8216;Armageddon&#8217; as prospective new owner outlines plan to save them",
+        "Hakim Ziyech finds new club four days after ex-Chelsea star had contract terminated",
+        "Lionesses legend Jill Scott handed new job at EFL club"
+      ]
+    },
+    {
+      "id": "65650a76-f67a-56ec-9fb6-7af74a3e446f",
+      "source": "OKDIARIO Paparazzi",
+      "language": "es",
+      "mode": "DIRECT_GOSSIP",
+      "tier": "CORE",
+      "url": "https://okdiario.com/deportes/corazon/feed",
+      "rss": "FAIL",
+      "currentItems": 0,
+      "acceptedCount": 0,
+      "eligible": false,
+      "reason": "SKIP: no dated items in the last 48 hours",
+      "accepted": [],
+      "rejected": []
+    },
+    {
+      "id": "3ea38ef8-ae93-50e3-b15e-5d4ee9581f17",
+      "source": "OKDIARIO Fútbol",
+      "language": "es",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "SECONDARY",
+      "url": "https://okdiario.com/deportes/futbol/feed",
+      "rss": "PASS",
+      "currentItems": 23,
+      "acceptedCount": 4,
+      "eligible": true,
+      "reason": null,
+      "accepted": [
+        "El Real Madrid firma el récord absoluto del límite salarial y saca 250 millones a un Barcelona que crece un 66%",
+        "UFP arremete contra Marlaska por el expediente a los policías agredidos por el ultra del Barça: «Absolutamente inaceptable»",
+        "Marlaska abre un expediente «por falta muy grave» a los policías agredidos por un ultra independentista del Barça",
+        "Muere repentinamente la hermana de Monchi, Catalina Rodríguez, a los 64 años"
+      ],
+      "rejected": [
+        "La Federación pasa de Marruecos: «Es un movimiento político, la final la tenemos que hacer nosotros»",
+        "La prensa afín a Mohamed VI se mofa de España por la final del Mundial: «¿Harán un gran estadio en la Ceuta ocupada?»",
+        "La FIFA desmiente a Marruecos limitándose a repetir que la sede de la final del Mundial 2030 no está decidida",
+        "Pochettino le declara la guerra al Chelsea: pide que le den una Premier League nueve años después",
+        "El Barcelona reniega ahora de Julián: «No le dijimos que expresara su deseo de irse del Atlético»"
+      ]
+    },
+    {
+      "id": "07056b24-0d7b-5435-bf9d-4286fc9994e5",
+      "source": "Mundo Deportivo El Otro Mundo",
+      "language": "es",
+      "mode": "DIRECT_GOSSIP",
+      "tier": "SECONDARY",
+      "url": "https://www.mundodeportivo.com/feed/rss/elotromundo",
+      "rss": "PASS",
+      "currentItems": 34,
+      "acceptedCount": 1,
+      "eligible": true,
+      "reason": null,
+      "accepted": [
+        "Soundhood SON Estrella Galicia, la propuesta que conecta música, barrios y escenas culturales, regresa a Barcelona el 17 de octubre"
+      ],
+      "rejected": [
+        "¿Sigue abierto el restaurante 'Bodeguita Los 50' de 'Pesadilla en la cocina'?",
+        "Jorge Fernández, sobre su infancia: \"Viví en Mondragón, que durante los años 80 y 90 era la cuna de ETA\"",
+        "El refugio gallego en el que se rodó la última película de Mario Casas en Prime Video se alquila",
+        "Ni los críticos se ponen de acuerdo: la miniserie de Movistar Plus que es Top 1 en España",
+        "La Ley de Bienestar Animal prohíbe a los propietarios de perros y gatos utilizarlos en espectáculos públicos"
+      ]
+    },
+    {
+      "id": "86d1eedf-4ab2-502f-9898-56b1482ef21c",
+      "source": "20minutos Deportes",
+      "language": "es",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "PREFLIGHT",
+      "url": "https://www.20minutos.es/rss/deportes/",
+      "rss": "PASS",
+      "currentItems": 29,
+      "acceptedCount": 1,
+      "eligible": false,
+      "reason": "PREFLIGHT",
+      "accepted": [
+        "El hermano de Jenni Hermoso asegura que le dijeron a Vinícius que iba a ganar el Balón de Oro: \"Ya tenía sitio en una vitrina\""
+      ],
+      "rejected": [
+        "La Federación de Marruecos da por segura la final del Mundial 2030 en el estadio de Casablanca",
+        "Así queda la clasificación de la Champions tras la goleada del Barça: el Real Madrid fuera del 'Top 8' y el Atlético en la zona baja",
+        "Ferran Torres guía al PSG en su estreno en Champions con un hat-trick: \"Es fácil jugar con este tipo de jugadores\"",
+        "Maica García denunciará al Sabadell por no renovarla tras ser madre: \"Tuve un cuadro fuerte de ansiedad\"",
+        "John McEnroe, leyenda del tenis, sobre Alcaraz: \"¿Cómo demonios puede estar tan feliz en la pista? Es mi jugador favorito\""
+      ]
+    },
+    {
+      "id": "64a3bf8a-c33c-596d-a568-5f00e74d8c62",
+      "source": "20minutos Gente/Televisión",
+      "language": "es",
+      "mode": "DIRECT_GOSSIP",
+      "tier": "PREFLIGHT",
+      "url": "https://www.20minutos.es/rss/gente-television/",
+      "rss": "PASS",
+      "currentItems": 26,
+      "acceptedCount": 2,
+      "eligible": false,
+      "reason": "PREFLIGHT",
+      "accepted": [
+        "Así es Kimberley Byrom, la británica detrás de las experiencias de lujo de Madring y de la 'Residencia Europea' de Shakira",
+        "Paddy, mujer de Marcos Llorente, sobre su profesión: \"Dejad de preguntarme, soy un ser de luz\""
+      ],
+      "rejected": [
+        "Tu horóscopo diario: viernes 11 de septiembre de 2026",
+        "Marina Rivers: \"Mi novio quería que me echaran de 'MasterChef' para poder verme y no hablaba de otra cosa\"",
+        "La posible indirecta de Cayetano Rivera a su hermano Fran: \"Hay quienes se creen en el derecho de contar tu historia por ti\"",
+        "Ion Aramendi desvela cuánto costó su boda con María Amores y anuncia una \"reboda\" en 2027",
+        "Un 'influencer' pierde un dedo tras intentar colarse en el Rock in Rio a pesar de tener entradas"
+      ]
+    },
+    {
+      "id": "d9b5c007-3d31-40ae-a642-697dfe445a87",
+      "source": "Golssip",
+      "language": "it",
+      "mode": "DIRECT_GOSSIP",
+      "tier": "CORE",
+      "url": "https://www.golssip.it/feed/",
+      "rss": "PASS",
+      "currentItems": 11,
+      "acceptedCount": 4,
+      "eligible": true,
+      "reason": null,
+      "accepted": [
+        "Palmeri: \"Il Napoli si è difeso bene con l'Arsenal e basta. Ma paragonarlo all'Inter...\"",
+        "Ma che fine ha fatto Viva El Futbol? Parpiglia: \"Adani pronto a lasciare e a sbarcare su...\"",
+        "Nel 2023 aggressione e rapina a casa Donnarumma: in Francia parte il processo",
+        "Pedullà: \"Napoli? Secondo tempo imbarazzante, per me non è calcio. Inter? C'è una bella...\""
+      ],
+      "rejected": [
+        "Sabatini: \"In TV fanno tutti i tattici ma nessuno ha detto che Allegri...\"",
+        "Bucciantini: \"Diouf/Dumfries? Chi è più forte. L'Inter deve fare un'impresa. E credere una cosa\"",
+        "Letizia: \"Ho sempre invidiato questa figura all'Inter. Potrebbe essere fatale nel medio periodo\"",
+        "Graziani: \"Il VAR? Morto, non ci interessa più. Alla fine Chivu ha ragione. Mica lo bocci per...\"",
+        "Bucchioni: \"Applaudo l'Inter per una cosa. Ausilio come Paratici senza Marotta? Ma se ha...\""
+      ]
+    },
+    {
+      "id": "fa4a7098-03d0-5432-81ff-9d622609285d",
+      "source": "Virgilio Sport Gossip",
+      "language": "it",
+      "mode": "DIRECT_GOSSIP",
+      "tier": "CORE",
+      "url": "https://sport.virgilio.it/feed/rss/gossip/",
+      "rss": "PASS",
+      "currentItems": 1,
+      "acceptedCount": 0,
+      "eligible": true,
+      "reason": null,
+      "accepted": [],
+      "rejected": [
+        "Martina Colombari trasformista a Venezia 83 riceve il Filming Italy Venice Award per \"Buen Camino\""
+      ]
+    },
+    {
+      "id": "b73ffdcd-e1bc-42be-a8db-22970606dc57",
+      "source": "Tuttosport Calcio",
+      "language": "it",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "SECONDARY",
+      "url": "https://www.tuttosport.com/rss/calcio",
+      "rss": "PASS",
+      "currentItems": 30,
+      "acceptedCount": 1,
+      "eligible": true,
+      "reason": null,
+      "accepted": [
+        "\"Non potevo continuare cos&igrave; e rovinare mio figlio\". Lavezzi shock: \"Mi hanno convinto a...\""
+      ],
+      "rejected": [
+        "Como una favola: lo storico esordio in Champions &egrave; un poker al Lipsia! Brillano le stelle di Fabregas",
+        "Gasperini: \"Roma ottima ma serve attenzione. Da chi mi aspettavo di pi&ugrave;. Balerdi, Molina e Pisilli...\"",
+        "La Roma soffre ma strappa il pari in Turchia: non basta Cristante contro il Fenerbahce",
+        "Vlahovic squalificato! La lite con Skriniar costa caro, il Besiktas non ci sta",
+        "Infortuni Meret e Alisson Santos: esami, comunicato ufficiale del Napoli e tempi di recupero"
+      ]
+    },
+    {
+      "id": "98941b64-9c63-4996-a4da-c5a02a1f2de3",
+      "source": "Gazzetta Calcio",
+      "language": "it",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "SECONDARY",
+      "url": "https://www.gazzetta.it/dynamic-feed/rss/section/Calcio.xml",
+      "rss": "PASS",
+      "currentItems": 30,
+      "acceptedCount": 1,
+      "eligible": true,
+      "reason": null,
+      "accepted": [
+        "Juventus, Douglas Luiz come non lo avete mai visto: piange per la convocazione con il Brasile"
+      ],
+      "rejected": [
+        "Fenerbahçe-Roma 1-1 highlights: gran gol di Cristante, poi Svilar si prende la scena",
+        "Fenerbahçe-Roma, le pagelle: Greenwood 7, ecco perché Gasp lo voleva. Mancini 5, errore grossolano",
+        "Fiorentina, Grosso rischia il licenziamento per giusta causa? L'avvocato: \"Il procedimento inizia con...\"",
+        "Gasperini: \"Ottima gara, Koné fuori per infortunio\". Si dimette l'allenatore dei turchi",
+        "Allegri e l'arte di subentrare a Conte. Ma se al posto di Hojlund devi mettere Lucca..."
+      ]
+    },
+    {
+      "id": "6ec938be-ca80-489d-a096-8912bc397e52",
+      "source": "Corriere dello Sport Calcio",
+      "language": "it",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "SECONDARY",
+      "url": "https://www.corrieredellosport.it/rss/calcio",
+      "rss": "PASS",
+      "currentItems": 30,
+      "acceptedCount": 2,
+      "eligible": true,
+      "reason": null,
+      "accepted": [
+        "Okafor si congeda dalla Svizzera: \"Con Yakin non voglio pi&ugrave; giocare\"",
+        "Dybala, paura nella notte. Si sveglia e trova la moglie cos&igrave;: \"Traumatizzato\""
+      ],
+      "rejected": [
+        "Perch&eacute; Gasperini ha sostituito Kon&eacute;: fastidio al ginocchio per il centrocampista",
+        "Clamoroso Fenerbahce, l'allenatore Kartal si dimette in conferenza stampa dopo il pareggio contro la Roma",
+        "Gasperini soddisfatto: \"Per la classifica Champions servono anche i pareggi\"",
+        "Debutto in Champions a suon di gol per Bayern e Manchester United, colpaccio Lens",
+        "L'abbraccio tra Gasperini e Greenwood dopo il corteggiamento della Roma: la scenetta in campo non passa inosservata"
+      ]
+    },
+    {
+      "id": "0bbb09ae-4ae2-49d1-a837-0259dc2d21d2",
+      "source": "BILD",
+      "language": "de",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "CORE",
+      "url": "https://www.bild.de/feed/alles.xml",
+      "rss": "PASS",
+      "currentItems": 50,
+      "acceptedCount": 0,
+      "eligible": true,
+      "reason": null,
+      "accepted": [],
+      "rejected": [
+        "Erstes CL-Spiel seit fast 3 Jahren - 4:0! Magische ManUnited-Nacht",
+        "Tor & Sieg bei Rückkehr in die Startelf - Musialas Traum-Comeback",
+        "Gegner mit rührender Oma-Opa-Aktion - Leipzig-Pleite! Dämpfer für Demichelis!",
+        "Gedenken an 11. September - Drohnen malen Twin-Towers in den Himmel",
+        "„Beauty and the Nerd“ - Nerd packt über Sex-Erfahrung mit Mann aus"
+      ]
+    },
+    {
+      "id": "071eea13-6ae7-4455-af18-1d3a150c28ad",
+      "source": "SPORT BILD Football",
+      "language": "de",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "CORE",
+      "url": "https://sportbild.bild.de/rss/vw-fussball/vw-fussball-45036878,sort=1,view=rss2.sport.xml",
+      "rss": "PASS",
+      "currentItems": 50,
+      "acceptedCount": 5,
+      "eligible": true,
+      "reason": null,
+      "accepted": [
+        "Richarlison will weg! - Tottenham-Streit erreicht die nächste Eskalationsstufe",
+        "Nach dem WM-Finale - Trump verblüfft Weltmeister-Coach mit Ballon-d'Or-Spruch",
+        "MLS-Sammler: Reus im Duell mit Müller - Messis Miami und Lewandowski im Streit",
+        "Königsklassen-Kuriosum - Wieso läuft die Champions League am Donnerstag?",
+        "Dreipack in der Champions League - Stuttgart feiert Demirovic-Party"
+      ],
+      "rejected": [
+        "Traum-Startelf-Comeback nach Zusammenbrüchen - Musiala leitet Bayerns Tor-Party ein!",
+        "Pleite beim Königsklassen-Comeback - Demichelis & Leipzig gehen in Como unter!",
+        "Superstar plant Zukunft - Spanien-Klub bestätigt Messi-Deal!",
+        "„Wie eine Tischdecke“ - Das denken die Bayern-Fans über das neue Wiesn-Trikot",
+        "Beim CL-Auftakt - Musiala überraschend in Bayern-Startelf!"
+      ]
+    },
+    {
+      "id": "03456655-7681-52db-8f91-0b13f62ccf28",
+      "source": "Blick Fussball",
+      "language": "de",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "CORE",
+      "url": "https://www.blick.ch/sport/fussball/rss.xml",
+      "rss": "FAIL",
+      "currentItems": 0,
+      "acceptedCount": 0,
+      "eligible": false,
+      "reason": "SKIP: Status code 403",
+      "accepted": [],
+      "rejected": []
+    },
+    {
+      "id": "45367605-f18e-47c3-a585-9741b6c8ff8f",
+      "source": "Kronen Zeitung Fussball",
+      "language": "de",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "CORE",
+      "url": "https://api.krone.at/v1/rss/rssfeed-google.xml?id=958",
+      "rss": "PASS",
+      "currentItems": 40,
+      "acceptedCount": 1,
+      "eligible": true,
+      "reason": null,
+      "accepted": ["Nicht ganz dicht - Barcas Milliarden-Projekt Stadion: Es regnet rein"],
+      "rejected": [
+        "Krimi in Prag - Bayern glänzt – Historischer CL-Sieg für Como",
+        "Startelf und Tor - Gänsehaut! Musiala schreibt Bayern-Geschichte",
+        "Nach neun Jahren - Paukenschlag! Schöttel steht vor Aus beim ÖFB",
+        "Champions League - Zweimal 1:1! Keine Siege in Eindhoven und Istanbul",
+        "Der Druck wird größer - Wende! Auch Frankreich stellt sich gegen Infantino"
+      ]
+    },
+    {
+      "id": "26f8e280-b627-5b68-85d1-546588a08a9e",
+      "source": "SPORT1 Boulevard",
+      "language": "de",
+      "mode": "DIRECT_GOSSIP",
+      "tier": "HOLD",
+      "url": "https://www.sport1.de/rss/boulevard",
+      "rss": "FAIL",
+      "currentItems": 0,
+      "acceptedCount": 0,
+      "eligible": false,
+      "reason": "SKIP: Status code 404",
+      "accepted": [],
+      "rejected": []
+    },
+    {
+      "id": "8c5b3ffc-9ac3-5e0e-ab24-ecb8db894a66",
+      "source": "oe24 Fussball",
+      "language": "de",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "HOLD",
+      "url": "https://www.oe24.at/sport/fussball/rss",
+      "rss": "FAIL",
+      "currentItems": 0,
+      "acceptedCount": 0,
+      "eligible": false,
+      "reason": "SKIP: Status code 404",
+      "accepted": [],
+      "rejected": []
+    },
+    {
+      "id": "ba138fa3-3e21-5034-841d-45b5a68d66be",
+      "source": "AS Tikitakas",
+      "language": "es",
+      "mode": "DIRECT_GOSSIP",
+      "tier": "HOLD",
+      "url": "https://feeds.as.com/mrss-s/pages/as/site/as.com/section/tikitakas/portada/",
+      "rss": "PASS",
+      "currentItems": 32,
+      "acceptedCount": 0,
+      "eligible": false,
+      "reason": "HOLD",
+      "accepted": [],
+      "rejected": [
+        "Grison, sobre ‘La Revuelta’ y un posible cambio de gobierno: “Quizá nos tomen como cabeza de turco”",
+        "Mónica Cruz (49 años): “Me gusta hacer ayuno, desayuno café americano y como tostadas con huevo, jamón o aguacate”",
+        "Colocar papel higiénico hacia adelante o atrás: por qué los expertos recomiendan esta opción",
+        "Chaysavanh Manichanh, experta microbiota: “Un mayor consumo de café está asociado con una reducción de la inflamación”",
+        "La reflexión de Javier Bardem sobre la cultura de EEUU comparada con España: “No pertenezco a la cultura americana”"
+      ]
+    },
+    {
+      "id": "3e37cd12-5c04-5984-91be-18450b104292",
+      "source": "ElDesmarque Famosos",
+      "language": "es",
+      "mode": "DIRECT_GOSSIP",
+      "tier": "HOLD",
+      "url": "https://www.eldesmarque.com/famosos/feed/",
+      "rss": "FAIL",
+      "currentItems": 0,
+      "acceptedCount": 0,
+      "eligible": false,
+      "reason": "SKIP: Status code 403",
+      "accepted": [],
+      "rejected": []
+    },
+    {
+      "id": "4249ab1b-d599-4734-a36a-7008f5f6deb7",
+      "source": "101 Great Goals",
+      "language": "en",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "RETIRED",
+      "url": "https://www.101greatgoals.com/feed",
+      "rss": "PASS",
+      "currentItems": 16,
+      "acceptedCount": 0,
+      "eligible": false,
+      "reason": "RETIRED",
+      "accepted": [],
+      "rejected": [
+        "Manchester United 4-0 Sabah: Report, result and goals as Red Devils cruise to UCL win",
+        "WATCH: Manchester United take the lead in Champions League",
+        "LIVE – Manchester United v Sabah: Commentary, updates, goals and stats",
+        "Manchester United vs Sabah: Line-ups confirmed for Red Devils’ Champions League return",
+        "Seahawks ‘dodge bullet’ with Darnold injury update"
+      ]
+    },
+    {
+      "id": "f90c9797-d442-4a39-a56c-c91ef431ec98",
+      "source": "CaughtOffside",
+      "language": "en",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "RETIRED",
+      "url": "https://www.caughtoffside.com/feed",
+      "rss": "PASS",
+      "currentItems": 10,
+      "acceptedCount": 0,
+      "eligible": false,
+      "reason": "RETIRED",
+      "accepted": [],
+      "rejected": [
+        "Arsenal identify 24-year-old defensive target ahead of January transfer window",
+        "Xabi Alonso makes surprise decision on Chelsea attacker who “is not part of the plans”",
+        "Arsenal send scouts to watch highly rated 24-year-old La Liga ace",
+        "Premier League summer signing admits he would have joined Manchester United",
+        "“The biggest difference is…” – sources on how Arteta has got Odegaard back to his best for Arsenal"
+      ]
+    },
+    {
+      "id": "f2a28368-121e-468c-a982-7be40100ea21",
+      "source": "FootballFanCast",
+      "language": "en",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "RETIRED",
+      "url": "https://www.footballfancast.com/feed",
+      "rss": "PASS",
+      "currentItems": 10,
+      "acceptedCount": 0,
+      "eligible": false,
+      "reason": "RETIRED",
+      "accepted": [],
+      "rejected": [
+        "Manchester United plotting £150m raid to sign two Bournemouth stars in 2027",
+        "£35m ENIC signing already looks like the modern-day Moussa Sissoko at Spurs",
+        "Exclusive: Celtic end interest in top target after club release public statement",
+        "Why £67m Arsenal star is now a bigger disaster than Gyokeres",
+        "Why Everton could be about to sign their next version of Richarlison"
+      ]
+    },
+    {
+      "id": "fda67a83-08ed-43ac-aae4-58eaebf43d3e",
+      "source": "GiveMeSport",
+      "language": "en",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "RETIRED",
+      "url": "https://www.givemesport.com/feed",
+      "rss": "PASS",
+      "currentItems": 10,
+      "acceptedCount": 0,
+      "eligible": false,
+      "reason": "RETIRED",
+      "accepted": [],
+      "rejected": [
+        "Man Utd: 3 Players Wear Special Shirt in Champions League vs Sabah",
+        "Man Utd Must Trust Academy Stars as Mainoo Shines Again",
+        "Deco Explains Why Barcelona Signed Anthony Gordon Over Marcus Rashford",
+        "Ballon d’Or: Michael Olise Backs Harry Kane to Win Award Over Himself",
+        "Tottenham Could Be Making Mistake Letting Richarlison Leave"
+      ]
+    },
+    {
+      "id": "59059c32-0b6e-490f-a989-0bdfc36f7b8c",
+      "source": "HITC",
+      "language": "en",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "RETIRED",
+      "url": "https://www.hitc.com/news/feed",
+      "rss": "PASS",
+      "currentItems": 13,
+      "acceptedCount": 1,
+      "eligible": false,
+      "reason": "RETIRED",
+      "accepted": [
+        "‘He’s not a dad’ – Trinity Rodman once explained her strained relationship with NBA legend Dennis Rodman"
+      ],
+      "rejected": [
+        "The ‘Rodman Rule’ was once created by the NWSL to make Trinity Rodman the highest paid player ever",
+        "Trinity Rodman once said Ben Shelton passed a key relationship test without even knowing it",
+        "Ben Shelton will surpass girlfriend Trinity Rodman’s record-breaking annual salary by reaching US Open final",
+        "‘What a shame…’ Argentina fans don’t like their tribute idea for Lionel Messi’s final game",
+        "‘The woman you are’ – Fans can’t believe Trinity Rodman made it to practice after late Ben Shelton win"
+      ]
+    },
+    {
+      "id": "74235f6c-020d-4189-ab53-56d1b35a2789",
+      "source": "Bernabéu Digital",
+      "language": "es",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "RETIRED",
+      "url": "https://www.bernabeudigital.com/rss",
+      "rss": "PASS",
+      "currentItems": 20,
+      "acceptedCount": 1,
+      "eligible": false,
+      "reason": "RETIRED",
+      "accepted": ["Los dos sorprendentes clubes que pelearon por Endrick en verano"],
+      "rejected": [
+        "El Real Madrid manda un mensaje directo a Diomandé: le piden paciencia",
+        "La FIFA rompe el mercado: adiós a las cláusulas desorbitadas",
+        "Desvelan motivo que bloqueó un fichajes en la medular del Real Madrid",
+        "Colocan al Barça por delante del Real Madrid en la 'Operación Haaland'",
+        "Ya hay confirmación del nuevo contrato de Bellingham: firmaría hasta 2032"
+      ]
+    },
+    {
+      "id": "585496cc-0e47-4197-a1ca-fef8ab78eff0",
+      "source": "Panenka",
+      "language": "es",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "RETIRED",
+      "url": "https://www.panenka.org/feed/",
+      "rss": "PASS",
+      "currentItems": 4,
+      "acceptedCount": 0,
+      "eligible": false,
+      "reason": "RETIRED",
+      "accepted": [],
+      "rejected": [
+        "Y la Fiore nos robó el corazón",
+        "Isco Alarcón: Europa, la tierra, el duende",
+        "Adel Taarabt y el paso del tiempo",
+        "Camello y el Rayo: recuperar lo nuestro"
+      ]
+    },
+    {
+      "id": "5de17dc3-d7d8-4187-a316-7c4b82afdb3d",
+      "source": "FCInter1908",
+      "language": "it",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "RETIRED",
+      "url": "https://www.fcinter1908.it/feed",
+      "rss": "PASS",
+      "currentItems": 50,
+      "acceptedCount": 0,
+      "eligible": false,
+      "reason": "RETIRED",
+      "accepted": [],
+      "rejected": [
+        "Champions League - Apoteosi Como: Lipsia battuto 4-1! Il Bayern ne fa 5 al Bodo",
+        "Brocchi: \"Inter la più forte in assoluto. Una squadra può impensierirla per lo scudetto\"",
+        "Palmeri: \"Napoli? Con l'Arsenal si è difeso e stop. Paragonarlo all'Inter Madrid vuol dire...\"",
+        "Inter, ecco quanto vale ora la maglia. Con BBVA ha staccato Milan e Juve: \"Nel range del Bayern\"",
+        "Bucchioni: \"Napoli, ecco perché Allegri va aspettato. Inter e Como non dico che sono...\""
+      ]
+    },
+    {
+      "id": "b6178d80-96c3-4d14-a7a2-4094ad0c74c3",
+      "source": "CalcioNapoli24",
+      "language": "it",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "RETIRED",
+      "url": "https://www.calcionapoli24.it/feed",
+      "rss": "PASS",
+      "currentItems": 190,
+      "acceptedCount": 2,
+      "eligible": false,
+      "reason": "RETIRED",
+      "accepted": [
+        "Lavezzi: \"Mi voleva la Juve, ma ho scelto Napoli per Diego. Primo giorno in citt&agrave;: mi &egrave; venuta a prendere la polizia!\"",
+        "Prosegue la tensione tra gli ultras ed ADL: partono cori vergognosi contro il patron del Napoli"
+      ],
+      "rejected": [
+        "Doppia tegola Napoli, infortunio per Meret e Alisson Santos: le condizioni e i tempi di recupero",
+        "Infortuni Napoli, Corbo: \"Possibile che nessuno abbia fatto questa cosa?\"",
+        "Classifica Champions League 2026/2027 aggiornata: Napoli a zero punti",
+        "Voti e pagelle Politano: il solito lavoro dopo il quale chieder&agrave; gli straordinari ad ADL! Non pu&ograve; che sdoppiarsi",
+        "DIRETTA - Diretta gol Champions League: risultati live"
+      ]
+    },
+    {
+      "id": "a089090d-3e55-41fc-ad62-e0569aea128b",
+      "source": "Spazio Napoli",
+      "language": "it",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "RETIRED",
+      "url": "https://www.spazionapoli.it/feed",
+      "rss": "PASS",
+      "currentItems": 20,
+      "acceptedCount": 1,
+      "eligible": false,
+      "reason": "RETIRED",
+      "accepted": ["Napoli multato dalla UEFA per la coreografia degli Ultras: la ricostruzione"],
+      "rejected": [
+        "Lavezzi, discorso da brividi sui problemi di salute: “Mi sono curato per mio figlio…”",
+        "Napoli, arrivato l’annuncio su Meret e Alisson: c’è lesione per entrambi!",
+        "Napoli-Bologna, arrivano ottime notizie per Allegri: Anguissa verso il recupero!",
+        "Giuffredi, sfogo durissimo in diretta: “Accuse gravissime contro di me e De Laurentiis. Mi sono rotto”",
+        "Il momento ideale per gli ossessionati da Massimiliano Allegri"
+      ]
+    },
+    {
+      "id": "c92bf736-9f46-4d5a-a679-537e98035a12",
+      "source": "TuttoNapoli",
+      "language": "it",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "RETIRED",
+      "url": "https://www.tuttonapoli.net/rss",
+      "rss": "PASS",
+      "currentItems": 20,
+      "acceptedCount": 0,
+      "eligible": false,
+      "reason": "RETIRED",
+      "accepted": [],
+      "rejected": [
+        "Champions, Man United e Bayern travolgono Sabah e Bodo/Glimt: i risultati",
+        "Como, debutto Champions da sogno: la squadra di Fabregas domina e batte 4-1 il Lipsia",
+        "Dalla Francia: “Allegri è finito da anni! Orribile, ma continuano a prenderlo”",
+        "Avellino, sfuma il sogno James? Pressing dell’Atletico Nacional: domani giornata decisiva",
+        "Pedullà: “Allegri, ma gioca! Pullman perenne già dal Genoa, mercato non c’entra niente”"
+      ]
+    },
+    {
+      "id": "fc1d7a0c-0d1f-4c74-a8d4-5a0487a7bb57",
+      "source": "IamNaples",
+      "language": "it",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "RETIRED",
+      "url": "https://www.iamnaples.it/feed",
+      "rss": "PASS",
+      "currentItems": 20,
+      "acceptedCount": 0,
+      "eligible": false,
+      "reason": "RETIRED",
+      "accepted": [],
+      "rejected": [
+        "Arpaia: “Gilmour mi è piaciuto tanto, bene la scelta del doppio play”",
+        "Bologna, differenziato per El Azzouzi e Orsolini: le ultime in casa rossoblù",
+        "Salvione: “Il Napoli si sta modellando, sta diventando la squadra che chiede Allegri",
+        "Olivera: “Arsenal? Lottato con una squadra fortissima, invertiremo la rotta”",
+        "Napoli, Anguissa si è allenato con il gruppo: il giocatore ci sarà con il Bologna"
+      ]
+    },
+    {
+      "id": "b8893629-db05-43d2-aa56-282793a7bd0a",
+      "source": "SPOX fallback/general",
+      "language": "de",
+      "mode": "BROAD_TABLOID_FOOTBALL",
+      "tier": "RETIRED",
+      "url": "https://feeds.feedburner.com/spox-sport/",
+      "rss": "FAIL",
+      "currentItems": 0,
+      "acceptedCount": 0,
+      "eligible": false,
+      "reason": "SKIP: no dated items in the last 48 hours",
+      "accepted": [],
+      "rejected": []
+    }
+  ],
+  "images": [
+    {
+      "source": "The Sun / SunSport Football",
+      "article": "Diletta Leotta puts on busty display in elegant black dress as she returns to screens for Champions League",
+      "articleUrl": "https://www.thesun.co.uk/sport/40338673/diletta-leotta-champions-league-instagram/",
+      "imageSource": "json-ld",
+      "width": 1920,
+      "height": 1080,
+      "remoteUrlPresent": true,
+      "imageUrl": "https://www.thesun.co.uk/wp-content/uploads/2026/09/JW-OP-LEOTTA-RETURN.jpg?quality=90&strip=all&w=1920&h=1080&crop=1"
+    },
+    {
+      "source": "Daily Star Football",
+      "article": "Porto star 'grabbed Erling Haaland's bum' after Champions League tunnel chaos",
+      "articleUrl": "https://www.dailystar.co.uk/sport/football/erling-haaland-man-city-porto-37645169",
+      "imageSource": "og",
+      "width": null,
+      "height": null,
+      "remoteUrlPresent": true,
+      "imageUrl": "https://i2-prod.dailystar.co.uk/article37645079.ece/ALTERNATES/s1200d/0_GettyImages-2294322877.jpg"
+    },
+    {
+      "source": "Daily Mail Football",
+      "article": "Manchester United facing ANOTHER protest... as furious local residents hit back over club's plans to open fanzone behind the Stretford End",
+      "articleUrl": "https://www.dailymail.com/sport/football/article-16120705/Manchester-United-facing-protest-furious-locals.html?ns_mchannel=rss&ns_campaign=1490&ito=1490",
+      "imageSource": "og",
+      "width": 1200,
+      "height": 675,
+      "remoteUrlPresent": true,
+      "imageUrl": "https://i.dailymail.com/1s/2026/09/10/15/111169249-0-image-m-5_1789052220104.jpg"
+    },
+    {
+      "source": "talkSPORT Football",
+      "article": "West Ham midfielder Edson Alvarez furiously rejects allegations he was involved in a kidnapping plot",
+      "articleUrl": "https://talksport.com/football/4573277/west-ham-edson-alvarez-kidnapping-allegations-statement/",
+      "imageSource": "og",
+      "width": 1920,
+      "height": 1080,
+      "remoteUrlPresent": true,
+      "imageUrl": "https://talksport.com/wp-content/uploads/2026/09/crop-4573331.jpg?strip=all&quality=100&w=1920&h=1080&crop=1"
+    },
+    {
+      "source": "OKDIARIO Fútbol",
+      "article": "El Real Madrid firma el récord absoluto del límite salarial y saca 250 millones a un Barcelona que crece un 66%",
+      "articleUrl": "https://okdiario.com/deportes/real-madrid-firma-record-absoluto-del-limite-salarial-saca-250-millones-barcelona-que-crece-66-20267074",
+      "imageSource": "media:content",
+      "width": 1800,
+      "height": 1013,
+      "remoteUrlPresent": true,
+      "imageUrl": "https://okdiario.com/img/2026/09/10/real-madrid-barcelona.jpg"
+    },
+    {
+      "source": "Mundo Deportivo El Otro Mundo",
+      "article": "Soundhood SON Estrella Galicia, la propuesta que conecta música, barrios y escenas culturales, regresa a Barcelona el 17 de octubre",
+      "articleUrl": "https://www.mundodeportivo.com/elotromundo/musica/20260910/1004225510/soundhood-son-estrella-galicia-propuesta-conecta-musica-barrios-escenas-culturales-regresa-barcelona-17-octubre-dct.html",
+      "imageSource": "og",
+      "width": 1200,
+      "height": 675,
+      "remoteUrlPresent": true,
+      "imageUrl": "https://imagenes2.mundodeportivo.com/files/og_thumbnail/uploads/2026/09/10/6aa26abcafb5d.png"
+    },
+    {
+      "source": "Golssip",
+      "article": "Palmeri: \"Il Napoli si è difeso bene con l'Arsenal e basta. Ma paragonarlo all'Inter...\"",
+      "articleUrl": "https://www.golssip.it/gossip/calcio/palmeri-napoli-difeso-bene-paragone-inter/",
+      "imageSource": "media:content",
+      "width": 1305,
+      "height": 800,
+      "remoteUrlPresent": true,
+      "imageUrl": "https://static.golssip.it/202605/0a18dbbdec3c8b5013cb9995af292d58.jpg"
+    },
+    {
+      "source": "Tuttosport Calcio",
+      "article": "\"Non potevo continuare cos&igrave; e rovinare mio figlio\". Lavezzi shock: \"Mi hanno convinto a...\"",
+      "articleUrl": "https://www.tuttosport.com/news/calcio/serie-a/napoli/2026/09/10-151148800/non_potevo_continuare_cos_e_rovinare_mio_figlio_lavezzi_shock_mi_hanno_convinto_a_/",
+      "imageSource": null,
+      "width": null,
+      "height": null,
+      "remoteUrlPresent": false,
+      "imageUrl": null
+    },
+    {
+      "source": "Gazzetta Calcio",
+      "article": "Juventus, Douglas Luiz come non lo avete mai visto: piange per la convocazione con il Brasile",
+      "articleUrl": "https://video.gazzetta.it/video-juventus-douglas-luiz-in-lacrime-per-la-convocazione-con-il-brasile/f8e67dc2-3e9a-4050-84f4-e123a7a41xlk",
+      "imageSource": null,
+      "width": null,
+      "height": null,
+      "remoteUrlPresent": false,
+      "imageUrl": null
+    },
+    {
+      "source": "Corriere dello Sport Calcio",
+      "article": "Okafor si congeda dalla Svizzera: \"Con Yakin non voglio pi&ugrave; giocare\"",
+      "articleUrl": "https://www.corrieredellosport.it/news/calcio/2026/09/10-151150779/okafor_si_congenda_dalla_svizzera_con_yakin_non_voglio_pi_giocare/",
+      "imageSource": null,
+      "width": null,
+      "height": null,
+      "remoteUrlPresent": false,
+      "imageUrl": null
+    }
+  ]
+}

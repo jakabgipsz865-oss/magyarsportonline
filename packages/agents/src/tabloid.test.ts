@@ -67,6 +67,22 @@ describe("precision-first football tabloid filter", () => {
   ])("checks title and RSS body together: %s", (title, content, accepted) => {
     expect(isFootballTabloid(title, content)).toBe(accepted);
   });
+  it("uses a direct gossip vertical as a positive signal, after football and hard exclusions", () => {
+    expect(
+      isFootballTabloid("Arsenal captain speaks", "A personal account.", true, "DIRECT_GOSSIP"),
+    ).toBe(true);
+    expect(
+      isFootballTabloid(
+        "Arsenal captain speaks",
+        "A personal account.",
+        true,
+        "BROAD_TABLOID_FOOTBALL",
+      ),
+    ).toBe(false);
+    expect(isFootballTabloid("Arsenal transfer scandal", "", true, "DIRECT_GOSSIP")).toBe(false);
+    expect(isFootballTabloid("Liverpool wins 2-0", "", true, "DIRECT_GOSSIP")).toBe(false);
+    expect(isFootballTabloid("Hollywood wedding", "", false, "DIRECT_GOSSIP")).toBe(false);
+  });
   it("requires football evidence even in a declared football feed", () => {
     expect(isFootballTabloid("Police arrest a politician", "", true)).toBe(false);
     expect(isFootballTabloid("Striker arrested at nightclub", "", true)).toBe(true);

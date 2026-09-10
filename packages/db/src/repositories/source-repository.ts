@@ -34,6 +34,7 @@ export class SourceRepository {
     language: string;
     footballFeed: boolean;
     feedUrls: string[];
+    mode: string;
   }): Promise<Source> {
     const [row] = await this.db
       .insert(sources)
@@ -50,16 +51,38 @@ export class SourceRepository {
         fetchConfig: {
           url: input.url,
           tabloid: true,
+          mode: input.mode,
           footballFeed: input.footballFeed,
           feedUrls: input.feedUrls,
         },
         attributionRule: "Canonical source URL retained",
         ingestWatermarkAt: new Date(),
       })
-      .onConflictDoUpdate({ target: sources.id, set: { name: input.name } })
+      .onConflictDoUpdate({
+        target: sources.id,
+        set: {
+          name: input.name,
+          isActive: false,
+          baseUrl: new URL(input.url).origin,
+          fetchConfig: {
+            url: input.url,
+            tabloid: true,
+            mode: input.mode,
+            footballFeed: input.footballFeed,
+            feedUrls: input.feedUrls,
+          },
+        },
+      })
       .returning();
     if (!row) throw new Error("Tabloid source registration failed");
     return row;
+  }
+
+  async pauseTabloidSources(): Promise<void> {
+    await this.db
+      .update(sources)
+      .set({ isActive: false })
+      .where(sql`${sources.fetchConfig}->>'tabloid' = 'true'`);
   }
 
   async activateTabloidSources(ids: string[]): Promise<void> {

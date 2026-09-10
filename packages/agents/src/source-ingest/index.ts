@@ -244,3 +244,5 @@ async function ingestOneSource(
 
   return ingestedCount;
 }
+
+export * from "./remote-image";

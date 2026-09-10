@@ -1,3 +1,4 @@
+import type { TabloidSourceMode } from "@magyarsportonline/shared";
 import { z } from "zod";
 import type { LlmClient } from "@magyarsportonline/llm";
 
@@ -12,7 +13,12 @@ export const tabloidOutputSchema = z
   .strict();
 
 /** Precision first: football context, hard exclusions, then a positive human angle. */
-export function isFootballTabloid(title: string, content: string, footballFeed = true): boolean {
+export function isFootballTabloid(
+  title: string,
+  content: string,
+  footballFeed = true,
+  mode: TabloidSourceMode = "BROAD_TABLOID_FOOTBALL",
+): boolean {
   const normalize = (value: string) =>
     value.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/ß/g, "ss");
   const headline = normalize(title);
@@ -39,7 +45,7 @@ export function isFootballTabloid(title: string, content: string, footballFeed =
 
   const humanAngle =
     /\b(scandal\w*|controvers\w*|row|feud\w*|clash(?:ed|es)? with|dressing.room clash|tunnel clash|angry|furious|slams?|blasts?|dressing.room (?:conflict|row|split)|police|arrest\w*|court|disciplinary|wife|girlfriend|husband|divorc\w*|wedding|relationship|party|parties|nightclub|alcohol|luxury|car|cars|mansion|money|instagram|social media|viral|fans? (?:outrage|react\w*)|bizarre|shock\w*|embarrass\w*|apolog\w*|tears|private life|personal drama|escandalo\w*|polemic\w*|pelea\w*|enfad\w*|furioso\w*|arremet\w*|policia|detenid\w*|detencion|tribunal|denuncia\w*|disciplinari\w*|novia|esposa|pareja sentimental|divorcio|boda|fiesta|discoteca|alcohol|lujo|coche|mansion|dinero|redes sociales|indignacion|insolit\w*|vergonz\w*|disculp\w*|lagrimas|vida privada|scandal\w*|polemich?\w*|litig\w*|rissa|furios\w*|accusa\w*|polizia|arrest\w*|tribunale|disciplinar\w*|fidanzat\w*|moglie|marito|divorzio|matrimonio|festa|discoteca|alcol|luss\w*|automobile|villa|soldi|social|tifosi infuriati|bizzarr\w*|vergogn\w*|scuse|lacrime|vita privata|skandal\w*|streit\w*|zoff|wutend|wut|tobt|polizei|festgenomm\w*|verhaft\w*|gericht|disziplinar\w*|ehefrau|freundin|scheidung|hochzeit|beziehung|nachtclub|alkohol|luxus\w*|auto|autos|geld|soziale medien|fan.?wut|empoer\w*|empor\w*|kurios\w*|bizarr\w*|schock\w*|peinlich\w*|entschuldig\w*|tranen|privatleben)\b/;
-  return humanAngle.test(text);
+  return mode === "DIRECT_GOSSIP" || humanAngle.test(text);
 }
 
 export async function writeTabloid(
