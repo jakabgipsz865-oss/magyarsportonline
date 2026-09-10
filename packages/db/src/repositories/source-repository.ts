@@ -27,6 +27,53 @@ export function isSourceDue(
 export class SourceRepository {
   constructor(private readonly db: Database) {}
 
+  async registerTabloidSource(input: {
+    id: string;
+    name: string;
+    url: string;
+    language: string;
+    footballFeed: boolean;
+    feedUrls: string[];
+  }): Promise<Source> {
+    const [row] = await this.db
+      .insert(sources)
+      .values({
+        id: input.id,
+        name: input.name,
+        baseUrl: new URL(input.url).origin,
+        type: "rss",
+        language: input.language,
+        licenseType: "public_rss",
+        reliabilityTier: "C",
+        isActive: false,
+        pollingFrequencyMinutes: 1,
+        fetchConfig: {
+          url: input.url,
+          tabloid: true,
+          footballFeed: input.footballFeed,
+          feedUrls: input.feedUrls,
+        },
+        attributionRule: "Canonical source URL retained",
+        ingestWatermarkAt: new Date(),
+      })
+      .onConflictDoUpdate({ target: sources.id, set: { name: input.name } })
+      .returning();
+    if (!row) throw new Error("Tabloid source registration failed");
+    return row;
+  }
+
+  async activateTabloidSources(ids: string[]): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.update(sources).set({ isActive: false });
+      for (const id of ids) {
+        await tx
+          .update(sources)
+          .set({ isActive: true, pollingFrequencyMinutes: 1 })
+          .where(and(eq(sources.id, id), sql`${sources.fetchConfig}->>'tabloid' = 'true'`));
+      }
+    });
+  }
+
   async listAll(): Promise<Source[]> {
     return this.db.select().from(sources).orderBy(sources.name);
   }

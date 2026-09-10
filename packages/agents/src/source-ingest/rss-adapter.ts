@@ -13,6 +13,8 @@ interface MediaThumbnail {
 
 interface RssFeedItem {
   link?: string;
+  guid?: string;
+  "content:encoded"?: string;
   title?: string;
   contentSnippet?: string;
   content?: string;
@@ -30,7 +32,10 @@ export interface RssParserLike {
 }
 
 function createDefaultParser(): RssParserLike {
-  return new Parser({ customFields: { item: [["media:thumbnail", "mediaThumbnail"]] } });
+  return new Parser({
+    timeout: 8000,
+    customFields: { item: [["media:thumbnail", "mediaThumbnail"]] },
+  });
 }
 
 function extractImageUrl(item: RssFeedItem): string | null {
@@ -67,27 +72,35 @@ function parsePublishedDate(value: string | undefined): Date | null {
  * (docs/adr/0005-mvp-end-to-end-scope-cuts.md), not in this file.
  */
 export class RssSourceAdapter implements SourceAdapter {
-  constructor(private readonly parser: RssParserLike = createDefaultParser()) {}
+  constructor(
+    private readonly parser: RssParserLike = createDefaultParser(),
+    private readonly retry = true,
+  ) {}
 
   async fetch(fetchConfig: unknown): Promise<NormalizedArticle[]> {
     const config = rssFetchConfigSchema.parse(fetchConfig);
     // Átmeneti hálózati hibára (feed pillanatnyi elérhetetlensége) rövid
     // exponenciális backoff-fal újrapróbálkozunk, mielőtt a forrás futását
     // hibásnak jelölnénk.
-    const feed = await withRetry(() => this.parser.parseURL(config.url));
+    const feed = this.retry
+      ? await withRetry(() => this.parser.parseURL(config.url))
+      : await this.parser.parseURL(config.url);
 
     return feed.items
       .map((item): NormalizedArticle | null => {
         const sourceUrl = item.link?.trim();
         const titleOriginal = stripHtml(item.title ?? "");
-        if (!sourceUrl || !titleOriginal) {
+        if (!sourceUrl || !/^https?:\/\//i.test(sourceUrl) || !titleOriginal) {
           return null;
         }
-        const bodyOriginal = stripHtml(item.contentSnippet ?? item.content ?? "");
+        const bodyOriginal = stripHtml(
+          item["content:encoded"] ?? item.content ?? item.contentSnippet ?? "",
+        );
         const publishedAtSource = parsePublishedDate(item.isoDate ?? item.pubDate);
 
         return {
           sourceUrl,
+          ...(item.guid ? { guid: item.guid } : {}),
           titleOriginal,
           // Az RSS-feed sosem ad alcímet/szerzőt — ezeket (és a rövid
           // `contentSnippet` helyett a teljes törzset) a Source Fetcher réteg

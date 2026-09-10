@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache, type ReactNode } from "react";
 import { deduplication } from "@magyarsportonline/agents";
-import { publicCredibilityRating } from "@magyarsportonline/shared";
 import { MediaThumb } from "../../../components/media-thumb";
 import { StoryRiver } from "../../../components/story-river";
 import { createRepositories } from "../../../lib/db";
@@ -110,27 +109,6 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
   const primaryEntity = primaryEntityMatch
     ? (entities.find((entity) => entity.id === primaryEntityMatch.entityId) ?? null)
     : null;
-  const independentCorroborationCount = Math.min(
-    Math.max(0, story.sources.length - 1),
-    Math.max(0, (story.credibility?.corroboratingSourceCount ?? 0) - 1),
-  );
-  const publicCredibility = story.credibility
-    ? publicCredibilityRating({
-        officialConfirmed: story.credibility.officialConfirmed,
-        sourceReliabilityTiers: story.sources.flatMap((source) =>
-          source.reliabilityTier ? [source.reliabilityTier] : [],
-        ),
-        independentCorroborationCount,
-        hasContradiction: story.credibility.contradictions.length > 0,
-      })
-    : null;
-  const reliabilityLabel = story.sources.some((source) => source.reliabilityTier === "A")
-    ? "erős"
-    : story.sources.some((source) => source.reliabilityTier === "B")
-      ? "közepes"
-      : story.sources.some((source) => source.reliabilityTier === "C")
-        ? "korlátozott"
-        : "nincs besorolva";
 
   return (
     <main className="public-surface">
@@ -203,45 +181,6 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
         </div>
 
         <aside className="story-sidebar" aria-label="A hír kiegészítő információi">
-          {publicCredibility && story.credibility ? (
-            <section
-              className={
-                "story-section story-credibility story-credibility--" + publicCredibility.slug
-              }
-            >
-              <h2>Hitelesség</h2>
-              <p className="story-credibility__rating">
-                <span>{publicCredibility.level}/5</span>
-                <strong>{publicCredibility.labelHu}</strong>
-              </p>
-              <ul className="story-credibility__meta">
-                <li>Forrás megbízhatósága: {reliabilityLabel}</li>
-                <li>Független megerősítő forrás: {independentCorroborationCount}</li>
-                <li>
-                  Hivatalos megerősítés: {story.credibility.officialConfirmed ? "igen" : "nem"}
-                </li>
-              </ul>
-
-              {story.credibility.contradictions.map((contradiction) => (
-                <div className="story-credibility__contradiction" key={contradiction.factType}>
-                  <p>
-                    <strong>⚠ Ellentmondás — {contradiction.factTypeLabelHu}:</strong>
-                  </p>
-                  <ul>
-                    {contradiction.claims.map((claim) => (
-                      <li key={claim.sourceName}>
-                        {claim.sourceName} szerint: {claim.detailHu}
-                      </li>
-                    ))}
-                  </ul>
-                  <p>
-                    <strong>Jelenlegi állapot:</strong> {contradiction.statusHu}
-                  </p>
-                </div>
-              ))}
-            </section>
-          ) : null}
-
           <section className="story-section">
             <h2>Források ({story.sources.length})</h2>
             <ul className="story-sources">

@@ -51,7 +51,7 @@ export const env = createEnv({
     GEMINI_API_KEY: z.string().min(1).optional(),
     GEMINI_MODEL: z.string().min(1).default("gemini-3.5-flash-lite"),
     GEMINI_FREE_ONLY: z.literal("true").default("true"),
-    GEMINI_DAILY_REQUEST_CAP: z.coerce.number().int().positive().optional(),
+    GEMINI_DAILY_REQUEST_CAP: z.coerce.number().int().positive().max(450).default(450),
 
     // Admin/review felület (/admin/review) HTTP Basic auth jelszava.
     // Ha nincs beállítva, az admin felület 503-mal letiltva marad —

@@ -1,4 +1,5 @@
-import { jsonb, pgTable, text, timestamp, uuid, vector } from "drizzle-orm/pg-core";
+import { jsonb, pgTable, text, timestamp, uuid, vector, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { ingestStatusEnum } from "./enums";
 import { sources } from "./sources";
 import { stories } from "./stories";
@@ -12,33 +13,43 @@ import { stories } from "./stories";
  */
 export const RAW_ARTICLE_EMBEDDING_DIMENSIONS = 1536;
 
-export const rawArticles = pgTable("raw_articles", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  sourceId: uuid("source_id")
-    .notNull()
-    .references(() => sources.id),
-  sourceUrl: text("source_url").notNull().unique(),
-  titleOriginal: text("title_original").notNull(),
-  // Source Fetcher (2026-07-28-i sprint, packages/agents/src/source-ingest/
-  // article-fetcher/): teljes cikk letöltésekor a forrás-specifikus
-  // extractor tölti ki, ha talál ilyet — RSS-only cikkeknél mindig null.
-  subtitleOriginal: text("subtitle_original"),
-  bodyOriginal: text("body_original").notNull(),
-  // Provenance is explicit so an RSS description cannot be mistaken for a
-  // successfully fetched full source article at publication time.
-  contentOrigin: text("content_origin").notNull().default("rss_snippet"),
-  authorOriginal: text("author_original"),
-  // RSS media:thumbnail/enclosure image, if the source provided one — frontend
-  // hero/thumbnail display (Real Sports Portal UX sprint). Never re-hosted,
-  // just the source URL.
-  imageUrl: text("image_url"),
-  language: text("language").notNull(),
-  embedding: vector("embedding", {
-    dimensions: RAW_ARTICLE_EMBEDDING_DIMENSIONS,
-  }),
-  extractedEntities: jsonb("extracted_entities"),
-  ingestStatus: ingestStatusEnum("ingest_status").notNull().default("ingested"),
-  storyId: uuid("story_id").references(() => stories.id),
-  publishedAtSource: timestamp("published_at_source", { withTimezone: true }),
-  ingestedAt: timestamp("ingested_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const rawArticles = pgTable(
+  "raw_articles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => sources.id),
+    sourceUrl: text("source_url").notNull(),
+    titleOriginal: text("title_original").notNull(),
+    // Source Fetcher (2026-07-28-i sprint, packages/agents/src/source-ingest/
+    // article-fetcher/): teljes cikk letöltésekor a forrás-specifikus
+    // extractor tölti ki, ha talál ilyet — RSS-only cikkeknél mindig null.
+    subtitleOriginal: text("subtitle_original"),
+    bodyOriginal: text("body_original").notNull(),
+    // Provenance is explicit so an RSS description cannot be mistaken for a
+    // successfully fetched full source article at publication time.
+    contentOrigin: text("content_origin").notNull().default("rss_snippet"),
+    authorOriginal: text("author_original"),
+    // RSS media:thumbnail/enclosure image, if the source provided one — frontend
+    // hero/thumbnail display (Real Sports Portal UX sprint). Never re-hosted,
+    // just the source URL.
+    imageUrl: text("image_url"),
+    language: text("language").notNull(),
+    embedding: vector("embedding", {
+      dimensions: RAW_ARTICLE_EMBEDDING_DIMENSIONS,
+    }),
+    extractedEntities: jsonb("extracted_entities"),
+    ingestStatus: ingestStatusEnum("ingest_status").notNull().default("ingested"),
+    storyId: uuid("story_id").references(() => stories.id),
+    publishedAtSource: timestamp("published_at_source", { withTimezone: true }),
+    ingestedAt: timestamp("ingested_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("raw_articles_source_url_unique").on(table.sourceId, table.sourceUrl),
+    uniqueIndex("raw_articles_source_guid_unique").on(
+      table.sourceId,
+      sql`(${table.extractedEntities}->>'rssGuid')`,
+    ),
+  ],
+);

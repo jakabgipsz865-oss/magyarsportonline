@@ -23,25 +23,12 @@ function timeAgo(iso: string): string {
   return `${Math.round(hours / 24)} napja`;
 }
 
-function CredibilityBadge({ story }: { story: StorySummaryView }): ReactNode {
-  if (!story.credibilityLevel) return null;
-  return (
-    <span
-      className={`home-credibility home-credibility--${story.credibilityLevel}`}
-      title={story.credibilityLabel ?? undefined}
-    >
-      {story.credibilityLevel}/5
-    </span>
-  );
-}
-
 function StoryMeta({ story }: { story: StorySummaryView }): ReactNode {
   return (
     <div className="home-story-meta">
       <span>{story.primarySourceName ?? "Forrás"}</span>
       <span aria-hidden="true">•</span>
       <time dateTime={story.publishedAt}>{timeAgo(story.publishedAt)}</time>
-      <CredibilityBadge story={story} />
     </div>
   );
 }
@@ -105,31 +92,6 @@ function MatchPanel({ panel }: { panel: PremierLeaguePanel }): ReactNode {
         </ol>
       )}
       <p className="match-provider">API-Football · 30 perces szerveroldali gyorsítótár</p>
-    </section>
-  );
-}
-
-function CredibilityScale(): ReactNode {
-  const levels = [
-    [5, "Hivatalosan megerősített"],
-    [4, "Erős, megbízható forrás"],
-    [3, "Mérsékelt bizonyosság"],
-    [2, "Korlátozott bizonyosság"],
-    [1, "Spekulatív"],
-  ] as const;
-  return (
-    <section className="home-panel">
-      <div className="home-section-title">
-        <h2>Hitelességi skála</h2>
-      </div>
-      <ol className="credibility-scale">
-        {levels.map(([level, label]) => (
-          <li key={level}>
-            <span className={`home-credibility home-credibility--${level}`}>{level}/5</span>
-            <span>{label}</span>
-          </li>
-        ))}
-      </ol>
     </section>
   );
 }
@@ -272,7 +234,6 @@ export default async function HomePage(): Promise<ReactNode> {
           </div>
 
           <aside className="home-lower-sidebar">
-            <CredibilityScale />
             {popularEntities.length > 0 ? (
               <section className="home-panel">
                 <div className="home-section-title">

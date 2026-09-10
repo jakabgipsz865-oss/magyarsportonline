@@ -1,15 +1,4 @@
-import {
-  deduplication,
-  editorialRewrite,
-  factVerification,
-  footballLexicon,
-  hungarianWriter,
-  publishGate,
-  readModelProjector,
-  seo,
-  sourceIngest,
-  storyMerge,
-} from "@magyarsportonline/agents";
+import { editorialRewrite, footballLexicon, hungarianWriter } from "@magyarsportonline/agents";
 import {
   createEventEnvelope,
   createInProcessDispatcher,
@@ -23,12 +12,10 @@ import {
   NO_LLM_MODEL_LABEL,
   NoLlmClient,
 } from "@magyarsportonline/llm";
-import { revalidatePath } from "next/cache";
 import { createRepositories, type Repositories } from "./db";
-import { env } from "./env";
-import { getFactLlmClient, getLlmClient, getWriterLlmClient } from "./llm";
+import { getLlmClient } from "./llm";
 import { getLogger } from "./logger";
-import { calculateIngestBudget } from "./ingest-control";
+import { ingestTabloid, publishTabloid } from "./tabloid";
 
 /**
  * MVP-only coarse category input for the Deduplication Agent's fingerprint
@@ -36,7 +23,6 @@ import { calculateIngestBudget } from "./ingest-control";
  * Source is a single-sport (football) feed, so there is exactly one coarse
  * bucket. Real multi-category classification is Fázis 4/8 work.
  */
-const DEFAULT_CATEGORY_SLUG = "labdarugas";
 
 /**
  * Wires every agent's event handler onto the in-process dispatcher
@@ -46,145 +32,9 @@ const DEFAULT_CATEGORY_SLUG = "labdarugas";
  */
 export function buildDispatcher(repos: Repositories = createRepositories()): InProcessDispatcher {
   const dispatcher = createInProcessDispatcher();
-  const logger = getLogger();
-  const factLlm = getFactLlmClient();
-  const writerLlm = getWriterLlmClient();
-
-  dispatcher.on("source/article.ingested", (event) =>
-    deduplication.handleSourceArticleIngested(
-      {
-        rawArticleRepository: repos.rawArticleRepository,
-        entityRepository: repos.entityRepository,
-        storyMatchRepository: repos.storyMatchRepository,
-        agentRunRepository: repos.agentRunRepository,
-        dispatcher,
-        logger,
-        defaultCategorySlug: DEFAULT_CATEGORY_SLUG,
-      },
-      event,
-    ),
-  );
-
-  dispatcher.on("story/candidate.identified", (event) =>
-    storyMerge.handleStoryCandidateIdentified(
-      {
-        storyRepository: repos.storyRepository,
-        rawArticleRepository: repos.rawArticleRepository,
-        storySourceRepository: repos.storySourceRepository,
-        storyMatchRepository: repos.storyMatchRepository,
-        entityRepository: repos.entityRepository,
-        agentRunRepository: repos.agentRunRepository,
-        dispatcher,
-        logger,
-      },
-      event,
-    ),
-  );
-
-  const factVerificationDeps = {
-    storyRepository: repos.storyRepository,
-    rawArticleRepository: repos.rawArticleRepository,
-    sourceRepository: repos.sourceRepository,
-    factRepository: repos.factRepository,
-    storySourceRepository: repos.storySourceRepository,
-    storyCredibilityHistoryRepository: repos.storyCredibilityHistoryRepository,
-    llm: factLlm,
-    agentRunRepository: repos.agentRunRepository,
-    dispatcher,
-    logger,
-  };
-  dispatcher.on("story/created", (event) =>
-    factVerification.handleFactVerificationTrigger(factVerificationDeps, event),
-  );
-  dispatcher.on("story/merge.completed", (event) => {
-    // Only genuinely new information re-triggers Fact Verification — a plain
-    // corroboration bumps confidence elsewhere without a re-write
-    // (docs/architecture/02-agents.md §2.3 "downstream szabály").
-    if (event.payload.update_type !== "new_info") {
-      return Promise.resolve();
-    }
-    return factVerification.handleFactVerificationTrigger(factVerificationDeps, event);
+  dispatcher.on("source/article.ingested", async (event) => {
+    await publishTabloid(event.payload.raw_article_id, repos);
   });
-
-  dispatcher.on("story/facts.verified", (event) =>
-    hungarianWriter.handleStoryFactsVerified(
-      {
-        storyRepository: repos.storyRepository,
-        storyVersionRepository: repos.storyVersionRepository,
-        factRepository: repos.factRepository,
-        editorialKnowledgeRepository: repos.editorialKnowledgeRepository,
-        writerLlm,
-        selfCheckLlm: factLlm,
-        agentRunRepository: repos.agentRunRepository,
-        dispatcher,
-        logger,
-      },
-      event,
-    ),
-  );
-
-  dispatcher.on("story/content.drafted", (event) =>
-    editorialRewrite.handleStoryContentDrafted(
-      {
-        storyRepository: repos.storyRepository,
-        storyVersionRepository: repos.storyVersionRepository,
-        factRepository: repos.factRepository,
-        editorialCorrectionRepository: repos.editorialCorrectionRepository,
-        editorialCorrectionApplicationRepository: repos.editorialCorrectionApplicationRepository,
-        llm: writerLlm,
-        agentRunRepository: repos.agentRunRepository,
-        dispatcher,
-        logger,
-      },
-      event,
-    ),
-  );
-
-  dispatcher.on("story/editorial.rewritten", (event) =>
-    seo.handleStoryEditorialRewritten(
-      {
-        storyRepository: repos.storyRepository,
-        storyVersionRepository: repos.storyVersionRepository,
-        agentRunRepository: repos.agentRunRepository,
-        dispatcher,
-        logger,
-      },
-      event,
-    ),
-  );
-
-  dispatcher.on("story/seo.ready", (event) =>
-    publishGate.handleStorySeoReady(
-      {
-        storyRepository: repos.storyRepository,
-        storyVersionRepository: repos.storyVersionRepository,
-        factRepository: repos.factRepository,
-        storySourceRepository: repos.storySourceRepository,
-        reviewQueueRepository: repos.reviewQueueRepository,
-        agentRunRepository: repos.agentRunRepository,
-        dispatcher,
-        logger,
-        forceReviewMode: env.FORCE_REVIEW_MODE,
-      },
-      event,
-    ),
-  );
-
-  dispatcher.on("story/published", async (event) => {
-    await readModelProjector.handleStoryPublished(
-      {
-        storyRepository: repos.storyRepository,
-        storyVersionRepository: repos.storyVersionRepository,
-        storySourceRepository: repos.storySourceRepository,
-        storyCredibilityHistoryRepository: repos.storyCredibilityHistoryRepository,
-        storyReadModelRepository: repos.storyReadModelRepository,
-        logger,
-      },
-      event,
-    );
-    revalidatePath("/");
-  });
-
   return dispatcher;
 }
 
@@ -233,142 +83,12 @@ export function buildQueueingEmitter(
 export async function dispatchJobToHandler(
   event: SportsNewsEvent,
   repos: Repositories,
-  emitter: { emit(event: unknown): Promise<void> },
+  _emitter: { emit(event: unknown): Promise<void> },
 ): Promise<void> {
-  const logger = getLogger();
-  const factLlm = getFactLlmClient();
-  const writerLlm = getWriterLlmClient();
-
-  switch (event.type) {
-    case "source/article.ingested":
-      return deduplication.handleSourceArticleIngested(
-        {
-          rawArticleRepository: repos.rawArticleRepository,
-          entityRepository: repos.entityRepository,
-          storyMatchRepository: repos.storyMatchRepository,
-          agentRunRepository: repos.agentRunRepository,
-          dispatcher: emitter,
-          logger,
-          defaultCategorySlug: DEFAULT_CATEGORY_SLUG,
-        },
-        event,
-      );
-
-    case "story/candidate.identified":
-      return storyMerge.handleStoryCandidateIdentified(
-        {
-          storyRepository: repos.storyRepository,
-          rawArticleRepository: repos.rawArticleRepository,
-          storySourceRepository: repos.storySourceRepository,
-          storyMatchRepository: repos.storyMatchRepository,
-          entityRepository: repos.entityRepository,
-          agentRunRepository: repos.agentRunRepository,
-          dispatcher: emitter,
-          logger,
-        },
-        event,
-      );
-
-    case "story/created":
-    case "story/merge.completed": {
-      if (event.type === "story/merge.completed" && event.payload.update_type !== "new_info") {
-        return;
-      }
-      return factVerification.handleFactVerificationTrigger(
-        {
-          storyRepository: repos.storyRepository,
-          rawArticleRepository: repos.rawArticleRepository,
-          sourceRepository: repos.sourceRepository,
-          factRepository: repos.factRepository,
-          storySourceRepository: repos.storySourceRepository,
-          storyCredibilityHistoryRepository: repos.storyCredibilityHistoryRepository,
-          llm: factLlm,
-          agentRunRepository: repos.agentRunRepository,
-          dispatcher: emitter,
-          logger,
-        },
-        event,
-      );
-    }
-
-    case "story/facts.verified":
-      return hungarianWriter.handleStoryFactsVerified(
-        {
-          storyRepository: repos.storyRepository,
-          storyVersionRepository: repos.storyVersionRepository,
-          factRepository: repos.factRepository,
-          editorialKnowledgeRepository: repos.editorialKnowledgeRepository,
-          writerLlm,
-          selfCheckLlm: factLlm,
-          agentRunRepository: repos.agentRunRepository,
-          dispatcher: emitter,
-          logger,
-        },
-        event,
-      );
-
-    case "story/content.drafted":
-      return editorialRewrite.handleStoryContentDrafted(
-        {
-          storyRepository: repos.storyRepository,
-          storyVersionRepository: repos.storyVersionRepository,
-          factRepository: repos.factRepository,
-          editorialCorrectionRepository: repos.editorialCorrectionRepository,
-          editorialCorrectionApplicationRepository: repos.editorialCorrectionApplicationRepository,
-          llm: writerLlm,
-          agentRunRepository: repos.agentRunRepository,
-          dispatcher: emitter,
-          logger,
-        },
-        event,
-      );
-
-    case "story/editorial.rewritten":
-      return seo.handleStoryEditorialRewritten(
-        {
-          storyRepository: repos.storyRepository,
-          storyVersionRepository: repos.storyVersionRepository,
-          agentRunRepository: repos.agentRunRepository,
-          dispatcher: emitter,
-          logger,
-        },
-        event,
-      );
-
-    case "story/seo.ready":
-      return publishGate.handleStorySeoReady(
-        {
-          storyRepository: repos.storyRepository,
-          storyVersionRepository: repos.storyVersionRepository,
-          factRepository: repos.factRepository,
-          storySourceRepository: repos.storySourceRepository,
-          reviewQueueRepository: repos.reviewQueueRepository,
-          agentRunRepository: repos.agentRunRepository,
-          dispatcher: emitter,
-          logger,
-          forceReviewMode: env.FORCE_REVIEW_MODE,
-        },
-        event,
-      );
-
-    case "story/published":
-      await readModelProjector.handleStoryPublished(
-        {
-          storyRepository: repos.storyRepository,
-          storyVersionRepository: repos.storyVersionRepository,
-          storySourceRepository: repos.storySourceRepository,
-          storyCredibilityHistoryRepository: repos.storyCredibilityHistoryRepository,
-          storyReadModelRepository: repos.storyReadModelRepository,
-          logger,
-        },
-        event,
-      );
-      revalidatePath("/");
-      return;
-
-    default:
-      return;
+  if (event.type === "source/article.ingested") {
+    await publishTabloid(event.payload.raw_article_id, repos);
   }
+  // Historical fact/merge/rewrite events never re-enter the publication path.
 }
 
 /**
@@ -396,46 +116,8 @@ export async function dispatchJobToHandler(
  * `buildQueueingEmitter`'s doc comment). A separate worker
  * (`/api/internal/jobs/process`) drains the queue on its own schedule.
  */
-export async function runIngestPipeline(): Promise<{
-  results: Awaited<ReturnType<typeof sourceIngest.runSourceIngest>>;
-  queueBefore: Awaited<ReturnType<Repositories["pipelineJobRepository"]["getStatusCounts"]>>;
-  ingestBudget: number;
-  ingestDeferred: boolean;
-}> {
-  const repos = createRepositories();
-  const dispatcher = buildQueueingEmitter(repos.pipelineJobRepository);
-  const queueBefore = await repos.pipelineJobRepository.getStatusCounts();
-  const ingestBudget = calculateIngestBudget(queueBefore);
-
-  const logger = getLogger();
-  if (ingestBudget === 0) {
-    logger.warn(
-      { queue: queueBefore },
-      "ingest deferred because the durable pipeline queue is above its pressure limit",
-    );
-  }
-  const results = await sourceIngest.runSourceIngest({
-    sourceRepository: repos.sourceRepository,
-    rawArticleRepository: repos.rawArticleRepository,
-    agentRunRepository: repos.agentRunRepository,
-    dispatcher,
-    // Source Fetcher (2026-07-28-i sprint): az RSS-adaptert becsomagoljuk
-    // egy dekorátorral, ami a rövid contentSnippet helyett a cikkoldalról
-    // letöltött, teljes törzset adja tovább, HA van a domainhez
-    // regisztrált extractor — minden más forrás, vagy bármilyen
-    // letöltési/kinyerési hiba esetén az eredeti RSS
-    // snippetre esik vissza, a pipeline sosem áll le emiatt.
-    adapters: {
-      rss: new sourceIngest.ArticleEnrichingSourceAdapter(
-        new sourceIngest.RssSourceAdapter(),
-        new sourceIngest.ArticleFetcher(undefined, undefined, logger),
-        logger,
-      ),
-    },
-    logger,
-    maxNewArticlesPerRun: ingestBudget,
-  });
-  return { results, queueBefore, ingestBudget, ingestDeferred: ingestBudget === 0 };
+export async function runIngestPipeline() {
+  return ingestTabloid();
 }
 
 /**

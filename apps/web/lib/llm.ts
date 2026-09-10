@@ -66,7 +66,7 @@ export function getWriterLlmClient(): LlmClient {
   }
   const repos = createRepositories();
   const metered = new ProviderFallbackLlmClient({
-    inner: new GeminiLlmClient({ apiKey: env.GEMINI_API_KEY, model: env.GEMINI_MODEL }),
+    inner: new GeminiLlmClient({ apiKey: env.GEMINI_API_KEY, model: "gemini-3.5-flash-lite" }),
     fallback: new NoLlmClient(),
     providerName: "gemini",
     describeError: describeGeminiError,
@@ -76,7 +76,7 @@ export function getWriterLlmClient(): LlmClient {
   cachedWriterClient = new DailyRequestCappedLlmClient(
     metered,
     "gemini",
-    env.GEMINI_DAILY_REQUEST_CAP,
+    Math.min(450, env.GEMINI_DAILY_REQUEST_CAP),
     repos.llmUsageRepository,
     isGeminiDefinitelyUnmeteredError,
   );
