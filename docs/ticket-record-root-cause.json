@@ -1,0 +1,39 @@
+{
+  "tickets": [
+    {
+      "source": "The Sun / SunSport Football",
+      "title": "Man Utd brutally strip 685 fans of their season tickets and warn 464 more amid controversial ticket touting crackdown",
+      "rawId": "2956fc66-fbf3-44da-b5fb-12979aead0d9",
+      "normalizedEntities": [
+        "team:manchester-united"
+      ],
+      "eventType": null,
+      "eventKey": null,
+      "fingerprint": "8972b1c8649e12d994d9bf2b69e8b72b84d86e4c664946dfa1871a109de8fe72",
+      "whyNotMatched": "Entity aliases already normalize correctly. eventTypes has no ticket revocation/enforcement type; types.length=0 makes describeTabloidEvent return null. resolveTabloidEvent uses sourceId/rawId fallback hash."
+    },
+    {
+      "source": "Daily Star Football",
+      "title": "Man Utd 'remove 685 season tickets' after controversial summer crackdown",
+      "rawId": "befe94d6-a170-47c1-8659-0cd61d4e494f",
+      "normalizedEntities": [
+        "team:manchester-united"
+      ],
+      "eventType": null,
+      "eventKey": null,
+      "fingerprint": "b41bcc98905307899ea6269a54595b96ae9a12e68a518fff9744c385a92f2553",
+      "whyNotMatched": "Entity aliases already normalize correctly. eventTypes has no ticket revocation/enforcement type; types.length=0 makes describeTabloidEvent return null. resolveTabloidEvent uses sourceId/rawId fallback hash."
+    }
+  ],
+  "arsenal": {
+    "id": "1e842e16-ece5-4392-856c-43838cb0d595",
+    "title": "Best starts to the season EVER as Arsenal look to smash Chelsea’s 21-year-old record and continue incredible winning run",
+    "body": "ARSENAL have enjoyed a flying start in their bid to win their first ever back-to-back Premier league titles. The Gunners finally broke their duck last season by winning their first Prem trophy since the Invincibles' 2004 triumph. And the North Londoners have won all three of their opening matches this term in the English top...",
+    "classification": "sports record / competition performance",
+    "whyAccepted": "offField regex includes bare look (Italian fashion), matching English look to smash in headline; offFieldHeadline=true bypasses the !offFieldHeadline sports guard despite win/won in body; final offField.test(text) accepts."
+  },
+  "codeHashes": {
+    "packages/agents/src/tabloid-event.ts": "bb1b53fdb7fb7e05f0e6b1967ecfacc387df6e9bd4b85a53cd2d3a4eaed57c94",
+    "packages/agents/src/tabloid.ts": "39b3dd86723c1d96b3f8716dd70577800cefe608d75cd3b1fc1c568e74dc7528"
+  }
+}

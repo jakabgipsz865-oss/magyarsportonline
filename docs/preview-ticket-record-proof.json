@@ -1,0 +1,1250 @@
+{
+  "runId": "90e55b13-ba8c-4197-af78-35a2ed84e8f8",
+  "environment": "Preview",
+  "project": "wild-lake-68761162",
+  "branch": "vercel-preview",
+  "branchId": "br-flat-sun-a25d40c9",
+  "totals": {
+    "fetched": 956,
+    "considered": 558,
+    "rawStored": 11,
+    "accept": 27,
+    "reject": 531,
+    "duplicate": 547,
+    "eventMerged": 13,
+    "imageUrl": 26
+  },
+  "uniqueMergedRaw": 11,
+  "cases": [
+    {
+      "event": "Donnarumma kirablásának tárgyalása",
+      "sources": 7,
+      "rawArticles": 7,
+      "canonicalEventCount": 1,
+      "pass": true,
+      "fixtureRawIds": [
+        "825fa7cf-bb4b-44e1-bcdc-d0b1854b2a5b",
+        "7c4886e5-02c0-4048-ba41-fa9d1353f525",
+        "9cd85992-5b9e-427b-be08-12060d327ffe",
+        "40af8232-25da-4a9b-a46b-87e844a591d3",
+        "d160f8f7-4103-4e78-8aa1-4d0e06e3ce4b",
+        "235a257d-9cf0-4bd1-8f1f-d5e82cc9c526",
+        "6c59d388-777f-48b6-a7a5-aae1310aa05b"
+      ],
+      "fingerprint": "e95675745290e86b19aa688690f690a62f36b8cbf4a6f615d7911af1812b7385",
+      "articles": [
+        {
+          "id": "235a257d-9cf0-4bd1-8f1f-d5e82cc9c526",
+          "source": "OKDIARIO Paparazzi",
+          "language": "es",
+          "title": "Salen a la luz todos los detalles del asalto armado a Donnarumma y su novia embarazada",
+          "url": "https://okdiario.com/deportes/salen-luz-todos-detalles-del-asalto-armado-donnarumma-novia-embarazada-20269181",
+          "publishedAt": "2026-09-11 07:55:09+00",
+          "ingestedAt": "2026-09-11 12:21:16.327262+00",
+          "event": {
+            "entity": "person:gianluigi-donnarumma",
+            "lastAt": "2026-09-11T08:54:46.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:gianluigi-donnarumma\",\"robbery\",\"robbery\",\"victims:player-and-partner\"]",
+            "firstAt": "2026-09-10T22:59:08.000Z",
+            "version": 1,
+            "concepts": [
+              "robbery",
+              "victims:player-and-partner"
+            ],
+            "eventType": "robbery",
+            "constraints": {
+              "place": "paris",
+              "partner": "alessia-elefante"
+            },
+            "fingerprint": "e95675745290e86b19aa688690f690a62f36b8cbf4a6f615d7911af1812b7385",
+            "canonicalRawId": "9cd85992-5b9e-427b-be08-12060d327ffe"
+          }
+        },
+        {
+          "id": "40af8232-25da-4a9b-a46b-87e844a591d3",
+          "source": "Daily Mirror Football",
+          "language": "en",
+          "title": "Man City's Gianluigi Donnarumma and pregnant girlfriend 'bound and hit' in terrifying robbery",
+          "url": "https://www.mirror.co.uk/sport/football/news/man-city-gianluigi-donnarumma-psg-37650409",
+          "publishedAt": "2026-09-11 06:13:25+00",
+          "ingestedAt": "2026-09-11 12:21:08.023038+00",
+          "event": {
+            "entity": "person:gianluigi-donnarumma",
+            "lastAt": "2026-09-11T08:54:46.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:gianluigi-donnarumma\",\"robbery\",\"robbery\",\"victims:player-and-partner\"]",
+            "firstAt": "2026-09-10T22:59:08.000Z",
+            "version": 1,
+            "concepts": [
+              "robbery",
+              "victims:player-and-partner"
+            ],
+            "eventType": "robbery",
+            "constraints": {
+              "place": "paris",
+              "partner": "alessia-elefante"
+            },
+            "fingerprint": "e95675745290e86b19aa688690f690a62f36b8cbf4a6f615d7911af1812b7385",
+            "canonicalRawId": "9cd85992-5b9e-427b-be08-12060d327ffe"
+          }
+        },
+        {
+          "id": "6c59d388-777f-48b6-a7a5-aae1310aa05b",
+          "source": "SPORT BILD Football",
+          "language": "de",
+          "title": "Horror-Prozess eskaliert - So brutal war der Überfall auf Donnarumma und seine Frau",
+          "url": "https://sportbild.bild.de/fussball/internationaler-fussball/so-brutal-war-der-ueberfall-auf-donnarumma-und-seine-frau-6aa3c79e56f343d9f4dd189a",
+          "publishedAt": "2026-09-11 10:34:58+00",
+          "ingestedAt": "2026-09-11 12:21:24.674105+00",
+          "event": {
+            "entity": "person:gianluigi-donnarumma",
+            "lastAt": "2026-09-11T10:34:58.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:gianluigi-donnarumma\",\"robbery\",\"robbery\",\"victims:player-and-partner\"]",
+            "firstAt": "2026-09-10T22:59:08.000Z",
+            "version": 1,
+            "concepts": [
+              "robbery",
+              "victims:player-and-partner"
+            ],
+            "eventType": "robbery",
+            "constraints": {
+              "place": "paris",
+              "partner": "alessia-elefante"
+            },
+            "fingerprint": "e95675745290e86b19aa688690f690a62f36b8cbf4a6f615d7911af1812b7385",
+            "canonicalRawId": "9cd85992-5b9e-427b-be08-12060d327ffe"
+          }
+        },
+        {
+          "id": "7c4886e5-02c0-4048-ba41-fa9d1353f525",
+          "source": "Daily Mail Football",
+          "language": "en",
+          "title": "Man City star Gianluigi Donnarumma and his pregnant girlfriend 'hit, bound and threatened with a knife by robbers while sleeping in their Paris flat'",
+          "url": "https://www.dailymail.com/sport/football/article-16121869/Man-City-star-Gianluigi-Donnarumma-pregnant-girlfriend-hit-bound-threatened-knife-robbers-sleeping-Paris-flat.html?ns_mchannel=rss&ns_campaign=1490&ito=1490",
+          "publishedAt": "2026-09-11 06:55:12+00",
+          "ingestedAt": "2026-09-11 12:21:03.822911+00",
+          "event": {
+            "entity": "person:gianluigi-donnarumma",
+            "lastAt": "2026-09-11T08:54:46.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:gianluigi-donnarumma\",\"robbery\",\"robbery\",\"victims:player-and-partner\"]",
+            "firstAt": "2026-09-10T22:59:08.000Z",
+            "version": 1,
+            "concepts": [
+              "robbery",
+              "victims:player-and-partner"
+            ],
+            "eventType": "robbery",
+            "constraints": {
+              "place": "paris",
+              "partner": "alessia-elefante"
+            },
+            "fingerprint": "e95675745290e86b19aa688690f690a62f36b8cbf4a6f615d7911af1812b7385",
+            "canonicalRawId": "9cd85992-5b9e-427b-be08-12060d327ffe"
+          }
+        },
+        {
+          "id": "825fa7cf-bb4b-44e1-bcdc-d0b1854b2a5b",
+          "source": "Daily Star Football",
+          "language": "en",
+          "title": "Premier League ace and pregnant girlfriend 'hit and bound' in horrific knifepoint robbery",
+          "url": "https://www.dailystar.co.uk/sport/football/gianluigi-donnarumma-alessia-knifepoint-robbery-37650882",
+          "publishedAt": "2026-09-11 08:54:46+00",
+          "ingestedAt": "2026-09-11 12:20:59.786779+00",
+          "event": {
+            "entity": "person:gianluigi-donnarumma",
+            "lastAt": "2026-09-11T08:54:46.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:gianluigi-donnarumma\",\"robbery\",\"robbery\",\"victims:player-and-partner\"]",
+            "firstAt": "2026-09-10T22:59:08.000Z",
+            "version": 1,
+            "concepts": [
+              "robbery",
+              "victims:player-and-partner"
+            ],
+            "eventType": "robbery",
+            "constraints": {
+              "partner": "alessia-elefante"
+            },
+            "fingerprint": "e95675745290e86b19aa688690f690a62f36b8cbf4a6f615d7911af1812b7385",
+            "canonicalRawId": "9cd85992-5b9e-427b-be08-12060d327ffe"
+          }
+        },
+        {
+          "id": "9cd85992-5b9e-427b-be08-12060d327ffe",
+          "source": "The Sun / SunSport Football",
+          "language": "en",
+          "title": "Man City ace Donnarumma ‘bound and hit’ when robbers raided flat… as judge suspends first day of ‘catastrophic’ trial",
+          "url": "https://www.thesun.co.uk/sport/40342876/man-city-ace-robbed-flat-trial-suspended/",
+          "publishedAt": "2026-09-10 22:59:08+00",
+          "ingestedAt": "2026-09-11 12:20:58.832145+00",
+          "event": {
+            "entity": "person:gianluigi-donnarumma",
+            "lastAt": "2026-09-11T10:34:58.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:gianluigi-donnarumma\",\"robbery\",\"robbery\",\"victims:player-and-partner\"]",
+            "firstAt": "2026-09-10T22:59:08.000Z",
+            "version": 1,
+            "concepts": [
+              "robbery",
+              "victims:player-and-partner"
+            ],
+            "eventType": "robbery",
+            "constraints": {
+              "place": "paris",
+              "partner": "alessia-elefante"
+            },
+            "fingerprint": "e95675745290e86b19aa688690f690a62f36b8cbf4a6f615d7911af1812b7385",
+            "canonicalRawId": "9cd85992-5b9e-427b-be08-12060d327ffe"
+          }
+        },
+        {
+          "id": "d160f8f7-4103-4e78-8aa1-4d0e06e3ce4b",
+          "source": "Daily Express Football",
+          "language": "en",
+          "title": "Gianluigi Donnarumma and pregnant girlfriend 'bound and hit' by knife-wielding robbers",
+          "url": "https://www.express.co.uk/sport/football/2247635/Gianluigi-Donnarumma-girlfriend-robbers",
+          "publishedAt": "2026-09-11 08:54:00+00",
+          "ingestedAt": "2026-09-11 12:21:10.888693+00",
+          "event": {
+            "entity": "person:gianluigi-donnarumma",
+            "lastAt": "2026-09-11T08:54:46.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:gianluigi-donnarumma\",\"robbery\",\"robbery\",\"victims:player-and-partner\"]",
+            "firstAt": "2026-09-10T22:59:08.000Z",
+            "version": 1,
+            "concepts": [
+              "robbery",
+              "victims:player-and-partner"
+            ],
+            "eventType": "robbery",
+            "constraints": {
+              "place": "paris",
+              "partner": "alessia-elefante"
+            },
+            "fingerprint": "e95675745290e86b19aa688690f690a62f36b8cbf4a6f615d7911af1812b7385",
+            "canonicalRawId": "9cd85992-5b9e-427b-be08-12060d327ffe"
+          }
+        }
+      ]
+    },
+    {
+      "event": "Edson Álvarez emberrablási vádak",
+      "sources": 4,
+      "rawArticles": 4,
+      "canonicalEventCount": 1,
+      "pass": true,
+      "fixtureRawIds": [
+        "f80da132-78e1-4cff-954f-ca138aa036ce",
+        "166649c2-4e38-4208-bf20-f7b7d7cc5aeb",
+        "73e93d84-666d-4011-a725-f2c0b7858558",
+        "f144700d-244c-4147-bce3-c4d7d83470b5"
+      ],
+      "fingerprint": "d7654b81a674069aeaaadeee4a1f0f2ce15e2fbdbf0e5a3d8fc3bb542093faa2",
+      "articles": [
+        {
+          "id": "166649c2-4e38-4208-bf20-f7b7d7cc5aeb",
+          "source": "Daily Mail Football",
+          "language": "en",
+          "title": "West Ham footballer Edson Alvarez forced to deny bombshell claims linking him to a KIDNAPPING plot",
+          "url": "https://www.dailymail.com/sport/football/article-16121729/West-Ham-footballer-Edson-Alvarez-forced-deny-bombshell-claims-linking-KIDNAPPING-plot.html?ns_mchannel=rss&ns_campaign=1490&ito=1490",
+          "publishedAt": "2026-09-11 09:39:53+00",
+          "ingestedAt": "2026-09-11 12:21:03.216465+00",
+          "event": {
+            "entity": "person:edson-alvarez",
+            "lastAt": "2026-09-11T09:39:53.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:edson-alvarez\",\"kidnapping-allegation\",\"kidnapping-allegation\",\"allegation\"]",
+            "firstAt": "2026-09-10T20:16:59.000Z",
+            "version": 1,
+            "concepts": [
+              "kidnapping-allegation",
+              "allegation"
+            ],
+            "eventType": "kidnapping-allegation",
+            "constraints": {},
+            "fingerprint": "d7654b81a674069aeaaadeee4a1f0f2ce15e2fbdbf0e5a3d8fc3bb542093faa2",
+            "canonicalRawId": "f80da132-78e1-4cff-954f-ca138aa036ce"
+          }
+        },
+        {
+          "id": "73e93d84-666d-4011-a725-f2c0b7858558",
+          "source": "Daily Mirror Football",
+          "language": "en",
+          "title": "West Ham star threatens legal action over 'false allegations' after kidnap claims",
+          "url": "https://www.mirror.co.uk/sport/football/news/west-ham-united-edson-alvarez-37650221",
+          "publishedAt": "2026-09-10 22:32:32+00",
+          "ingestedAt": "2026-09-11 12:21:08.419674+00",
+          "event": {
+            "entity": "person:edson-alvarez",
+            "lastAt": "2026-09-11T09:39:53.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:edson-alvarez\",\"kidnapping-allegation\",\"kidnapping-allegation\",\"allegation\"]",
+            "firstAt": "2026-09-10T20:16:59.000Z",
+            "version": 1,
+            "concepts": [
+              "kidnapping-allegation",
+              "allegation"
+            ],
+            "eventType": "kidnapping-allegation",
+            "constraints": {},
+            "fingerprint": "d7654b81a674069aeaaadeee4a1f0f2ce15e2fbdbf0e5a3d8fc3bb542093faa2",
+            "canonicalRawId": "f80da132-78e1-4cff-954f-ca138aa036ce"
+          }
+        },
+        {
+          "id": "f144700d-244c-4147-bce3-c4d7d83470b5",
+          "source": "talkSPORT Football",
+          "language": "en",
+          "title": "West Ham midfielder Edson Alvarez furiously rejects allegations he was involved in a kidnapping plot",
+          "url": "https://talksport.com/football/4573277/west-ham-edson-alvarez-kidnapping-allegations-statement/",
+          "publishedAt": "2026-09-10 16:57:25+00",
+          "ingestedAt": "2026-09-11 12:21:14.634248+00",
+          "event": {
+            "entity": "person:edson-alvarez",
+            "lastAt": "2026-09-11T09:39:53.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:edson-alvarez\",\"kidnapping-allegation\",\"kidnapping-allegation\",\"allegation\"]",
+            "firstAt": "2026-09-10T16:57:25.000Z",
+            "version": 1,
+            "concepts": [
+              "kidnapping-allegation",
+              "allegation"
+            ],
+            "eventType": "kidnapping-allegation",
+            "constraints": {},
+            "fingerprint": "d7654b81a674069aeaaadeee4a1f0f2ce15e2fbdbf0e5a3d8fc3bb542093faa2",
+            "canonicalRawId": "f80da132-78e1-4cff-954f-ca138aa036ce"
+          }
+        },
+        {
+          "id": "f80da132-78e1-4cff-954f-ca138aa036ce",
+          "source": "Daily Star Football",
+          "language": "en",
+          "title": "West Ham star issues strong statement over wild kidnap plot claims",
+          "url": "https://www.dailystar.co.uk/sport/football/west-ham-united-edson-alvarez-37649939",
+          "publishedAt": "2026-09-10 20:16:59+00",
+          "ingestedAt": "2026-09-11 12:21:00.268065+00",
+          "event": {
+            "entity": "person:edson-alvarez",
+            "lastAt": "2026-09-11T09:39:53.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:edson-alvarez\",\"kidnapping-allegation\",\"kidnapping-allegation\",\"allegation\"]",
+            "firstAt": "2026-09-10T16:57:25.000Z",
+            "version": 1,
+            "concepts": [
+              "kidnapping-allegation",
+              "allegation"
+            ],
+            "eventType": "kidnapping-allegation",
+            "constraints": {},
+            "fingerprint": "d7654b81a674069aeaaadeee4a1f0f2ce15e2fbdbf0e5a3d8fc3bb542093faa2",
+            "canonicalRawId": "f80da132-78e1-4cff-954f-ca138aa036ce"
+          }
+        }
+      ]
+    },
+    {
+      "event": "Sorba Thomas autóbalesete",
+      "sources": 2,
+      "rawArticles": 2,
+      "canonicalEventCount": 1,
+      "pass": true,
+      "fixtureRawIds": [
+        "ed2738bf-5626-44d5-afb7-f19055287aa0",
+        "7bce8d06-ae31-4c6d-acc6-7b4df906c736"
+      ],
+      "fingerprint": "2a91671e1dde18090612a58e50b6a56863456f9ac69ee7a5a7391057a28964e2",
+      "articles": [
+        {
+          "id": "7bce8d06-ae31-4c6d-acc6-7b4df906c736",
+          "source": "Daily Express Football",
+          "language": "en",
+          "title": "Premier League star involved in car crash near training ground as club release statement",
+          "url": "https://www.express.co.uk/sport/football/2247665/Hull-Thomas-Premier-League-Car-Crash-Statement",
+          "publishedAt": "2026-09-11 09:55:00+00",
+          "ingestedAt": "2026-09-11 12:21:10.539694+00",
+          "event": {
+            "entity": "person:sorba-thomas",
+            "lastAt": "2026-09-11T09:55:15.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:sorba-thomas\",\"road-accident\",\"road-accident\",\"vehicle:car\"]",
+            "firstAt": "2026-09-11T09:55:00.000Z",
+            "version": 1,
+            "concepts": [
+              "road-accident",
+              "vehicle:car"
+            ],
+            "eventType": "road-accident",
+            "constraints": {},
+            "fingerprint": "2a91671e1dde18090612a58e50b6a56863456f9ac69ee7a5a7391057a28964e2",
+            "canonicalRawId": "ed2738bf-5626-44d5-afb7-f19055287aa0"
+          }
+        },
+        {
+          "id": "ed2738bf-5626-44d5-afb7-f19055287aa0",
+          "source": "Daily Mirror Football",
+          "language": "en",
+          "title": "Premier League star flips car onto roof in terrifying incident as club release statement",
+          "url": "https://www.mirror.co.uk/sport/football/news/sorba-thomas-hull-car-crash-37651323",
+          "publishedAt": "2026-09-11 09:55:15+00",
+          "ingestedAt": "2026-09-11 12:21:07.449067+00",
+          "event": {
+            "entity": "person:sorba-thomas",
+            "lastAt": "2026-09-11T09:55:15.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:sorba-thomas\",\"road-accident\",\"road-accident\",\"vehicle:car\"]",
+            "firstAt": "2026-09-11T09:55:00.000Z",
+            "version": 1,
+            "concepts": [
+              "road-accident",
+              "vehicle:car"
+            ],
+            "eventType": "road-accident",
+            "constraints": {},
+            "fingerprint": "2a91671e1dde18090612a58e50b6a56863456f9ac69ee7a5a7391057a28964e2",
+            "canonicalRawId": "ed2738bf-5626-44d5-afb7-f19055287aa0"
+          }
+        }
+      ]
+    },
+    {
+      "event": "Manchester United bérletszankció",
+      "sources": 2,
+      "rawArticles": 2,
+      "canonicalEventCount": 1,
+      "pass": true,
+      "fixtureRawIds": [
+        "2956fc66-fbf3-44da-b5fb-12979aead0d9",
+        "befe94d6-a170-47c1-8659-0cd61d4e494f"
+      ],
+      "fingerprint": "6f26b10f7bae7371c9c030e0eb7374d38d66a8f277d4d91a7c33c1ab7bae974b",
+      "articles": [
+        {
+          "id": "2956fc66-fbf3-44da-b5fb-12979aead0d9",
+          "source": "The Sun / SunSport Football",
+          "language": "en",
+          "title": "Man Utd brutally strip 685 fans of their season tickets and warn 464 more amid controversial ticket touting crackdown",
+          "url": "https://www.thesun.co.uk/sport/40346472/man-utd-season-tickets-tout-crackdown/",
+          "publishedAt": "2026-09-11 11:30:04+00",
+          "ingestedAt": "2026-09-11 12:20:58.265349+00",
+          "event": {
+            "entity": "team:manchester-united",
+            "lastAt": "2026-09-11T14:36:19.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"team:manchester-united\",\"ticket-enforcement\",\"ticket-enforcement\"]",
+            "firstAt": "2026-09-11T11:30:04.000Z",
+            "version": 1,
+            "concepts": [
+              "ticket-enforcement"
+            ],
+            "eventType": "ticket-enforcement",
+            "constraints": {
+              "affectedCount": "685"
+            },
+            "fingerprint": "6f26b10f7bae7371c9c030e0eb7374d38d66a8f277d4d91a7c33c1ab7bae974b",
+            "canonicalRawId": "2956fc66-fbf3-44da-b5fb-12979aead0d9"
+          }
+        },
+        {
+          "id": "befe94d6-a170-47c1-8659-0cd61d4e494f",
+          "source": "Daily Star Football",
+          "language": "en",
+          "title": "Man Utd 'remove 685 season tickets' after controversial summer crackdown",
+          "url": "https://www.dailystar.co.uk/sport/football/man-utd-remove-685-season-37653030",
+          "publishedAt": "2026-09-11 14:36:19+00",
+          "ingestedAt": "2026-09-11 15:11:56.217543+00",
+          "event": {
+            "entity": "team:manchester-united",
+            "lastAt": "2026-09-11T14:36:19.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"team:manchester-united\",\"ticket-enforcement\",\"ticket-enforcement\"]",
+            "firstAt": "2026-09-11T11:30:04.000Z",
+            "version": 1,
+            "concepts": [
+              "ticket-enforcement"
+            ],
+            "eventType": "ticket-enforcement",
+            "constraints": {
+              "affectedCount": "685"
+            },
+            "fingerprint": "6f26b10f7bae7371c9c030e0eb7374d38d66a8f277d4d91a7c33c1ab7bae974b",
+            "canonicalRawId": "2956fc66-fbf3-44da-b5fb-12979aead0d9"
+          }
+        }
+      ]
+    },
+    {
+      "event": "Bayern Oktoberfest-mez szurkolói reakció",
+      "sources": 2,
+      "rawArticles": 2,
+      "canonicalEventCount": 1,
+      "pass": true,
+      "fixtureRawIds": [
+        "069927ba-4892-4301-a9aa-b959a00fe748",
+        "47275301-ab4d-490a-a8f3-5f0d8c3efa42"
+      ],
+      "fingerprint": "6100c36fb10a870a513dfa656d0a90e5f22f589266ba42d43d45262f402c0549",
+      "articles": [
+        {
+          "id": "069927ba-4892-4301-a9aa-b959a00fe748",
+          "source": "SPORT BILD Football",
+          "language": "de",
+          "title": "„Wie eine Tischdecke“ - Das denken die Bayern-Fans über das neue Wiesn-Trikot",
+          "url": "https://sportbild.bild.de/fussball/1-bundesliga/wie-eine-tischdecke-das-denken-die-bayern-fans-ueber-das-neue-wiesn-trikot-6aa308a3240b302c8a8409bd",
+          "publishedAt": "2026-09-10 19:44:52+00",
+          "ingestedAt": "2026-09-11 12:21:25.350716+00",
+          "event": {
+            "entity": "team:bayern-munich",
+            "lastAt": "2026-09-10T19:49:12.084Z",
+            "baseKey": "[\"tabloid-event@1\",\"team:bayern-munich\",\"kit-reaction\",\"kit-reaction\",\"occasion:oktoberfest\"]",
+            "firstAt": "2026-09-10T19:44:52.000Z",
+            "version": 1,
+            "concepts": [
+              "kit-reaction",
+              "occasion:oktoberfest"
+            ],
+            "eventType": "kit-reaction",
+            "constraints": {
+              "season": "2026 27"
+            },
+            "fingerprint": "6100c36fb10a870a513dfa656d0a90e5f22f589266ba42d43d45262f402c0549",
+            "canonicalRawId": "069927ba-4892-4301-a9aa-b959a00fe748"
+          }
+        },
+        {
+          "id": "47275301-ab4d-490a-a8f3-5f0d8c3efa42",
+          "source": "BILD Sport",
+          "language": "de",
+          "title": "„Wie eine Tischdecke“ - Das denken die Bayern-Fans über das neue Wiesn-Trikot",
+          "url": "https://www.bild.de/sport/fussball/wie-eine-tischdecke-das-denken-die-bayern-fans-ueber-das-neue-wiesn-trikot-6aa2fd49240b302c8a84091c",
+          "publishedAt": null,
+          "ingestedAt": "2026-09-10 19:49:12.084285+00",
+          "event": {
+            "entity": "team:bayern-munich",
+            "lastAt": "2026-09-10T19:49:12.084Z",
+            "baseKey": "[\"tabloid-event@1\",\"team:bayern-munich\",\"kit-reaction\",\"kit-reaction\",\"occasion:oktoberfest\"]",
+            "firstAt": "2026-09-10T19:44:52.000Z",
+            "version": 1,
+            "concepts": [
+              "kit-reaction",
+              "occasion:oktoberfest"
+            ],
+            "eventType": "kit-reaction",
+            "constraints": {
+              "season": "2026 27"
+            },
+            "fingerprint": "6100c36fb10a870a513dfa656d0a90e5f22f589266ba42d43d45262f402c0549",
+            "canonicalRawId": "069927ba-4892-4301-a9aa-b959a00fe748"
+          }
+        }
+      ]
+    },
+    {
+      "event": "Gary Lineker egészség/öregedés vallomás",
+      "sources": 2,
+      "rawArticles": 2,
+      "canonicalEventCount": 1,
+      "pass": true,
+      "fixtureRawIds": [
+        "1af000d3-c148-4817-9998-447d4f9cc48a",
+        "c7382a4f-e195-4f15-bad1-ffbe2c3688e8"
+      ],
+      "fingerprint": "fa994bd207c0879a9edacadf1002ce2285fffa51e13f4bf9126c58b3fff7b83e",
+      "articles": [
+        {
+          "id": "1af000d3-c148-4817-9998-447d4f9cc48a",
+          "source": "Daily Express - Football",
+          "language": "en",
+          "title": "Gary Lineker admits 'we're all worried' as he opens up on death fears",
+          "url": "https://www.express.co.uk/celebrity-news/2243972/Gary-Lineker-worried-opens-up-death-fears",
+          "publishedAt": "2026-08-31 08:15:00+00",
+          "ingestedAt": "2026-08-31 09:10:22.451835+00",
+          "event": {
+            "entity": "person:gary-lineker",
+            "lastAt": "2026-08-31T09:31:43.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:gary-lineker\",\"health-confession\",\"health-confession\",\"topic:ageing\"]",
+            "firstAt": "2026-08-31T08:15:00.000Z",
+            "version": 1,
+            "concepts": [
+              "health-confession",
+              "topic:ageing"
+            ],
+            "eventType": "health-confession",
+            "constraints": {},
+            "fingerprint": "fa994bd207c0879a9edacadf1002ce2285fffa51e13f4bf9126c58b3fff7b83e",
+            "canonicalRawId": "1af000d3-c148-4817-9998-447d4f9cc48a"
+          }
+        },
+        {
+          "id": "c7382a4f-e195-4f15-bad1-ffbe2c3688e8",
+          "source": "Daily Star - Football",
+          "language": "en",
+          "title": "Gary Lineker, 65, admits health fears and says 'I'm not worried about death'",
+          "url": "https://www.dailystar.co.uk/sport/football/gary-lineker-65-admits-health-37610017",
+          "publishedAt": "2026-08-31 09:31:43+00",
+          "ingestedAt": "2026-08-31 09:36:24.317166+00",
+          "event": {
+            "entity": "person:gary-lineker",
+            "lastAt": "2026-08-31T09:31:43.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:gary-lineker\",\"health-confession\",\"health-confession\",\"topic:ageing\"]",
+            "firstAt": "2026-08-31T08:15:00.000Z",
+            "version": 1,
+            "concepts": [
+              "health-confession",
+              "topic:ageing"
+            ],
+            "eventType": "health-confession",
+            "constraints": {},
+            "fingerprint": "fa994bd207c0879a9edacadf1002ce2285fffa51e13f4bf9126c58b3fff7b83e",
+            "canonicalRawId": "1af000d3-c148-4817-9998-447d4f9cc48a"
+          }
+        }
+      ]
+    },
+    {
+      "event": "Darren Fletcher és az agresszív szurkoló",
+      "sources": 3,
+      "rawArticles": 3,
+      "canonicalEventCount": 1,
+      "pass": true,
+      "fixtureRawIds": [
+        "380e0d15-2673-4e4c-92ce-23860ca2d8d8",
+        "85f27262-8486-4b0f-bd2e-3ad3307c7f92",
+        "fe2d4175-8547-4f95-b8eb-da6e6159adee"
+      ],
+      "fingerprint": "0c25e13056e1b627bd9b9297212af53da291c1e63d60aaa3d260b1e80bf007a1",
+      "articles": [
+        {
+          "id": "380e0d15-2673-4e4c-92ce-23860ca2d8d8",
+          "source": "talkSPORT Football",
+          "language": "en",
+          "title": "Darren Fletcher seen confronting abusive Man United fan immediately after Champions League win",
+          "url": "https://talksport.com/football/4573965/darren-fletcher-confrontation-man-united-fan-champions-league/",
+          "publishedAt": "2026-09-11 07:30:02+00",
+          "ingestedAt": "2026-09-11 12:21:14.086219+00",
+          "event": {
+            "entity": "person:darren-fletcher",
+            "lastAt": "2026-09-11T10:36:19.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:darren-fletcher\",\"fan-confrontation\",\"fan-confrontation\",\"topic:abusive-supporter\"]",
+            "firstAt": "2026-09-11T06:55:42.000Z",
+            "version": 1,
+            "concepts": [
+              "fan-confrontation",
+              "topic:abusive-supporter"
+            ],
+            "eventType": "fan-confrontation",
+            "constraints": {},
+            "fingerprint": "0c25e13056e1b627bd9b9297212af53da291c1e63d60aaa3d260b1e80bf007a1",
+            "canonicalRawId": "380e0d15-2673-4e4c-92ce-23860ca2d8d8"
+          }
+        },
+        {
+          "id": "85f27262-8486-4b0f-bd2e-3ad3307c7f92",
+          "source": "Daily Mirror Football",
+          "language": "en",
+          "title": "Darren Fletcher cheered as 'abusive Man Utd fan' put in place after Champions League win",
+          "url": "https://www.mirror.co.uk/sport/football/news/man-utd-darren-fletcher-sabah-37650423",
+          "publishedAt": "2026-09-11 06:55:42+00",
+          "ingestedAt": "2026-09-11 12:21:07.567573+00",
+          "event": {
+            "entity": "person:darren-fletcher",
+            "lastAt": "2026-09-11T07:30:02.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:darren-fletcher\",\"fan-confrontation\",\"fan-confrontation\",\"topic:abusive-supporter\"]",
+            "firstAt": "2026-09-11T06:55:42.000Z",
+            "version": 1,
+            "concepts": [
+              "fan-confrontation",
+              "topic:abusive-supporter"
+            ],
+            "eventType": "fan-confrontation",
+            "constraints": {},
+            "fingerprint": "0c25e13056e1b627bd9b9297212af53da291c1e63d60aaa3d260b1e80bf007a1",
+            "canonicalRawId": "380e0d15-2673-4e4c-92ce-23860ca2d8d8"
+          }
+        },
+        {
+          "id": "fe2d4175-8547-4f95-b8eb-da6e6159adee",
+          "source": "Daily Star Football",
+          "language": "en",
+          "title": "Darren Fletcher confronts 'abusive' Man Utd fan as tempers flare at Old Trafford",
+          "url": "https://www.dailystar.co.uk/sport/football/darren-fletcher-man-utd-fan-37651457",
+          "publishedAt": "2026-09-11 10:36:19+00",
+          "ingestedAt": "2026-09-11 12:20:59.362627+00",
+          "event": {
+            "entity": "person:darren-fletcher",
+            "lastAt": "2026-09-11T10:36:19.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:darren-fletcher\",\"fan-confrontation\",\"fan-confrontation\",\"topic:abusive-supporter\"]",
+            "firstAt": "2026-09-11T06:55:42.000Z",
+            "version": 1,
+            "concepts": [
+              "fan-confrontation",
+              "topic:abusive-supporter"
+            ],
+            "eventType": "fan-confrontation",
+            "constraints": {},
+            "fingerprint": "0c25e13056e1b627bd9b9297212af53da291c1e63d60aaa3d260b1e80bf007a1",
+            "canonicalRawId": "380e0d15-2673-4e4c-92ce-23860ca2d8d8"
+          }
+        }
+      ]
+    },
+    {
+      "event": "Carrick válasza Anderson Manchester-megjegyzésére",
+      "sources": 2,
+      "rawArticles": 2,
+      "canonicalEventCount": 1,
+      "pass": true,
+      "fixtureRawIds": [
+        "882662f5-79ae-482d-a325-103ec63ac22c",
+        "b8cfc992-f877-4c0c-8a86-1658f1a63eda"
+      ],
+      "fingerprint": "8123e2a9b6721aa902142193a9109601250206b3186fc11486f58a88b990da7c",
+      "articles": [
+        {
+          "id": "882662f5-79ae-482d-a325-103ec63ac22c",
+          "source": "The Sun / SunSport Football",
+          "language": "en",
+          "title": "Man Utd boss Michael Carrick scoffs at Elliot Anderson jibe ahead of Manchester derby",
+          "url": "https://www.thesun.co.uk/sport/40345280/man-utd-michael-carrick-elliot-anderson-city/",
+          "publishedAt": "2026-09-11 12:30:00+00",
+          "ingestedAt": "2026-09-11 15:11:54.288696+00",
+          "event": {
+            "entity": "person:elliot-anderson+person:michael-carrick",
+            "lastAt": "2026-09-11T13:44:09.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:elliot-anderson+person:michael-carrick\",\"jibe-response\",\"jibe-response\"]",
+            "firstAt": "2026-09-11T12:30:00.000Z",
+            "version": 1,
+            "concepts": [
+              "jibe-response"
+            ],
+            "eventType": "jibe-response",
+            "constraints": {},
+            "fingerprint": "8123e2a9b6721aa902142193a9109601250206b3186fc11486f58a88b990da7c",
+            "canonicalRawId": "882662f5-79ae-482d-a325-103ec63ac22c"
+          }
+        },
+        {
+          "id": "b8cfc992-f877-4c0c-8a86-1658f1a63eda",
+          "source": "Daily Mirror Football",
+          "language": "en",
+          "title": "Michael Carrick responds to Elliot Anderson's 'Kings of Manchester' jibe",
+          "url": "https://www.mirror.co.uk/sport/football/news/michael-carrick-responds-elliot-andersons-37652122",
+          "publishedAt": "2026-09-11 13:44:09+00",
+          "ingestedAt": "2026-09-11 15:12:03.924086+00",
+          "event": {
+            "entity": "person:elliot-anderson+person:michael-carrick",
+            "lastAt": "2026-09-11T13:44:09.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:elliot-anderson+person:michael-carrick\",\"jibe-response\",\"jibe-response\"]",
+            "firstAt": "2026-09-11T12:30:00.000Z",
+            "version": 1,
+            "concepts": [
+              "jibe-response"
+            ],
+            "eventType": "jibe-response",
+            "constraints": {},
+            "fingerprint": "8123e2a9b6721aa902142193a9109601250206b3186fc11486f58a88b990da7c",
+            "canonicalRawId": "882662f5-79ae-482d-a325-103ec63ac22c"
+          }
+        }
+      ]
+    },
+    {
+      "event": "Pochettino vitatja a Chelsea 2017-es címét",
+      "sources": 2,
+      "rawArticles": 2,
+      "canonicalEventCount": 1,
+      "pass": true,
+      "fixtureRawIds": [
+        "a58aef30-8bbe-42c6-9a3c-836c27e5fef8",
+        "c3631890-8af4-4441-ba4d-93b45ee611c0"
+      ],
+      "fingerprint": "142dd24e34986ad10cecec8bcb8a4d8a42e036ee22c678bf9e3b52bff9183a76",
+      "articles": [
+        {
+          "id": "a58aef30-8bbe-42c6-9a3c-836c27e5fef8",
+          "source": "SPORTbible Football",
+          "language": "en",
+          "title": "Mauricio Pochettino demands Premier League strip club of title in extraordinary interview",
+          "url": "https://www.sportbible.com/football/premier-league/mauricio-pochettino-premier-league-stripped-spurs-chelsea-103103-20260910",
+          "publishedAt": "2026-09-10 10:10:42.895+00",
+          "ingestedAt": "2026-09-11 12:21:09.633633+00",
+          "event": {
+            "entity": "person:mauricio-pochettino",
+            "lastAt": "2026-09-10T10:10:42.895Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:mauricio-pochettino\",\"title-sanction-demand\",\"title-sanction-demand\"]",
+            "firstAt": "2026-09-10T07:56:09.000Z",
+            "version": 1,
+            "concepts": [
+              "title-sanction-demand"
+            ],
+            "eventType": "title-sanction-demand",
+            "constraints": {
+              "competition": "premier league",
+              "competitionYear": "2017"
+            },
+            "fingerprint": "142dd24e34986ad10cecec8bcb8a4d8a42e036ee22c678bf9e3b52bff9183a76",
+            "canonicalRawId": "a58aef30-8bbe-42c6-9a3c-836c27e5fef8"
+          }
+        },
+        {
+          "id": "c3631890-8af4-4441-ba4d-93b45ee611c0",
+          "source": "Daily Star Football",
+          "language": "en",
+          "title": "Mauricio Pochettino demands 'take Premier League title off Chelsea and give it to Tottenham'",
+          "url": "https://www.dailystar.co.uk/sport/football/pochettino-chelsea-tottenham-premier-league-37646364",
+          "publishedAt": "2026-09-10 07:56:09+00",
+          "ingestedAt": "2026-09-11 12:21:00.43171+00",
+          "event": {
+            "entity": "person:mauricio-pochettino",
+            "lastAt": "2026-09-10T10:10:42.895Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:mauricio-pochettino\",\"title-sanction-demand\",\"title-sanction-demand\"]",
+            "firstAt": "2026-09-10T07:56:09.000Z",
+            "version": 1,
+            "concepts": [
+              "title-sanction-demand"
+            ],
+            "eventType": "title-sanction-demand",
+            "constraints": {
+              "competition": "premier league",
+              "competitionYear": "2017"
+            },
+            "fingerprint": "142dd24e34986ad10cecec8bcb8a4d8a42e036ee22c678bf9e3b52bff9183a76",
+            "canonicalRawId": "a58aef30-8bbe-42c6-9a3c-836c27e5fef8"
+          }
+        }
+      ]
+    },
+    {
+      "event": "Arteta pánik elleni csapatprankjei",
+      "sources": 2,
+      "rawArticles": 2,
+      "canonicalEventCount": 1,
+      "pass": true,
+      "fixtureRawIds": [
+        "48ef626c-893c-4ba2-9134-43ffb0942bd5",
+        "9932b1c4-8229-400a-b63f-603b792c890a"
+      ],
+      "fingerprint": "db3093e500671f8daf9c62da772cc0fb9faa0093490d9a370c66a50c9339b6b3",
+      "articles": [
+        {
+          "id": "48ef626c-893c-4ba2-9134-43ffb0942bd5",
+          "source": "Daily Mirror Football",
+          "language": "en",
+          "title": "Mikel Arteta reveals bizarre traps including air con trick to stop Arsenal stars 'panicking'",
+          "url": "https://www.mirror.co.uk/sport/football/news/mikel-arteta-arsenal-press-conference-37651344",
+          "publishedAt": "2026-09-11 09:55:24+00",
+          "ingestedAt": "2026-09-11 12:21:07.487642+00",
+          "event": {
+            "entity": "person:mikel-arteta",
+            "lastAt": "2026-09-11T14:04:03.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:mikel-arteta\",\"training-prank\",\"training-prank\",\"topic:panic-response\"]",
+            "firstAt": "2026-09-11T09:55:24.000Z",
+            "version": 1,
+            "concepts": [
+              "training-prank",
+              "topic:panic-response"
+            ],
+            "eventType": "training-prank",
+            "constraints": {},
+            "fingerprint": "db3093e500671f8daf9c62da772cc0fb9faa0093490d9a370c66a50c9339b6b3",
+            "canonicalRawId": "48ef626c-893c-4ba2-9134-43ffb0942bd5"
+          }
+        },
+        {
+          "id": "9932b1c4-8229-400a-b63f-603b792c890a",
+          "source": "Daily Star Football",
+          "language": "en",
+          "title": "Mikel Arteta admits sabotaging Arsenal with odd tricks to stop stars 'panicking'",
+          "url": "https://www.dailystar.co.uk/sport/football/arsenal-mikel-arteta-sabotage-training-37652664",
+          "publishedAt": "2026-09-11 14:04:03+00",
+          "ingestedAt": "2026-09-11 15:11:55.751752+00",
+          "event": {
+            "entity": "person:mikel-arteta",
+            "lastAt": "2026-09-11T14:04:03.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:mikel-arteta\",\"training-prank\",\"training-prank\",\"topic:panic-response\"]",
+            "firstAt": "2026-09-11T09:55:24.000Z",
+            "version": 1,
+            "concepts": [
+              "training-prank",
+              "topic:panic-response"
+            ],
+            "eventType": "training-prank",
+            "constraints": {},
+            "fingerprint": "db3093e500671f8daf9c62da772cc0fb9faa0093490d9a370c66a50c9339b6b3",
+            "canonicalRawId": "48ef626c-893c-4ba2-9134-43ffb0942bd5"
+          }
+        }
+      ]
+    },
+    {
+      "event": "Staveley nyilatkozata a sikertelen West Ham-ajánlatról",
+      "sources": 2,
+      "rawArticles": 2,
+      "canonicalEventCount": 1,
+      "pass": true,
+      "fixtureRawIds": [
+        "1b6d44d8-0c08-434d-8050-e3515a0aa0f8",
+        "4f382055-2562-4905-81b5-36c8cb565d8d"
+      ],
+      "fingerprint": "4f7ac9fe04ea6c32d57f6ec6eda532f2275b6f965e5b9337f701a05efdfba9cf",
+      "articles": [
+        {
+          "id": "1b6d44d8-0c08-434d-8050-e3515a0aa0f8",
+          "source": "The Sun / SunSport Football",
+          "language": "en",
+          "title": "Amanda Staveley breaks silence after failing in bid to buy West Ham stake… but admits ambitions for Hammers NOT over",
+          "url": "https://www.thesun.co.uk/sport/40344885/amanda-staveley-west-ham-stake-bid-failure/",
+          "publishedAt": "2026-09-11 11:01:08+00",
+          "ingestedAt": "2026-09-11 12:20:57.906477+00",
+          "event": {
+            "entity": "person:amanda-staveley",
+            "lastAt": "2026-09-11T11:01:08.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:amanda-staveley\",\"takeover-response\",\"takeover-response\"]",
+            "firstAt": "2026-09-11T09:21:33.000Z",
+            "version": 1,
+            "concepts": [
+              "takeover-response"
+            ],
+            "eventType": "takeover-response",
+            "constraints": {
+              "subjectClub": "team:west-ham"
+            },
+            "fingerprint": "4f7ac9fe04ea6c32d57f6ec6eda532f2275b6f965e5b9337f701a05efdfba9cf",
+            "canonicalRawId": "1b6d44d8-0c08-434d-8050-e3515a0aa0f8"
+          }
+        },
+        {
+          "id": "4f382055-2562-4905-81b5-36c8cb565d8d",
+          "source": "talkSPORT Football",
+          "language": "en",
+          "title": "Amanda Staveley breaks silence on West Ham saga and insists this isn&#8217;t over yet",
+          "url": "https://talksport.com/football/4574205/amanda-staveley-breaks-silence-west-ham-takeover-saga/",
+          "publishedAt": "2026-09-11 09:21:33+00",
+          "ingestedAt": "2026-09-11 12:21:14.086068+00",
+          "event": {
+            "entity": "person:amanda-staveley",
+            "lastAt": "2026-09-11T11:01:08.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:amanda-staveley\",\"takeover-response\",\"takeover-response\"]",
+            "firstAt": "2026-09-11T09:21:33.000Z",
+            "version": 1,
+            "concepts": [
+              "takeover-response"
+            ],
+            "eventType": "takeover-response",
+            "constraints": {
+              "subjectClub": "team:west-ham"
+            },
+            "fingerprint": "4f7ac9fe04ea6c32d57f6ec6eda532f2275b6f965e5b9337f701a05efdfba9cf",
+            "canonicalRawId": "1b6d44d8-0c08-434d-8050-e3515a0aa0f8"
+          }
+        }
+      ]
+    },
+    {
+      "event": "Ismail Kartal lemondása a Roma-meccs után",
+      "sources": 2,
+      "rawArticles": 2,
+      "canonicalEventCount": 1,
+      "pass": true,
+      "fixtureRawIds": [
+        "62909e8d-4cff-4c04-b830-466c0dbb7304",
+        "9cce7c73-fd87-4243-b6e0-536c297979a2"
+      ],
+      "fingerprint": "2cebdbfba2afd1687ab491684744a224a412a214491e478d9b05ce4869c39bf6",
+      "articles": [
+        {
+          "id": "62909e8d-4cff-4c04-b830-466c0dbb7304",
+          "source": "talkSPORT Football",
+          "language": "en",
+          "title": "Champions League manager immediately resigns minutes after opening match",
+          "url": "https://talksport.com/football/4573631/fenerbahce-manager-resigns-immediately-ismail-kartal-champions-league/",
+          "publishedAt": "2026-09-10 20:18:53+00",
+          "ingestedAt": "2026-09-11 12:21:14.257302+00",
+          "event": {
+            "entity": "person:ismail-kartal",
+            "lastAt": "2026-09-10T21:06:00.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:ismail-kartal\",\"coach-resignation\",\"coach-resignation\"]",
+            "firstAt": "2026-09-10T20:18:53.000Z",
+            "version": 1,
+            "concepts": [
+              "coach-resignation"
+            ],
+            "eventType": "coach-resignation",
+            "constraints": {},
+            "fingerprint": "2cebdbfba2afd1687ab491684744a224a412a214491e478d9b05ce4869c39bf6",
+            "canonicalRawId": "62909e8d-4cff-4c04-b830-466c0dbb7304"
+          }
+        },
+        {
+          "id": "9cce7c73-fd87-4243-b6e0-536c297979a2",
+          "source": "Daily Express Football",
+          "language": "en",
+          "title": "Champions League manager resigns immediately after full-time as players stunned",
+          "url": "https://www.express.co.uk/sport/football/2247552/champions-league-manager-fenerbahce-Ismail-Kartal",
+          "publishedAt": "2026-09-10 21:06:00+00",
+          "ingestedAt": "2026-09-11 12:21:10.969416+00",
+          "event": {
+            "entity": "person:ismail-kartal",
+            "lastAt": "2026-09-10T21:06:00.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:ismail-kartal\",\"coach-resignation\",\"coach-resignation\"]",
+            "firstAt": "2026-09-10T20:18:53.000Z",
+            "version": 1,
+            "concepts": [
+              "coach-resignation"
+            ],
+            "eventType": "coach-resignation",
+            "constraints": {},
+            "fingerprint": "2cebdbfba2afd1687ab491684744a224a412a214491e478d9b05ce4869c39bf6",
+            "canonicalRawId": "62909e8d-4cff-4c04-b830-466c0dbb7304"
+          }
+        }
+      ]
+    },
+    {
+      "event": "Olise szokatlan DAZN-interjúja",
+      "sources": 4,
+      "rawArticles": 4,
+      "canonicalEventCount": 1,
+      "pass": true,
+      "fixtureRawIds": [
+        "95d08bf6-0c36-4a61-8590-4506db954394",
+        "965c0f46-4a13-4203-bd8d-cebe321a5fd2",
+        "a93ff452-5777-44b5-ab4f-86df82a3b92d"
+      ],
+      "fingerprint": "19434c1b30444f07f9e95768f30966d3b624c1845dfbb419f276961bf9e914ee",
+      "articles": [
+        {
+          "id": "4aa56936-1fba-40d8-b1c2-2bff403b98ef",
+          "source": "SPORT BILD Football",
+          "language": "de",
+          "title": "Total bizarres Gespräch - Warum Olise das Interview geben musste",
+          "url": "https://sportbild.bild.de/fussball/1-bundesliga/total-bizarres-gespraech-warum-olise-das-interview-geben-musste-6aa3b501240b302c8a840fed",
+          "publishedAt": "2026-09-11 08:00:14+00",
+          "ingestedAt": "2026-09-11 12:21:24.980391+00",
+          "event": {
+            "entity": "person:michael-olise",
+            "lastAt": "2026-09-11T09:23:02.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:michael-olise\",\"awkward-interview\",\"awkward-interview\"]",
+            "firstAt": "2026-09-11T08:00:14.000Z",
+            "version": 1,
+            "concepts": [
+              "awkward-interview"
+            ],
+            "eventType": "awkward-interview",
+            "constraints": {
+              "opponent": "bodo-glimt",
+              "broadcaster": "dazn"
+            },
+            "fingerprint": "19434c1b30444f07f9e95768f30966d3b624c1845dfbb419f276961bf9e914ee",
+            "canonicalRawId": "4aa56936-1fba-40d8-b1c2-2bff403b98ef"
+          }
+        },
+        {
+          "id": "95d08bf6-0c36-4a61-8590-4506db954394",
+          "source": "SPORTbible Football",
+          "language": "en",
+          "title": "Michael Olise divides football fans with uncomfortable interview after Bayern Munich win in Champions League",
+          "url": "https://www.sportbible.com/football/football-news/champions-league/michael-olise-interview-bayern-munich-768368-20260911",
+          "publishedAt": "2026-09-11 08:20:55.685+00",
+          "ingestedAt": "2026-09-11 12:21:09.453302+00",
+          "event": {
+            "entity": "person:michael-olise",
+            "lastAt": "2026-09-11T08:20:55.685Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:michael-olise\",\"awkward-interview\",\"awkward-interview\"]",
+            "firstAt": "2026-09-11T08:00:14.000Z",
+            "version": 1,
+            "concepts": [
+              "awkward-interview"
+            ],
+            "eventType": "awkward-interview",
+            "constraints": {
+              "opponent": "bodo-glimt",
+              "broadcaster": "dazn"
+            },
+            "fingerprint": "19434c1b30444f07f9e95768f30966d3b624c1845dfbb419f276961bf9e914ee",
+            "canonicalRawId": "4aa56936-1fba-40d8-b1c2-2bff403b98ef"
+          }
+        },
+        {
+          "id": "965c0f46-4a13-4203-bd8d-cebe321a5fd2",
+          "source": "Corriere dello Sport Calcio",
+          "language": "it",
+          "title": "Olise e l'intervista surreale dopo la Champions: \"Gol capolavoro? Ho tirato e basta\". La sua faccia dice tutto",
+          "url": "https://www.corrieredellosport.it/news/calcio/champions-league/2026/09/11-151169969/olise_e_l_intervista_surreale_dopo_la_champions_gol_capolavoro_ho_tirato_e_basta_la_sua_faccia_dice_tutto/",
+          "publishedAt": "2026-09-11 08:31:25+00",
+          "ingestedAt": "2026-09-11 12:21:21.899156+00",
+          "event": {
+            "entity": "person:michael-olise",
+            "lastAt": "2026-09-11T08:31:25.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:michael-olise\",\"awkward-interview\",\"awkward-interview\"]",
+            "firstAt": "2026-09-11T08:00:14.000Z",
+            "version": 1,
+            "concepts": [
+              "awkward-interview"
+            ],
+            "eventType": "awkward-interview",
+            "constraints": {
+              "opponent": "bodo-glimt",
+              "broadcaster": "dazn"
+            },
+            "fingerprint": "19434c1b30444f07f9e95768f30966d3b624c1845dfbb419f276961bf9e914ee",
+            "canonicalRawId": "4aa56936-1fba-40d8-b1c2-2bff403b98ef"
+          }
+        },
+        {
+          "id": "a93ff452-5777-44b5-ab4f-86df82a3b92d",
+          "source": "Kronen Zeitung Fussball",
+          "language": "de",
+          "title": "Reporter verzweifelt - Olise ist selbst im Interview … außergewöhnlich",
+          "url": "https://www.krone.at/4290698",
+          "publishedAt": "2026-09-11 09:23:02+00",
+          "ingestedAt": "2026-09-11 12:21:26.312922+00",
+          "event": {
+            "entity": "person:michael-olise",
+            "lastAt": "2026-09-11T09:23:02.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:michael-olise\",\"awkward-interview\",\"awkward-interview\"]",
+            "firstAt": "2026-09-11T08:00:14.000Z",
+            "version": 1,
+            "concepts": [
+              "awkward-interview"
+            ],
+            "eventType": "awkward-interview",
+            "constraints": {
+              "opponent": "bodo-glimt",
+              "broadcaster": "dazn"
+            },
+            "fingerprint": "19434c1b30444f07f9e95768f30966d3b624c1845dfbb419f276961bf9e914ee",
+            "canonicalRawId": "4aa56936-1fba-40d8-b1c2-2bff403b98ef"
+          }
+        }
+      ]
+    },
+    {
+      "event": "Boehly Chelsea-részesedésének eladása",
+      "sources": 2,
+      "rawArticles": 2,
+      "canonicalEventCount": 1,
+      "pass": true,
+      "fixtureRawIds": [
+        "056a172c-0d96-4025-ad44-789684e6a1d8",
+        "65109c93-2013-4d05-b3d6-8f7af8c39aa3"
+      ],
+      "fingerprint": "2beedba6ccd03f608527660415dbbf6cb4383fb7a614cbfa5add3737a130f63b",
+      "articles": [
+        {
+          "id": "056a172c-0d96-4025-ad44-789684e6a1d8",
+          "source": "The Sun / SunSport Football",
+          "language": "en",
+          "title": "Todd Boehly on brink of SELLING Chelsea shares & profit on £2.5BILLION stake leaving Blues under full control of Eghbali",
+          "url": "https://www.thesun.co.uk/sport/40343571/chelsea-todd-boehly-sale-mark-walter/",
+          "publishedAt": "2026-09-11 06:20:27+00",
+          "ingestedAt": "2026-09-11 12:20:58.509337+00",
+          "event": {
+            "entity": "person:todd-boehly",
+            "lastAt": "2026-09-11T06:20:27.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:todd-boehly\",\"ownership-sale\",\"ownership-sale\"]",
+            "firstAt": "2026-09-10T22:22:03.000Z",
+            "version": 1,
+            "concepts": [
+              "ownership-sale"
+            ],
+            "eventType": "ownership-sale",
+            "constraints": {
+              "subjectClub": "team:chelsea"
+            },
+            "fingerprint": "2beedba6ccd03f608527660415dbbf6cb4383fb7a614cbfa5add3737a130f63b",
+            "canonicalRawId": "056a172c-0d96-4025-ad44-789684e6a1d8"
+          }
+        },
+        {
+          "id": "65109c93-2013-4d05-b3d6-8f7af8c39aa3",
+          "source": "Daily Mail Football",
+          "language": "en",
+          "title": "Todd Boehly is on the brink of leaving Chelsea and selling his minority stake - with Behdad Eghbali's Clearlake Capital set to take control of club",
+          "url": "https://www.dailymail.com/sport/football/article-16122101/Todd-Boehly-brink-leaving-Chelsea-selling-minority-stake-Behdad-Eghbalis-Clearlake-Capital-set-control-club.html?ns_mchannel=rss&ns_campaign=1490&ito=1490",
+          "publishedAt": "2026-09-10 22:22:03+00",
+          "ingestedAt": "2026-09-11 12:21:03.961338+00",
+          "event": {
+            "entity": "person:todd-boehly",
+            "lastAt": "2026-09-11T06:20:27.000Z",
+            "baseKey": "[\"tabloid-event@1\",\"person:todd-boehly\",\"ownership-sale\",\"ownership-sale\"]",
+            "firstAt": "2026-09-10T22:22:03.000Z",
+            "version": 1,
+            "concepts": [
+              "ownership-sale"
+            ],
+            "eventType": "ownership-sale",
+            "constraints": {
+              "subjectClub": "team:chelsea"
+            },
+            "fingerprint": "2beedba6ccd03f608527660415dbbf6cb4383fb7a614cbfa5add3737a130f63b",
+            "canonicalRawId": "056a172c-0d96-4025-ad44-789684e6a1d8"
+          }
+        }
+      ]
+    }
+  ],
+  "negativeControls": [
+    "Cristiano Ronaldo wedding with Georgina / Cristiano Ronaldo diet interview",
+    "Cristiano Ronaldo wedding with Georgina / Cristiano Ronaldo luxury cars",
+    "Cristiano Ronaldo diet interview / Cristiano Ronaldo luxury cars",
+    "Cristiano Ronaldo wedding with Georgina / Cristiano Ronaldo wedding with Irina",
+    "Cristiano Ronaldo holiday in Ibiza / Cristiano Ronaldo holiday in Dubai",
+    "Donnarumma and girlfriend robbery in Paris / Donnarumma and girlfriend robbery in Madrid",
+    "Donnarumma and girlfriend robbery 2026-09-01 / Donnarumma and girlfriend robbery 2026-09-10",
+    "Sorba Thomas car crash / Sorba Thomas nightclub party",
+    "Edson Alvarez denies kidnapping allegations / Edson Alvarez car crash",
+    "David Beckham baby with Victoria / David Beckham divorce with Victoria",
+    "Arsenal party in London / Arsenal car crash",
+    "Donnarumma robbery / Donnarumma and girlfriend robbery"
+  ],
+  "gold": "64/64 PASS",
+  "p0Regressions": [
+    {
+      "id": "dd6ab228-5094-4ee9-84a0-de4600ad8265",
+      "title": "Es geht um ein Buch - Neuer Zoff zwischen Horner und Red Bull",
+      "accepted": false,
+      "pass": true
+    },
+    {
+      "id": "c4162d81-537a-45b3-8889-9d91cf92523e",
+      "title": "Kone, niente esami ma resta in dubbio per Torino-Roma: le condizioni del centrocampista",
+      "accepted": false,
+      "pass": true
+    },
+    {
+      "id": "1e842e16-ece5-4392-856c-43838cb0d595",
+      "title": "Best starts to the season EVER as Arsenal look to smash Chelsea’s 21-year-old record and continue incredible winning run",
+      "accepted": false,
+      "pass": true
+    }
+  ],
+  "testsPassed": 187,
+  "rawPreservation": {
+    "before": 895,
+    "after": 906,
+    "oldRawPreserved": 895,
+    "newRaw": 11,
+    "changedContentUrlSourceImageStoryLink": 0
+  },
+  "dbBefore": {
+    "database": "neondb",
+    "raw": 895,
+    "jobs": 1403,
+    "queue": 0,
+    "stories": 103,
+    "versions": 168,
+    "agent_runs": 4887,
+    "active_sources": 0,
+    "stories_hash": "24e9d05f85ef6174e72dd49eea9c9a7b",
+    "versions_hash": "5bc029f0eb975cb15cf077ff872708c5",
+    "jobs_hash": "9c852485ee7e3036bfce487e6f6bcd0a"
+  },
+  "dbAfter": {
+    "database": "neondb",
+    "raw": 906,
+    "jobs": 1403,
+    "queue": 0,
+    "stories": 103,
+    "versions": 168,
+    "agent_runs": 4887,
+    "active_sources": 0,
+    "stories_hash": "24e9d05f85ef6174e72dd49eea9c9a7b",
+    "versions_hash": "5bc029f0eb975cb15cf077ff872708c5",
+    "jobs_hash": "9c852485ee7e3036bfce487e6f6bcd0a"
+  },
+  "sourceImageFilesUnchanged": 25,
+  "productionDbWrites": 0,
+  "productionDeploys": 0,
+  "geminiCalls": 0,
+  "autoPublish": false,
+  "corporateCron": "OFF"
+}

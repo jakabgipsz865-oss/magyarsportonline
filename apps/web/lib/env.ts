@@ -27,8 +27,8 @@ export const env = createEnv({
     // LLM_PROVIDER=none esetén a pipeline a determinisztikus
     // NoLlmClient adaptert használja (packages/llm/src/no-llm-client.ts) —
     // kizárólag explicit helyi fejlesztéshez/teszthez. A production
-    // Fact Extraction és Self Check production providerként Cloudflare
-    // Workers AI-t használ; a Final Hungarian Writer külön Gemini kliens.
+    // A production pipeline és a Final Hungarian Writer is a Cloudflare
+    // Workers AI klienst használja.
     // A kulcsok feltételes kötelezőségét lib/llm.ts ellenőrzi.
     LLM_PROVIDER: z.enum(["none", "cloudflare"]).default("cloudflare"),
 

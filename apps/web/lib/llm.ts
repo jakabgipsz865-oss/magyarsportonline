@@ -1,13 +1,9 @@
 import {
   CloudflareWorkersAiLlmClient,
-  DailyRequestCappedLlmClient,
-  GeminiLlmClient,
   NoLlmClient,
   ProviderFallbackLlmClient,
   describeCloudflareError,
-  describeGeminiError,
   estimateCloudflareCostUsd,
-  isGeminiDefinitelyUnmeteredError,
   type LlmClient,
 } from "@magyarsportonline/llm";
 import { createRepositories } from "./db";
@@ -61,26 +57,7 @@ export function getFactLlmClient(): LlmClient {
 export function getWriterLlmClient(): LlmClient {
   if (cachedWriterClient) return cachedWriterClient;
   if (env.LLM_PROVIDER === "none") return (cachedWriterClient = new NoLlmClient());
-  if (!env.GEMINI_API_KEY || !env.GEMINI_DAILY_REQUEST_CAP) {
-    throw new Error("Gemini Writer credentials or daily request cap are missing");
-  }
-  const repos = createRepositories();
-  const metered = new ProviderFallbackLlmClient({
-    inner: new GeminiLlmClient({ apiKey: env.GEMINI_API_KEY, model: "gemini-3.5-flash-lite" }),
-    fallback: new NoLlmClient(),
-    providerName: "gemini",
-    describeError: describeGeminiError,
-    logger: getLogger(),
-    failClosed: true,
-  });
-  cachedWriterClient = new DailyRequestCappedLlmClient(
-    metered,
-    "gemini",
-    Math.min(450, env.GEMINI_DAILY_REQUEST_CAP),
-    repos.llmUsageRepository,
-    isGeminiDefinitelyUnmeteredError,
-  );
-  return cachedWriterClient;
+  return (cachedWriterClient = getFactLlmClient());
 }
 
 /** Compatibility alias for diagnostics that probe the Fact provider. */

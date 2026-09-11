@@ -52,7 +52,7 @@ export function createDefaultParser(): RssParserLike {
   });
 }
 
-function extractImage(item: RssFeedItem): RemoteImage | null {
+function extractImageCandidates(item: RssFeedItem): RemoteImage[] {
   const candidates: RemoteImage[] = [];
   const add = (attributes: MediaThumbnail["$"], source: RemoteImage["source"]) => {
     if (!attributes || !remoteImageUrl(attributes.url)) return;
@@ -71,7 +71,7 @@ function extractImage(item: RssFeedItem): RemoteImage | null {
   for (const image of many(item.mediaThumbnail)) add(image.$, "thumbnail");
   for (const image of item.enclosures ?? []) add(image.$, "enclosure");
   add(item.enclosure, "enclosure");
-  return selectRemoteImage(candidates);
+  return candidates;
 }
 
 function parsePublishedDate(value: string | undefined): Date | null {
@@ -119,7 +119,8 @@ export class RssSourceAdapter implements SourceAdapter {
         );
         const publishedAtSource = parsePublishedDate(item.isoDate ?? item.pubDate);
 
-        const image = extractImage(item);
+        const imageCandidates = extractImageCandidates(item);
+        const image = selectRemoteImage(imageCandidates);
         return {
           sourceUrl,
           ...(item.guid ? { guid: item.guid } : {}),
@@ -133,6 +134,7 @@ export class RssSourceAdapter implements SourceAdapter {
           authorOriginal: null,
           publishedAtSource,
           imageUrl: image?.url ?? null,
+          ...(imageCandidates.length ? { imageCandidates } : {}),
           ...(image ? { image } : {}),
           contentOrigin: "rss_snippet",
         };

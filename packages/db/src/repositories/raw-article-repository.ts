@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "../client";
 import { pipelineJobs, rawArticles } from "../schema/index";
+import type { TabloidEventIdentity } from "@magyarsportonline/shared";
 
 export type RawArticle = typeof rawArticles.$inferSelect;
 export type NewRawArticle = typeof rawArticles.$inferInsert;
@@ -11,6 +12,32 @@ export type NewRawArticle = typeof rawArticles.$inferInsert;
  */
 export class RawArticleRepository {
   constructor(private readonly db: Database) {}
+
+  async getTabloidEvent(rawId: string): Promise<TabloidEventIdentity | null> {
+    const rows = await this.db.execute<{ event: TabloidEventIdentity | null }>(sql`
+      SELECT extracted_entities->'tabloidEvent' AS event FROM raw_articles WHERE id = ${rawId}`);
+    return rows[0]?.event ?? null;
+  }
+
+  async listTabloidEvents(baseKey: string, at: Date): Promise<TabloidEventIdentity[]> {
+    const rows = await this.db.execute<{ event: TabloidEventIdentity }>(sql`
+      SELECT extracted_entities->'tabloidEvent' AS event FROM raw_articles
+      WHERE extracted_entities->'tabloidEvent'->>'baseKey' = ${baseKey}
+        AND extracted_entities->'tabloidEvent'->>'canonicalRawId' = id::text
+        AND (extracted_entities->'tabloidEvent'->>'firstAt')::timestamptz <= ${at.toISOString()}::timestamptz + interval '48 hours'
+        AND (extracted_entities->'tabloidEvent'->>'lastAt')::timestamptz >= ${at.toISOString()}::timestamptz - interval '48 hours'
+      ORDER BY ingested_at, id`);
+    return rows.map((row) => row.event);
+  }
+
+  async saveTabloidEvent(rawId: string, event: TabloidEventIdentity): Promise<void> {
+    await this.db
+      .update(rawArticles)
+      .set({
+        extractedEntities: sql`coalesce(${rawArticles.extractedEntities}, '{}'::jsonb) || ${JSON.stringify({ tabloidEvent: event })}::jsonb`,
+      })
+      .where(eq(rawArticles.id, rawId));
+  }
 
   /** Serialize deliveries for one article, including the single writer call. */
   async withTabloidLock<T>(id: string, work: () => Promise<T>): Promise<T> {

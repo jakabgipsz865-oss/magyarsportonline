@@ -1,0 +1,224 @@
+{
+  "runId": "472532db-d5df-4541-a925-cb0929672960",
+  "totals": {
+    "fetched": 950,
+    "fresh48h": 618,
+    "considered": 549,
+    "rawStored": 535,
+    "accept": 27,
+    "reject": 508,
+    "duplicate": 14,
+    "imageUrl": 25
+  },
+  "crossSourceDedup": [
+    {
+      "event": "Donnarumma és Alessia Elefante párizsi kirablásának tárgyalása",
+      "sources": [
+        "Daily Star Football",
+        "Daily Mail Football",
+        "The Sun / SunSport Football",
+        "Daily Mirror Football",
+        "Daily Express Football",
+        "OKDIARIO Paparazzi",
+        "SPORT BILD Football"
+      ],
+      "rawIds": [
+        "825fa7cf-bb4b-44e1-bcdc-d0b1854b2a5b",
+        "7c4886e5-02c0-4048-ba41-fa9d1353f525",
+        "9cd85992-5b9e-427b-be08-12060d327ffe",
+        "40af8232-25da-4a9b-a46b-87e844a591d3",
+        "d160f8f7-4103-4e78-8aa1-4d0e06e3ce4b",
+        "235a257d-9cf0-4bd1-8f1f-d5e82cc9c526",
+        "6c59d388-777f-48b6-a7a5-aae1310aa05b"
+      ],
+      "urls": [
+        "https://www.dailystar.co.uk/sport/football/gianluigi-donnarumma-alessia-knifepoint-robbery-37650882",
+        "https://www.dailymail.com/sport/football/article-16121869/Man-City-star-Gianluigi-Donnarumma-pregnant-girlfriend-hit-bound-threatened-knife-robbers-sleeping-Paris-flat.html?ns_mchannel=rss&ns_campaign=1490&ito=1490",
+        "https://www.thesun.co.uk/sport/40342876/man-city-ace-robbed-flat-trial-suspended/",
+        "https://www.mirror.co.uk/sport/football/news/man-city-gianluigi-donnarumma-psg-37650409",
+        "https://www.express.co.uk/sport/football/2247635/Gianluigi-Donnarumma-girlfriend-robbers",
+        "https://okdiario.com/deportes/salen-luz-todos-detalles-del-asalto-armado-donnarumma-novia-embarazada-20269181",
+        "https://sportbild.bild.de/fussball/internationaler-fussball/so-brutal-war-der-ueberfall-auf-donnarumma-und-seine-frau-6aa3c79e56f343d9f4dd189a"
+      ],
+      "acceptedRawRecords": 7,
+      "distinctCurrentStoryFingerprints": 7,
+      "actualCreatedStories": 0,
+      "crossSourceSingleStoryGuarantee": "FAIL"
+    },
+    {
+      "event": "Edson Álvarez: emberrablási vádak visszautasítása",
+      "sources": [
+        "Daily Star Football",
+        "Daily Mail Football",
+        "Daily Mirror Football",
+        "talkSPORT Football"
+      ],
+      "rawIds": [
+        "f80da132-78e1-4cff-954f-ca138aa036ce",
+        "166649c2-4e38-4208-bf20-f7b7d7cc5aeb",
+        "73e93d84-666d-4011-a725-f2c0b7858558",
+        "f144700d-244c-4147-bce3-c4d7d83470b5"
+      ],
+      "urls": [
+        "https://www.dailystar.co.uk/sport/football/west-ham-united-edson-alvarez-37649939",
+        "https://www.dailymail.com/sport/football/article-16121729/West-Ham-footballer-Edson-Alvarez-forced-deny-bombshell-claims-linking-KIDNAPPING-plot.html?ns_mchannel=rss&ns_campaign=1490&ito=1490",
+        "https://www.mirror.co.uk/sport/football/news/west-ham-united-edson-alvarez-37650221",
+        "https://talksport.com/football/4573277/west-ham-edson-alvarez-kidnapping-allegations-statement/"
+      ],
+      "acceptedRawRecords": 4,
+      "distinctCurrentStoryFingerprints": 4,
+      "actualCreatedStories": 0,
+      "crossSourceSingleStoryGuarantee": "FAIL"
+    },
+    {
+      "event": "Sorba Thomas autóbalesete a Hull City edzőpályája közelében",
+      "sources": [
+        "Daily Mirror Football",
+        "Daily Express Football"
+      ],
+      "rawIds": [
+        "ed2738bf-5626-44d5-afb7-f19055287aa0",
+        "7bce8d06-ae31-4c6d-acc6-7b4df906c736"
+      ],
+      "urls": [
+        "https://www.mirror.co.uk/sport/football/news/sorba-thomas-hull-car-crash-37651323",
+        "https://www.express.co.uk/sport/football/2247665/Hull-Thomas-Premier-League-Car-Crash-Statement"
+      ],
+      "acceptedRawRecords": 2,
+      "distinctCurrentStoryFingerprints": 2,
+      "actualCreatedStories": 0,
+      "crossSourceSingleStoryGuarantee": "FAIL"
+    }
+  ],
+  "editorialFindings": [
+    {
+      "status": "CONFIRMED FALSE POSITIVE — P0",
+      "source": "BILD Sport",
+      "title": "Es geht um ein Buch - Neuer Zoff zwischen Horner und Red Bull",
+      "rawId": "dd6ab228-5094-4ee9-84a0-de4600ad8265",
+      "actual": "ACCEPT",
+      "reason": "Formula–1 / Christian Horner. A cím német „Neuer” szava a játékosnév-regex „neuer” elemére illeszkedik; ez téves football relevance.",
+      "url": "https://www.bild.de/sport/mehr-sport/es-geht-um-ein-buch-neuer-zoff-zwischen-horner-und-red-bull-6aa3ba1c240b302c8a84106e"
+    },
+    {
+      "status": "CONFIRMED FALSE POSITIVE — P0",
+      "source": "Tuttosport Calcio",
+      "title": "Kone, niente esami ma resta in dubbio per Torino-Roma: le condizioni del centrocampista",
+      "rawId": "c4162d81-537a-45b3-8889-9d91cf92523e",
+      "actual": "ACCEPT",
+      "reason": "Sima térdsérülés/keretbe visszatérés sportfrissítés. A „ginocchio” nem kerül kizárásra; az „accusato” szó tévesen az accusa* human-angle jelre illeszkedik.",
+      "url": "https://www.tuttosport.com/news/calcio/serie-a/roma/2026/09/11-151171273/kone_niente_esami_ma_resta_in_dubbio_per_torino-roma_le_condizioni_del_centrocampista/"
+    },
+    {
+      "status": "EDITORIAL REVIEW — lehetséges FALSE POSITIVE",
+      "source": "Gazzetta Calcio",
+      "title": "Brignoli e l'esordio in Champions a 35 anni: \"A Donnarumma chiederò la maglia, a Gasp una... foto!\"",
+      "rawId": "1553ef2a-89de-45fa-9069-579fff9c80f6",
+      "actual": "ACCEPT",
+      "reason": "A fő téma a Champions League-debütálás; a maglia/foto mellékszál emeli ACCEPT-re. Kézi szerkesztői döntést igényel.",
+      "url": "https://www.gazzetta.it/Calcio/Champions-League/11-09-2026/alberto-brignoli-intervista-e-il-debutto-in-champions-a-35-anni-ora-il-como-e-la-roma.shtml"
+    },
+    {
+      "status": "EDITORIAL REVIEW — határeset",
+      "source": "Daily Mirror Football",
+      "title": "Mikel Arteta reveals bizarre traps including air con trick to stop Arsenal stars 'panicking'",
+      "rawId": "48ef626c-893c-4ba2-9134-43ffb0942bd5",
+      "actual": "ACCEPT",
+      "reason": "Edzői menedzsmentmódszer és furcsa tréfák keveréke; nem bizonyított súlyos false positive.",
+      "url": "https://www.mirror.co.uk/sport/football/news/mikel-arteta-arsenal-press-conference-37651344"
+    },
+    {
+      "status": "LIKELY FALSE NEGATIVE",
+      "source": "Daily Star Football",
+      "title": "Darren Fletcher confronts 'abusive' Man Utd fan as tempers flare at Old Trafford",
+      "rawId": "fe2d4175-8547-4f95-b8eb-da6e6159adee",
+      "actual": "REJECT",
+      "reason": "Szurkolói konfliktus; a meccseredmény csak háttér.",
+      "url": "https://www.dailystar.co.uk/sport/football/darren-fletcher-man-utd-fan-37651457"
+    },
+    {
+      "status": "LIKELY FALSE NEGATIVE",
+      "source": "Daily Mail Football",
+      "title": "Darren Fletcher puts 'abusive' Man United autograph-hunters in their place: Coach shouts back after angry fans attacked players for not stopping when they wanted to meet their heroes",
+      "rawId": "e273a1ee-4494-431b-b3f7-44525180557e",
+      "actual": "REJECT",
+      "reason": "Autogramkérők és edző konfliktusa; egyértelmű személyes incidens.",
+      "url": "https://www.dailymail.com/sport/football/article-16122849/Darren-Fletcher-abusive-Man-United-autograph-hunters-shouts-angry-fans-players-not-stopping-wanted-meet-heroes.html?ns_mchannel=rss&ns_campaign=1490&ito=1490"
+    },
+    {
+      "status": "LIKELY FALSE NEGATIVE",
+      "source": "Metro Football",
+      "title": "Premier League star crashes £160k Land Rover on residential street",
+      "rawId": "af90e4d0-9e80-4b33-9a1b-a58aa0e4ac41",
+      "actual": "REJECT",
+      "reason": "Sorba Thomas személyes autóbalesete. Ugyanezt a Mirror és az Express ACCEPT-re tette.",
+      "url": "https://metro.co.uk/2026/09/11/premier-league-star-crashes-160k-land-rover-residential-street-29585414/"
+    },
+    {
+      "status": "LIKELY FALSE NEGATIVE",
+      "source": "The Sun / SunSport Football",
+      "title": "Premier League star flips £60,000 Land Rover Defender on way to training days after £10million summer transfer",
+      "rawId": "ed5190fa-148b-4e87-94a7-c2d509c2dbac",
+      "actual": "REJECT",
+      "reason": "Személyes autóbaleset, a címben szereplő korábbi transfer háttérinformáció.",
+      "url": "https://www.thesun.co.uk/sport/40345748/sorba-thomas-flips-land-rover-defender-way-training/"
+    },
+    {
+      "status": "LIKELY FALSE NEGATIVE",
+      "source": "SPORTbible Football",
+      "title": "Michael Olise divides football fans with uncomfortable interview after Bayern Munich win in Champions League",
+      "rawId": "95d08bf6-0c36-4a61-8590-4506db954394",
+      "actual": "REJECT",
+      "reason": "Virális, kínos interjú; az eredmény és a kapcsolódó transfer-link sportháttérként kizárja.",
+      "url": "https://www.sportbible.com/football/football-news/champions-league/michael-olise-interview-bayern-munich-768368-20260911"
+    },
+    {
+      "status": "LIKELY FALSE NEGATIVE",
+      "source": "Corriere dello Sport Calcio",
+      "title": "Olise e l'intervista surreale dopo la Champions: \"Gol capolavoro? Ho tirato e basta\". La sua faccia dice tutto",
+      "rawId": "965c0f46-4a13-4203-bd8d-cebe321a5fd2",
+      "actual": "REJECT",
+      "reason": "Szürreális interjú; ugyanaz az Olise-téma SPORT BILD-en ACCEPT.",
+      "url": "https://www.corrieredellosport.it/news/calcio/champions-league/2026/09/11-151169969/olise_e_l_intervista_surreale_dopo_la_champions_gol_capolavoro_ho_tirato_e_basta_la_sua_faccia_dice_tutto/"
+    },
+    {
+      "status": "LIKELY FALSE NEGATIVE",
+      "source": "BILD Sport",
+      "title": "Halbfinalist der US Open und Fußball-Superstar - Sie sind aktuell das Glamour-Paar der Sportwelt",
+      "rawId": "323a5e40-88e0-4dca-a0d3-26de292ea889",
+      "actual": "REJECT",
+      "reason": "Trinity Rodman labdarúgó és Ben Shelton kapcsolata; a football-person felismerés nem elég.",
+      "url": "https://www.bild.de/sport/mehr-sport/ben-shelton-und-trinity-rodman-die-schoenste-sportromanze-6aa38ddd181cb962d488b585"
+    },
+    {
+      "status": "LIKELY FALSE NEGATIVE",
+      "source": "BILD Sport",
+      "title": "Worum es geht - Schwere Vorwürfe gegen Fußball-Legende Eto’o",
+      "rawId": "a4a566d4-ecb4-4ee8-a379-036698de9432",
+      "actual": "REJECT",
+      "reason": "Samuel Eto’o elleni vádak; a futballlegenda-relevancia/névváltozat hiányosan felismerhető.",
+      "url": "https://www.bild.de/sport/fussball/schwere-vorwuerfe-gegen-fussball-legende-samuel-etoo-6aa3bfe20f417ae59102e585"
+    },
+    {
+      "status": "LIKELY FALSE NEGATIVE",
+      "source": "SPORT BILD Football",
+      "title": "Lebenslange Sperre - Brutale Attacke auf Linienrichter",
+      "rawId": "96c6486d-0b73-4764-9bba-6131c312e143",
+      "actual": "REJECT",
+      "reason": "Linienrichter bántalmazása és életre szóló eltiltás; személyes erőszakos/disciplinary incidens.",
+      "url": "https://sportbild.bild.de/fussball/internationaler-fussball/lebenslange-sperre-brutale-attacke-auf-linienrichter-6aa3cb6556f343d9f4dd18fd"
+    }
+  ],
+  "verified": {
+    "rawStored": 535,
+    "writerQueued": 0,
+    "noLinkedStories": true,
+    "canonicalUnchanged": true,
+    "queueUnchanged": true,
+    "agentRunsUnchanged": true,
+    "sourcesInactive": true,
+    "urlsUnchanged": true
+  },
+  "imageFileRequests": 0,
+  "htmlMetadataRequests": 31
+}

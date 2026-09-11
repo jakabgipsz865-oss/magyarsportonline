@@ -136,3 +136,82 @@ describe("one-call Hungarian writer", () => {
     await expect(writeTabloid(llm, input)).rejects.toThrow("untranslated");
   });
 });
+
+describe("source reset V2 regression cases", () => {
+  it.each(["DIRECT_GOSSIP", "BROAD_TABLOID_FOOTBALL"] as const)(
+    "hard exclusions override %s",
+    (mode) => {
+      for (const title of [
+        "Soundhood SON Estrella Galicia regresa a Barcelona: música y fiesta",
+        "Dreipack in der Champions League - Stuttgart feiert Demirovic-Party",
+        "Königsklassen-Kuriosum - Wieso läuft die Champions League am Donnerstag?",
+        "Palmeri: Il Napoli si è difeso bene con l'Arsenal. Ma paragonarlo all'Inter...",
+        "Real Madrid firma el récord absoluto del límite salarial: polémica",
+        "Arsenal shock: financial results and salary cap",
+        "Messi: sorpresa en el calendario y horario del partido",
+        "Bayern: Taktik sorgt für Streit",
+        "Juventus: tattica e secondo tempo imbarazzante",
+        "Ronaldo: transfer scandal angers fans",
+        "Richarlison will weg! Tottenham-Streit eskaliert",
+        "Spanischer Fußballer Pablo Garcia weint, weil Betis Sevilla ihn verkauft",
+        "Lionel Messi weint nach verlorenem Finale gegen Spanien",
+        "MLS-Sammler: Reus im Duell mit Müller - Messis Miami und Lewandowski im Streit",
+        "Liverpool: police warn of music festival in the city",
+      ])
+        expect(isFootballTabloid(title, "", false, mode), title).toBe(false);
+    },
+  );
+  it.each([
+    ["Messi y su esposa: una historia personal", ""],
+    ["Totti e Ilary, il divorzio", ""],
+    ["La moglie del calciatore racconta la festa", ""],
+    ["Bayern captain opens up about family", ""],
+  ])("retains strong football-person/entity gossip: %s", (title, body) => {
+    expect(isFootballTabloid(title, body, false, "DIRECT_GOSSIP")).toBe(true);
+  });
+  it.each([
+    "Football festival returns to Barcelona",
+    "Napoli ospita la festa della musica",
+    "Hollywood actress parties in Manchester",
+  ])("does not treat a topic/city as a person/entity: %s", (title) => {
+    expect(isFootballTabloid(title, "", false, "DIRECT_GOSSIP")).toBe(false);
+  });
+});
+
+describe("sports context does not suppress a concrete off-field subject", () => {
+  it.each(["DIRECT_GOSSIP", "BROAD_TABLOID_FOOTBALL"] as const)("calibrates %s", (mode) => {
+    expect(
+      isFootballTabloid(
+        "Donnarumma injured in robbery at his house",
+        "The goalkeeper was hit by robbers.",
+        true,
+        mode,
+      ),
+    ).toBe(true);
+    expect(
+      isFootballTabloid(
+        "Donnarumma injury update",
+        "The goalkeeper is out of training.",
+        true,
+        mode,
+      ),
+    ).toBe(false);
+    expect(
+      isFootballTabloid(
+        "Donnarumma si sposa: contratto a lungo termine firmato",
+        "Nozze con Alessia Elefante.",
+        true,
+        mode,
+      ),
+    ).toBe(true);
+    expect(
+      isFootballTabloid(
+        "Messi contract dispute sparks feud",
+        "His club negotiates another year.",
+        true,
+        mode,
+      ),
+    ).toBe(false);
+    expect(isFootballTabloid("Football star reveals dating drama", "", true, mode)).toBe(false);
+  });
+});

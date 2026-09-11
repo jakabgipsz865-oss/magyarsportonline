@@ -1,5 +1,10 @@
-import { createHash } from "node:crypto";
-import { readModelProjector, seo, sourceIngest, tabloid } from "@magyarsportonline/agents";
+import {
+  readModelProjector,
+  seo,
+  sourceIngest,
+  tabloid,
+  tabloidEvent,
+} from "@magyarsportonline/agents";
 import { isDailyLlmQuotaError, isGeminiDailyQuotaError } from "@magyarsportonline/llm";
 import { createEventEnvelope } from "@magyarsportonline/events";
 import { revalidatePath } from "next/cache";
@@ -11,106 +16,120 @@ import registry from "./tabloid-sources.json";
 import type { TabloidSourceMode } from "@magyarsportonline/shared";
 import { TABLOID_PUBLIC_START } from "@magyarsportonline/shared";
 
-/** One accepted raw article owns one Story. Retries reuse its persisted draft. */
+/** Event identity and publication locks make cross-source deliveries reuse one draft. */
 export async function publishTabloid(rawId: string, repos: Repositories = createRepositories()) {
   if (!env.TABLOID_AUTO_PUBLISH) return { paused: true, llmCalls: 0 };
-  return repos.rawArticleRepository.withTabloidLock(rawId, async () => {
-    const raw = await repos.rawArticleRepository.getById(rawId);
-    if (!raw) throw new Error("Tabloid source article missing");
-    if (raw.ingestedAt < new Date(TABLOID_PUBLIC_START)) return { skipped: true };
-    const source = await repos.sourceRepository.getById(raw.sourceId);
-    if (!source) throw new Error("Tabloid source missing");
-    const config = source.fetchConfig as {
-      tabloid?: boolean;
-      footballFeed?: boolean;
-      mode?: TabloidSourceMode;
-    };
-    if (!config.tabloid || !registry.some((item) => item.id === source.id))
-      return { skipped: true };
-    if (
-      !tabloid.isFootballTabloid(
-        raw.titleOriginal,
-        raw.bodyOriginal,
-        config.footballFeed !== false,
-        config.mode,
-      )
+  const raw = await repos.rawArticleRepository.getById(rawId);
+  if (!raw) throw new Error("Tabloid source article missing");
+  if (raw.ingestedAt < new Date(TABLOID_PUBLIC_START)) return { skipped: true };
+  const source = await repos.sourceRepository.getById(raw.sourceId);
+  if (!source) throw new Error("Tabloid source missing");
+  const config = source.fetchConfig as {
+    tabloid?: boolean;
+    footballFeed?: boolean;
+    mode?: TabloidSourceMode;
+  };
+  if (!config.tabloid || !registry.some((item) => item.id === source.id)) return { skipped: true };
+  if (
+    !tabloid.isFootballTabloid(
+      raw.titleOriginal,
+      raw.bodyOriginal,
+      config.footballFeed !== false,
+      config.mode,
     )
-      return { skipped: true };
-    const { story } = await repos.storyRepository.createOrMatchByFingerprint(
-      createHash("sha256").update(`tabloid:${raw.sourceId}:${raw.id}`).digest("hex"),
-      {
-        canonicalTitle: raw.titleOriginal,
-        categoryId: null,
-        confidenceScore: 0,
-        riskLevel: null,
-        isDeveloping: false,
-        imageUrl: raw.imageUrl,
-      },
-    );
-    await repos.rawArticleRepository.linkToStory(raw.id, story.id);
-    await repos.storySourceRepository.link(story.id, raw.id, "initial");
-    let version = await repos.storyVersionRepository.getLatest(story.id);
-    if (version && version.promptVersion !== tabloid.TABLOID_PROMPT) return { skipped: true };
-    if (!version) {
-      if (!(await repos.rawArticleRepository.claimTabloidWriter(raw.id)))
-        throw new Error("Tabloid writer already attempted; manual inspection required");
-      const result = await tabloid
-        .writeTabloid(getWriterLlmClient(), {
-          language: raw.language,
-          title: raw.titleOriginal,
-          content: raw.bodyOriginal,
-          sourceName: source.name,
-          sourceUrl: raw.sourceUrl,
-          publishedAt: raw.publishedAtSource?.toISOString() ?? null,
-        })
-        .catch(async (error: unknown) => {
-          if (isDailyLlmQuotaError(error) || isGeminiDailyQuotaError(error))
-            await repos.rawArticleRepository.releaseTabloidQuotaDeferral(raw.id);
-          throw error;
+  )
+    return { skipped: true };
+  const identity = await tabloidEvent.resolveTabloidEvent(
+    {
+      id: raw.id,
+      sourceId: raw.sourceId,
+      title: raw.titleOriginal,
+      content: raw.bodyOriginal,
+      sourceUrl: raw.sourceUrl,
+      publishedAt: raw.publishedAtSource,
+      ingestedAt: raw.ingestedAt,
+    },
+    repos.rawArticleRepository,
+  );
+  return repos.rawArticleRepository.withTabloidLock(
+    `publication:${identity.fingerprint}`,
+    async () => {
+      const { story } = await repos.storyRepository.createOrMatchByFingerprint(
+        identity.fingerprint,
+        {
+          canonicalTitle: raw.titleOriginal,
+          categoryId: null,
+          confidenceScore: 0,
+          riskLevel: null,
+          isDeveloping: false,
+          imageUrl: raw.imageUrl,
+        },
+      );
+      await repos.rawArticleRepository.linkToStory(raw.id, story.id);
+      await repos.storySourceRepository.link(story.id, raw.id, "initial");
+      let version = await repos.storyVersionRepository.getLatest(story.id);
+      if (version && version.promptVersion !== tabloid.TABLOID_PROMPT) return { skipped: true };
+      if (!version) {
+        if (!(await repos.rawArticleRepository.claimTabloidWriter(identity.canonicalRawId)))
+          throw new Error("Tabloid writer already attempted; manual inspection required");
+        const result = await tabloid
+          .writeTabloid(getWriterLlmClient(), {
+            language: raw.language,
+            title: raw.titleOriginal,
+            content: raw.bodyOriginal,
+            sourceName: source.name,
+            sourceUrl: raw.sourceUrl,
+            publishedAt: raw.publishedAtSource?.toISOString() ?? null,
+          })
+          .catch(async (error: unknown) => {
+            if (isDailyLlmQuotaError(error) || isGeminiDailyQuotaError(error))
+              await repos.rawArticleRepository.releaseTabloidQuotaDeferral(identity.canonicalRawId);
+            throw error;
+          });
+        version = await repos.storyVersionRepository.createNextVersion(story.id, {
+          titleHu: result.title_hu,
+          leadHu: result.lead_hu,
+          bodyHu: result.body_hu,
+          changeSummaryHu: null,
+          generatedByModel: tabloid.TABLOID_MODEL,
+          isAiGenerated: true,
+          promptVersion: tabloid.TABLOID_PROMPT,
+          // Legacy columns retained for schema compatibility, never used as gates.
+          factConsistencyScore: 0,
+          selfCheckFallback: false,
         });
-      version = await repos.storyVersionRepository.createNextVersion(story.id, {
-        titleHu: result.title_hu,
-        leadHu: result.lead_hu,
-        bodyHu: result.body_hu,
-        changeSummaryHu: null,
-        generatedByModel: tabloid.TABLOID_MODEL,
-        isAiGenerated: true,
-        promptVersion: tabloid.TABLOID_PROMPT,
-        // Legacy columns retained for schema compatibility, never used as gates.
-        factConsistencyScore: 0,
-        selfCheckFallback: false,
-      });
-    }
-    const slug = story.slug ?? `${seo.slugify(version.titleHu)}-${story.id.slice(0, 8)}`;
-    if (!story.slug && !(await repos.storyRepository.trySetSlug(story.id, slug)))
-      throw new Error("Tabloid slug collision");
-    await repos.storyVersionRepository.markPublished(version.id);
-    await repos.storyRepository.publish(story.id, version.id, story.publishedAt ?? new Date());
-    await readModelProjector.handleStoryPublished(
-      {
-        storyRepository: repos.storyRepository,
-        storyVersionRepository: repos.storyVersionRepository,
-        storySourceRepository: repos.storySourceRepository,
-        storyCredibilityHistoryRepository: { listByStoryId: async () => [] },
-        storyReadModelRepository: repos.storyReadModelRepository,
-        logger: getLogger(),
-      },
-      {
-        ...createEventEnvelope({ correlationId: crypto.randomUUID() }),
-        type: "story/published",
-        payload: { story_id: story.id, story_version_id: version.id },
-      },
-    );
-    revalidatePath("/");
-    revalidatePath(`/hir/${slug}`);
-    return {
-      storyId: story.id,
-      versionId: version.id,
-      slug,
-      model: version.generatedByModel,
-      published: true,
-    };
-  });
+      }
+      const slug = story.slug ?? `${seo.slugify(version.titleHu)}-${story.id.slice(0, 8)}`;
+      if (!story.slug && !(await repos.storyRepository.trySetSlug(story.id, slug)))
+        throw new Error("Tabloid slug collision");
+      await repos.storyVersionRepository.markPublished(version.id);
+      await repos.storyRepository.publish(story.id, version.id, story.publishedAt ?? new Date());
+      await readModelProjector.handleStoryPublished(
+        {
+          storyRepository: repos.storyRepository,
+          storyVersionRepository: repos.storyVersionRepository,
+          storySourceRepository: repos.storySourceRepository,
+          storyCredibilityHistoryRepository: { listByStoryId: async () => [] },
+          storyReadModelRepository: repos.storyReadModelRepository,
+          logger: getLogger(),
+        },
+        {
+          ...createEventEnvelope({ correlationId: crypto.randomUUID() }),
+          type: "story/published",
+          payload: { story_id: story.id, story_version_id: version.id },
+        },
+      );
+      revalidatePath("/");
+      revalidatePath(`/hir/${slug}`);
+      return {
+        storyId: story.id,
+        versionId: version.id,
+        slug,
+        model: version.generatedByModel,
+        published: true,
+      };
+    },
+  );
 }
 
 /** RSS requests run concurrently; extraction is optional, RSS content is sufficient. */
@@ -173,11 +192,13 @@ export async function ingestTabloid(repos: Repositories = createRepositories()) 
               config.mode,
             );
             if (accepted) budget--;
-            const image =
-              article.image ??
-              (accepted
-                ? await sourceIngest.fetchArticleImage(article.sourceUrl, config.url)
-                : null);
+            const htmlImage = accepted
+              ? await sourceIngest.fetchArticleImage(article.sourceUrl, config.url)
+              : null;
+            const image = sourceIngest.selectRemoteImage([
+              ...(article.imageCandidates ?? (article.image ? [article.image] : [])),
+              ...(htmlImage ? [htmlImage] : []),
+            ]);
             const raw = await repos.rawArticleRepository.insertTabloid(
               {
                 sourceId: source.id,

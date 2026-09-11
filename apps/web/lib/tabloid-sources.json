@@ -8,7 +8,7 @@
     "url": "https://www.thesun.co.uk/sport/football/feed/",
     "feedUrls": ["https://www.thesun.co.uk/sport/football/feed/"],
     "footballFeed": true,
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "f069373a-d1c9-484f-aa7a-4e9f5bc0976b",
@@ -19,7 +19,7 @@
     "url": "https://www.dailystar.co.uk/sport/football/?service=rss",
     "feedUrls": ["https://www.dailystar.co.uk/sport/football/?service=rss"],
     "footballFeed": true,
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "5416c5b2-fc48-4994-ac0f-fcc966b9cb83",
@@ -30,7 +30,7 @@
     "url": "https://www.dailymail.com/sport/football/index.rss",
     "feedUrls": ["https://www.dailymail.com/sport/football/index.rss"],
     "footballFeed": true,
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "200bba72-cf0a-563e-b49f-fe440c2d1f3f",
@@ -41,18 +41,18 @@
     "url": "https://www.mirror.co.uk/sport/football/?service=rss",
     "feedUrls": ["https://www.mirror.co.uk/sport/football/?service=rss"],
     "footballFeed": true,
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "25205fef-c4a1-5749-a061-75cc05b73d47",
     "name": "SPORTbible Football",
     "language": "en",
     "mode": "BROAD_TABLOID_FOOTBALL",
-    "tier": "CORE",
+    "tier": "SECONDARY",
     "url": "https://www.sportbible.com/football.rss",
     "feedUrls": ["https://www.sportbible.com/football.rss"],
     "footballFeed": true,
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "8d36f522-b315-5e4f-81aa-0af41634c716",
@@ -63,18 +63,29 @@
     "url": "https://www.express.co.uk/posts/rss/67/football",
     "feedUrls": ["https://www.express.co.uk/posts/rss/67/football"],
     "footballFeed": true,
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "c2cf522b-53d2-52a8-a488-39995352613b",
     "name": "Metro Football",
     "language": "en",
     "mode": "BROAD_TABLOID_FOOTBALL",
-    "tier": "CORE",
+    "tier": "SECONDARY",
     "url": "https://metro.co.uk/sport/football/feed/",
     "feedUrls": ["https://metro.co.uk/sport/football/feed/"],
     "footballFeed": true,
-    "enabled": true
+    "enabled": false
+  },
+  {
+    "id": "535dae11-19b8-5eb9-9f09-16186a3d8e49",
+    "name": "Metro Oddballs",
+    "language": "en",
+    "mode": "DIRECT_GOSSIP",
+    "tier": "SECONDARY",
+    "url": "https://metro.co.uk/sport/oddballs/feed/",
+    "feedUrls": ["https://metro.co.uk/sport/oddballs/feed/"],
+    "footballFeed": false,
+    "enabled": false
   },
   {
     "id": "9800abd7-7b83-42bb-acf3-a6c5177d1ca3",
@@ -85,7 +96,18 @@
     "url": "https://talksport.com/football/feed",
     "feedUrls": ["https://talksport.com/football/feed"],
     "footballFeed": true,
-    "enabled": true
+    "enabled": false
+  },
+  {
+    "id": "65650a76-f67a-56ec-9fb6-7af74a3e446f",
+    "name": "OKDIARIO Paparazzi",
+    "language": "es",
+    "mode": "DIRECT_GOSSIP",
+    "tier": "CORE",
+    "url": "https://okdiario.com/deportes/corazon/feed",
+    "feedUrls": ["https://okdiario.com/deportes/corazon/feed"],
+    "footballFeed": false,
+    "enabled": false
   },
   {
     "id": "3ea38ef8-ae93-50e3-b15e-5d4ee9581f17",
@@ -96,29 +118,18 @@
     "url": "https://okdiario.com/deportes/futbol/feed",
     "feedUrls": ["https://okdiario.com/deportes/futbol/feed"],
     "footballFeed": true,
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "07056b24-0d7b-5435-bf9d-4286fc9994e5",
     "name": "Mundo Deportivo El Otro Mundo",
     "language": "es",
-    "mode": "DIRECT_GOSSIP",
+    "mode": "BROAD_TABLOID_FOOTBALL",
     "tier": "SECONDARY",
     "url": "https://www.mundodeportivo.com/feed/rss/elotromundo",
     "feedUrls": ["https://www.mundodeportivo.com/feed/rss/elotromundo"],
     "footballFeed": false,
-    "enabled": true
-  },
-  {
-    "id": "d9b5c007-3d31-40ae-a642-697dfe445a87",
-    "name": "Golssip",
-    "language": "it",
-    "mode": "DIRECT_GOSSIP",
-    "tier": "CORE",
-    "url": "https://www.golssip.it/feed/",
-    "feedUrls": ["https://www.golssip.it/feed/"],
-    "footballFeed": false,
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "fa4a7098-03d0-5432-81ff-9d622609285d",
@@ -129,7 +140,7 @@
     "url": "https://sport.virgilio.it/feed/rss/gossip/",
     "feedUrls": ["https://sport.virgilio.it/feed/rss/gossip/"],
     "footballFeed": false,
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "b73ffdcd-e1bc-42be-a8db-22970606dc57",
@@ -140,7 +151,7 @@
     "url": "https://www.tuttosport.com/rss/calcio",
     "feedUrls": ["https://www.tuttosport.com/rss/calcio"],
     "footballFeed": true,
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "98941b64-9c63-4996-a4da-c5a02a1f2de3",
@@ -151,7 +162,7 @@
     "url": "https://www.gazzetta.it/dynamic-feed/rss/section/Calcio.xml",
     "feedUrls": ["https://www.gazzetta.it/dynamic-feed/rss/section/Calcio.xml"],
     "footballFeed": true,
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "6ec938be-ca80-489d-a096-8912bc397e52",
@@ -162,18 +173,18 @@
     "url": "https://www.corrieredellosport.it/rss/calcio",
     "feedUrls": ["https://www.corrieredellosport.it/rss/calcio"],
     "footballFeed": true,
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "0bbb09ae-4ae2-49d1-a837-0259dc2d21d2",
-    "name": "BILD",
+    "name": "BILD Sport",
     "language": "de",
     "mode": "BROAD_TABLOID_FOOTBALL",
     "tier": "CORE",
-    "url": "https://www.bild.de/feed/alles.xml",
-    "feedUrls": ["https://www.bild.de/feed/alles.xml"],
+    "url": "https://www.bild.de/feed/sport.xml",
+    "feedUrls": ["https://www.bild.de/feed/sport.xml"],
     "footballFeed": false,
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "071eea13-6ae7-4455-af18-1d3a150c28ad",
@@ -186,17 +197,28 @@
       "https://sportbild.bild.de/rss/vw-fussball/vw-fussball-45036878,sort=1,view=rss2.sport.xml"
     ],
     "footballFeed": true,
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "45367605-f18e-47c3-a585-9741b6c8ff8f",
     "name": "Kronen Zeitung Fussball",
     "language": "de",
     "mode": "BROAD_TABLOID_FOOTBALL",
-    "tier": "CORE",
+    "tier": "SECONDARY",
     "url": "https://api.krone.at/v1/rss/rssfeed-google.xml?id=958",
     "feedUrls": ["https://api.krone.at/v1/rss/rssfeed-google.xml?id=958"],
     "footballFeed": true,
-    "enabled": true
+    "enabled": false
+  },
+  {
+    "id": "ba138fa3-3e21-5034-841d-45b5a68d66be",
+    "name": "AS Tikitakas",
+    "language": "es",
+    "mode": "DIRECT_GOSSIP",
+    "tier": "CORE",
+    "url": "https://feeds.as.com/mrss-s/pages/as/site/as.com/section/tikitakas/portada/",
+    "feedUrls": ["https://feeds.as.com/mrss-s/pages/as/site/as.com/section/tikitakas/portada/"],
+    "footballFeed": false,
+    "enabled": false
   }
 ]

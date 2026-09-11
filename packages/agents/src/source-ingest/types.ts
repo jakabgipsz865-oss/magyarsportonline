@@ -14,6 +14,8 @@ export interface NormalizedArticle {
   /** RSS media:thumbnail/enclosure image URL, if the feed item provided one. */
   imageUrl: string | null;
   image?: RemoteImage;
+  /** Preserve tiny declarations so HTML fallback cannot reuse a known-small RSS URL. */
+  imageCandidates?: RemoteImage[];
   /** Explicit provenance: publication is allowed only after at least one source page was fetched successfully. */
   contentOrigin: "rss_snippet" | "full_article";
 }
