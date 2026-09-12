@@ -48,10 +48,12 @@ async function status() {
     model: tabloid.TABLOID_MODEL,
     freeOnly: env.GEMINI_FREE_ONLY,
     dailyCap: env.GEMINI_DAILY_REQUEST_CAP,
-    activeSources: (await repos.sourceRepository.listActive()).map((source) => ({
-      id: source.id,
-      name: source.name,
-    })),
+    activeSources: (await repos.sourceRepository.listAll())
+      .filter((source) => source.isActive)
+      .map((source) => ({
+        id: source.id,
+        name: source.name,
+      })),
     configuredSources: registry.map((source) => ({
       id: source.id,
       name: source.name,
