@@ -14,6 +14,7 @@ const requestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("reset-sources"), sourceIds: z.array(z.string().uuid()).max(40) }),
   z.object({ action: z.literal("proof"), language: z.enum(languages) }),
   z.object({ action: z.literal("retry-proof"), language: z.enum(languages) }),
+  z.object({ action: z.literal("retry-article"), rawArticleId: z.string().uuid() }),
   z.object({ action: z.literal("activate") }),
 ]);
 
@@ -127,6 +128,13 @@ export async function POST(request: NextRequest) {
     if (!raw) return NextResponse.json({ error: "proof article not found" }, { status: 404 });
     const result = await publishTabloid(raw.id, repos, { retryFailedWriter: true });
     return NextResponse.json({ language: command.language, ...result });
+  }
+  if (command.action === "retry-article") {
+    const raw = await repos.rawArticleRepository.getById(command.rawArticleId);
+    if (!raw || !raw.storyId || !registry.some((source) => source.id === raw.sourceId))
+      return NextResponse.json({ error: "recoverable tabloid article not found" }, { status: 404 });
+    const result = await publishTabloid(raw.id, repos, { retryFailedWriter: true });
+    return NextResponse.json({ rawArticleId: raw.id, ...result });
   }
   // Persist one proof identity per language BEFORE any writer call. Repeated
   // requests reuse it and cannot exceed the four-call controlled rollout.
