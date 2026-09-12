@@ -160,9 +160,8 @@ export async function ingestTabloid(repos: Repositories = createRepositories()) 
             throw new Error("RSS fetch failed");
           for (const article of articles.slice(0, 30).reverse()) {
             if (
-              article.publishedAtSource &&
-              source.ingestWatermarkAt &&
-              article.publishedAtSource <= source.ingestWatermarkAt
+              !article.publishedAtSource ||
+              (source.ingestWatermarkAt && article.publishedAtSource <= source.ingestWatermarkAt)
             )
               continue;
             if (budget <= 0) break;

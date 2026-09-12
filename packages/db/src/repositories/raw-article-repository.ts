@@ -43,11 +43,16 @@ export class RawArticleRepository {
     });
   }
 
-  async findTabloidProof(language: string): Promise<RawArticle | null> {
+  async findTabloidProof(language: string, generation: string): Promise<RawArticle | null> {
     const [row] = await this.db
       .select()
       .from(rawArticles)
-      .where(sql`${rawArticles.extractedEntities}->>'tabloidProofLanguage' = ${language}`)
+      .where(
+        and(
+          sql`${rawArticles.extractedEntities}->>'tabloidProofLanguage' = ${language}`,
+          sql`${rawArticles.extractedEntities}->>'tabloidProofGeneration' = ${generation}`,
+        ),
+      )
       .limit(1);
     return row ?? null;
   }

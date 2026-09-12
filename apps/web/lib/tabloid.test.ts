@@ -182,6 +182,59 @@ describe("tabloid publication", () => {
     expect(mocks.fetchImages).not.toHaveBeenCalled();
     expect(mocks.write).not.toHaveBeenCalled();
   });
+  it("ingests only dated RSS items published after the activation watermark", async () => {
+    const watermark = new Date("2026-09-12T19:00:00.000Z");
+    mocks.fetchRss.mockResolvedValue([
+      {
+        titleOriginal: "old",
+        bodyOriginal: "personal football story",
+        sourceUrl: "https://publisher.test/old",
+        publishedAtSource: new Date("2026-09-12T18:59:59.000Z"),
+        imageUrl: null,
+      },
+      {
+        titleOriginal: "undated",
+        bodyOriginal: "personal football story",
+        sourceUrl: "https://publisher.test/undated",
+        publishedAtSource: null,
+        imageUrl: null,
+      },
+      {
+        titleOriginal: "new",
+        bodyOriginal: "personal football story",
+        sourceUrl: "https://publisher.test/new",
+        publishedAtSource: new Date("2026-09-12T19:00:01.000Z"),
+        imageUrl: null,
+      },
+    ]);
+    const insert = vi.fn(async () => ({ id: "raw" }));
+    const repos = {
+      pipelineJobRepository: { getStatusCounts: async () => ({ pending: 0, inProgress: 0 }) },
+      sourceRepository: {
+        listActive: async () => [
+          {
+            id: "source-0",
+            name: "Publisher",
+            language: "en",
+            ingestWatermarkAt: watermark,
+            fetchConfig: {
+              tabloid: true,
+              mode: "DIRECT_GOSSIP",
+              footballFeed: true,
+              url: "https://publisher.test/feed",
+            },
+          },
+        ],
+        recordFetchResult: vi.fn(),
+      },
+      rawArticleRepository: { insertTabloid: insert },
+    } as unknown as Repositories;
+
+    await ingestTabloid(repos);
+
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ titleOriginal: "new" }), true);
+  });
   it("keeps different sources separate even when content and URL are identical", async () => {
     const { repos, stories } = fixtures();
     await publishTabloid("one", repos);
