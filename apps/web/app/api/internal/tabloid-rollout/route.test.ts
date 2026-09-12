@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   listAll: vi.fn(),
   findProof: vi.fn(),
   latestPublished: vi.fn(),
+  getRaw: vi.fn(),
   writer: vi.fn(),
 }));
 vi.mock("../../../../lib/env", () => ({ env: mocks.env }));
@@ -18,7 +19,7 @@ vi.mock("../../../../lib/db", () => ({
       registerTabloidSource: mocks.register,
       listAll: mocks.listAll,
     },
-    rawArticleRepository: { findTabloidProof: mocks.findProof },
+    rawArticleRepository: { findTabloidProof: mocks.findProof, getById: mocks.getRaw },
     storyVersionRepository: { getLatestPublished: mocks.latestPublished },
   }),
 }));
@@ -46,6 +47,7 @@ beforeEach(() => {
   mocks.listAll.mockResolvedValue([]);
   mocks.findProof.mockResolvedValue(null);
   mocks.latestPublished.mockResolvedValue(null);
+  mocks.getRaw.mockResolvedValue(null);
 });
 describe("rollout status", () => {
   it("reports every enabled source even immediately after it was fetched", async () => {
@@ -63,6 +65,22 @@ describe("rollout status", () => {
     expect((await response.json()).activeSources).toEqual([
       { id: sourceId, name: "Daily Mail Football" },
     ]);
+  });
+});
+describe("failed article recovery", () => {
+  it("requires an already-linked article from the configured registry", async () => {
+    mocks.env.TABLOID_AUTO_PUBLISH = true;
+    mocks.getRaw.mockResolvedValue({ id: "raw", sourceId, storyId: "story" });
+    mocks.writer.mockResolvedValue({ published: true, model: "gemini-3.5-flash-lite" });
+
+    const response = await POST(
+      request({ action: "retry-article", rawArticleId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.writer).toHaveBeenCalledWith("raw", expect.any(Object), {
+      retryFailedWriter: true,
+    });
   });
 });
 describe("paused source reset", () => {

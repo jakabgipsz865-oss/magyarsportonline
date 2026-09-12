@@ -1,0 +1,49 @@
+name: Retry one Cloudflare RSS article
+
+on:
+  workflow_dispatch:
+    inputs:
+      raw_article_id:
+        description: Raw article UUID approved for one explicit Writer retry
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: false
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Retry the selected article
+        run: |
+          jq -nc --arg rawArticleId "$RAW_ARTICLE_ID" \
+            '{action:"retry-article", rawArticleId:$rawArticleId}' > /tmp/request.json
+          code=$(curl -sS --max-time 300 -o /tmp/response.json -w '%{http_code}' \
+            -X POST "$APP_ORIGIN/api/internal/tabloid-rollout" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/request.json)
+          jq . /tmp/response.json
+          test "$code" = "200"
+          test "$(jq -r '.published' /tmp/response.json)" = "true"
+          test "$(jq -r '.model' /tmp/response.json)" = "gemini-3.5-flash-lite"
+        env:
+          APP_ORIGIN: https://magyarsportonline-web.footballinvestmentkft.workers.dev
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          RAW_ARTICLE_ID: ${{ inputs.raw_article_id }}
+
+      - name: Upload recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudflare-rss-article-retry-${{ github.run_id }}
+          path: /tmp/response.json
+          if-no-files-found: ignore
+          retention-days: 30
