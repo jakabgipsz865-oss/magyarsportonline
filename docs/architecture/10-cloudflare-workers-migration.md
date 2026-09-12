@@ -1,6 +1,6 @@
 # 10 — Cloudflare Workers migration plan
 
-**Status:** In progress — DNS cutover submitted; registrar propagation pending
+**Status:** Production cutover complete — stabilization period in progress
 **Prepared:** 2026-09-12
 **Scope decision:** Move the Next.js application and scheduled execution from Vercel to Cloudflare Workers. Keep the existing PostgreSQL database and PostgreSQL schema in place. D1 is a later, separately approved migration.
 
@@ -26,9 +26,11 @@ OpenNext is the initial adapter because the application started this migration o
 - The `magyarsportonline-postgres` production Hyperdrive configuration points at the writable production branch, and binding ID `3a2967f028b449f7ade610395f6ccfbe` is configured as `HYPERDRIVE`.
 - `magyarsportonline-ingest-scheduler` targets the production Worker URL, has the same rotated `CRON_SECRET`, and runs every minute. Authenticated smoke tests for `/api/internal/cron/dispatch-ingest` and `/api/internal/jobs/process` both return HTTP 200.
 - GitHub's `Production` environment contains the Cloudflare account ID, deployment token, shared cron secret, and writable Neon production URL used by the deployment workflow.
-- The `magyarsportonline.hu` zone and both Worker custom domains are configured in Cloudflare. On 2026-09-12 Rackhost accepted the nameserver change to `ethan.ns.cloudflare.com` and `tori.ns.cloudflare.com`; public DNS can continue returning the former DNS24 nameservers and parking page during registrar propagation (Rackhost states up to 24 hours).
+- The `magyarsportonline.hu` zone and Worker custom domain are active on Cloudflare. Both `https://magyarsportonline.hu/` and the Workers.dev origin return HTTP 200 with Cloudflare and OpenNext response headers.
 - R2 is not enabled for the Cloudflare account. The homepage is therefore request-rendered; R2 incremental caching remains an optional follow-up.
-- Production AI is configured as Workers AI for fact extraction/self-check and Gemini `gemini-3.5-flash-lite` for the Final Hungarian Writer. Gemini traffic goes through the authenticated `magyarsportonline` Cloudflare AI Gateway.
+- Production AI is configured as Workers AI for fact extraction/self-check and Gemini `gemini-3.5-flash-lite` for the Final Hungarian Writer. Gemini traffic goes through the authenticated `magyarsportonline` Cloudflare AI Gateway. A live Gateway smoke request completed successfully and appears in the Gateway log with the expected model and token accounting.
+- GitHub Actions production run `34711660961` deployed web Worker version `9db033c1-1362-4b8e-98ce-4433d49696d1` and scheduler version `858e7de7-19b2-44fa-94b7-220b9bac0a58` after applying PostgreSQL migrations and configuring the AI secrets.
+- The preserved production database currently has no active sources, so scheduled dispatches are intentionally idle. Source rollout remains a separate editorial decision and is not changed by the infrastructure cutover.
 
 ## 10.2 Current-state findings
 
