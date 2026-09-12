@@ -21,7 +21,10 @@ async function status() {
   const databaseUrl = env.DATABASE_URL ? new URL(env.DATABASE_URL) : null;
   const proofs = await Promise.all(
     languages.map(async (language) => {
-      const raw = await repos.rawArticleRepository.findTabloidProof(language);
+      const raw = await repos.rawArticleRepository.findTabloidProof(
+        language,
+        tabloid.TABLOID_PROMPT,
+      );
       const version = raw?.storyId
         ? await repos.storyVersionRepository.getLatestPublished(raw.storyId)
         : null;
@@ -116,9 +119,12 @@ export async function POST(request: NextRequest) {
   // Persist one proof identity per language BEFORE any writer call. Repeated
   // requests reuse it and cannot exceed the four-call controlled rollout.
   const rawId = await repos.rawArticleRepository.withTabloidLock(
-    `proof:${command.language}`,
+    `proof:${tabloid.TABLOID_PROMPT}:${command.language}`,
     async () => {
-      const existing = await repos.rawArticleRepository.findTabloidProof(command.language);
+      const existing = await repos.rawArticleRepository.findTabloidProof(
+        command.language,
+        tabloid.TABLOID_PROMPT,
+      );
       if (existing) return existing.id;
       const candidates = registry.filter((source) => source.language === command.language);
       const adapter = new sourceIngest.RssSourceAdapter(undefined, false);
@@ -156,6 +162,7 @@ export async function POST(request: NextRequest) {
               extractedEntities: {
                 rssGuid: article.guid ?? article.sourceUrl,
                 tabloidProofLanguage: command.language,
+                tabloidProofGeneration: tabloid.TABLOID_PROMPT,
               },
             },
             false,

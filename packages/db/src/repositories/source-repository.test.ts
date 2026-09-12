@@ -13,6 +13,34 @@ const source = (
 });
 
 describe("SourceRepository watermarks", () => {
+  it("resets a registered tabloid source watermark to the registration time", async () => {
+    let inserted: Record<string, unknown> = {};
+    let updated: Record<string, unknown> = {};
+    const returning = vi.fn(async () => [{ id: "source-id" }]);
+    const onConflictDoUpdate = vi.fn((input: { set: Record<string, unknown> }) => {
+      updated = input.set;
+      return { returning };
+    });
+    const values = vi.fn((input: Record<string, unknown>) => {
+      inserted = input;
+      return { onConflictDoUpdate };
+    });
+    const repository = new SourceRepository({ insert: vi.fn(() => ({ values })) } as never);
+
+    await repository.registerTabloidSource({
+      id: "5416c5b2-fc48-4994-ac0f-fcc966b9cb83",
+      name: "Daily Mail Football",
+      url: "https://www.dailymail.com/sport/football/index.rss",
+      language: "en",
+      footballFeed: true,
+      feedUrls: ["https://www.dailymail.com/sport/football/index.rss"],
+      mode: "BROAD_TABLOID_FOOTBALL",
+    });
+
+    expect(inserted["ingestWatermarkAt"]).toBeInstanceOf(Date);
+    expect(updated["ingestWatermarkAt"]).toBe(inserted["ingestWatermarkAt"]);
+  });
+
   it("advances ingest watermark monotonically in PostgreSQL", async () => {
     let values: Record<string, unknown> = {};
     const where = vi.fn(async () => undefined);

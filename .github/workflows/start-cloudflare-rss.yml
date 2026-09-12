@@ -1,0 +1,121 @@
+name: Start Cloudflare RSS ingestion
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: false
+
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Deploy watermark-safe paused runtime
+        run: |
+          sed -i 's/"TABLOID_AUTO_PUBLISH": "true"/"TABLOID_AUTO_PUBLISH": "false"/' apps/web/wrangler.jsonc
+          pnpm --filter @magyarsportonline/web run deploy
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: ${{ secrets.DATABASE_URL }}
+
+      - name: Register every approved feed from the current instant
+        run: |
+          jq '{action:"reset-sources", sourceIds: map(select(.enabled == true) | .id)}' \
+            apps/web/lib/tabloid-sources.json > /tmp/reset-sources.json
+          code=$(curl -sS -o /tmp/reset-sources-response.json -w '%{http_code}' --max-time 300 \
+            -X POST "$APP_ORIGIN/api/internal/tabloid-rollout" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/reset-sources.json)
+          jq . /tmp/reset-sources-response.json
+          test "$code" = "200"
+          expected=$(jq '[.[] | select(.enabled == true)] | length' apps/web/lib/tabloid-sources.json)
+          test "$(jq -r '.registered' /tmp/reset-sources-response.json)" = "$expected"
+        env:
+          APP_ORIGIN: https://magyarsportonline-web.footballinvestmentkft.workers.dev
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+      - name: Enable and deploy production RSS processing
+        run: |
+          sed -i 's/"TABLOID_AUTO_PUBLISH": "false"/"TABLOID_AUTO_PUBLISH": "true"/' apps/web/wrangler.jsonc
+          pnpm --filter @magyarsportonline/web run deploy
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: ${{ secrets.DATABASE_URL }}
+
+      - name: Prove the current Writer generation in every source language
+        run: |
+          curl -fsS --max-time 60 "$APP_ORIGIN/api/internal/tabloid-rollout" \
+            -H "Authorization: Bearer $CRON_SECRET" -o /tmp/status.json
+          for language in en es it de; do
+            if jq -e --arg language "$language" \
+              '.proofs[] | select(.language == $language and .pass == true)' \
+              /tmp/status.json >/dev/null; then
+              continue
+            fi
+            jq -nc --arg language "$language" '{action:"proof", language:$language}' \
+              > "/tmp/proof-$language.json"
+            curl -fsS --max-time 300 -X POST "$APP_ORIGIN/api/internal/tabloid-rollout" \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              -H 'Content-Type: application/json' \
+              --data-binary "@/tmp/proof-$language.json" \
+              -o "/tmp/proof-$language-response.json"
+            jq . "/tmp/proof-$language-response.json"
+          done
+        env:
+          APP_ORIGIN: https://magyarsportonline-web.footballinvestmentkft.workers.dev
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+      - name: Activate every approved source and start polling
+        run: |
+          curl -fsS --max-time 300 -X POST "$APP_ORIGIN/api/internal/tabloid-rollout" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H 'Content-Type: application/json' \
+            --data '{"action":"activate"}' -o /tmp/activate.json
+          jq . /tmp/activate.json
+          expected=$(jq '[.[] | select(.enabled == true)] | length' apps/web/lib/tabloid-sources.json)
+          test "$(jq -r '.activeSources' /tmp/activate.json)" = "$expected"
+          curl -fsS --max-time 300 -X POST "$APP_ORIGIN/api/internal/cron/dispatch-ingest" \
+            -H "Authorization: Bearer $CRON_SECRET" -o /tmp/first-dispatch.json
+          jq . /tmp/first-dispatch.json
+        env:
+          APP_ORIGIN: https://magyarsportonline-web.footballinvestmentkft.workers.dev
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+      - name: Upload rollout evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudflare-rss-start-${{ github.run_id }}
+          path: |
+            /tmp/reset-sources-response.json
+            /tmp/status.json
+            /tmp/proof-*-response.json
+            /tmp/activate.json
+            /tmp/first-dispatch.json
+          if-no-files-found: ignore
+          retention-days: 30

@@ -36,6 +36,7 @@ export class SourceRepository {
     feedUrls: string[];
     mode: string;
   }): Promise<Source> {
+    const ingestWatermarkAt = new Date();
     const [row] = await this.db
       .insert(sources)
       .values({
@@ -56,7 +57,7 @@ export class SourceRepository {
           feedUrls: input.feedUrls,
         },
         attributionRule: "Canonical source URL retained",
-        ingestWatermarkAt: new Date(),
+        ingestWatermarkAt,
       })
       .onConflictDoUpdate({
         target: sources.id,
@@ -71,6 +72,7 @@ export class SourceRepository {
             footballFeed: input.footballFeed,
             feedUrls: input.feedUrls,
           },
+          ingestWatermarkAt,
         },
       })
       .returning();
