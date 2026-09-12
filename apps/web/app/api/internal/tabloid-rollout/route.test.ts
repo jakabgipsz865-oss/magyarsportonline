@@ -5,12 +5,21 @@ const mocks = vi.hoisted(() => ({
   env: { CRON_SECRET: "test-only", TABLOID_AUTO_PUBLISH: false },
   pause: vi.fn(),
   register: vi.fn(),
+  listAll: vi.fn(),
+  findProof: vi.fn(),
+  latestPublished: vi.fn(),
   writer: vi.fn(),
 }));
 vi.mock("../../../../lib/env", () => ({ env: mocks.env }));
 vi.mock("../../../../lib/db", () => ({
   createRepositories: () => ({
-    sourceRepository: { pauseTabloidSources: mocks.pause, registerTabloidSource: mocks.register },
+    sourceRepository: {
+      pauseTabloidSources: mocks.pause,
+      registerTabloidSource: mocks.register,
+      listAll: mocks.listAll,
+    },
+    rawArticleRepository: { findTabloidProof: mocks.findProof },
+    storyVersionRepository: { getLatestPublished: mocks.latestPublished },
   }),
 }));
 vi.mock("../../../../lib/tabloid", () => ({ publishTabloid: mocks.writer }));
@@ -23,7 +32,7 @@ vi.mock("../../../../lib/tabloid-sources.json", () => ({
     },
   ],
 }));
-import { POST } from "./route";
+import { GET, POST } from "./route";
 function request(body: unknown, auth = "Bearer test-only") {
   return new NextRequest("https://example.test/api/internal/tabloid-rollout", {
     method: "POST",
@@ -34,6 +43,27 @@ function request(body: unknown, auth = "Bearer test-only") {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.env.TABLOID_AUTO_PUBLISH = false;
+  mocks.listAll.mockResolvedValue([]);
+  mocks.findProof.mockResolvedValue(null);
+  mocks.latestPublished.mockResolvedValue(null);
+});
+describe("rollout status", () => {
+  it("reports every enabled source even immediately after it was fetched", async () => {
+    mocks.listAll.mockResolvedValue([
+      { id: sourceId, name: "Daily Mail Football", isActive: true },
+      { id: "inactive", name: "Inactive", isActive: false },
+    ]);
+
+    const response = await GET(
+      new NextRequest("https://example.test/api/internal/tabloid-rollout", {
+        headers: { authorization: "Bearer test-only" },
+      }),
+    );
+
+    expect((await response.json()).activeSources).toEqual([
+      { id: sourceId, name: "Daily Mail Football" },
+    ]);
+  });
 });
 describe("paused source reset", () => {
   it("requires authentication before any source write", async () => {

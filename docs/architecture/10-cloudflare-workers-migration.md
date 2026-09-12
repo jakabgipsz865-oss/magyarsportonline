@@ -30,7 +30,7 @@ OpenNext is the initial adapter because the application started this migration o
 - R2 is not enabled for the Cloudflare account. The homepage is therefore request-rendered; R2 incremental caching remains an optional follow-up.
 - Production AI is configured as Workers AI for fact extraction/self-check and Gemini `gemini-3.5-flash-lite` for the Final Hungarian Writer. Gemini traffic goes through the authenticated `magyarsportonline` Cloudflare AI Gateway. A live Gateway smoke request completed successfully and appears in the Gateway log with the expected model and token accounting.
 - GitHub Actions production run `34711660961` deployed web Worker version `9db033c1-1362-4b8e-98ce-4433d49696d1` and scheduler version `858e7de7-19b2-44fa-94b7-220b9bac0a58` after applying PostgreSQL migrations and configuring the AI secrets.
-- The preserved production database currently has no active sources, so scheduled dispatches are intentionally idle. Source rollout remains a separate editorial decision and is not changed by the infrastructure cutover.
+- All 18 approved RSS sources were activated on 2026-09-12 with per-source ingestion watermarks between `19:15:34.047Z` and `19:15:38.065Z`. Four `tabloid-hu@2` language proofs use `gemini-3.5-flash-lite`. Production run `34714968156` activated the feeds and completed the first fetch; the database verification found 17 newly observed, post-start feed items and zero undated or at/before-watermark items. The first accepted Daily Star item completed the queue and was published with Gemini and prompt generation `tabloid-hu@2`.
 
 ## 10.2 Current-state findings
 
