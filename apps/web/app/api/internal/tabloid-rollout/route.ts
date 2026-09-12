@@ -13,6 +13,7 @@ const requestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("register") }),
   z.object({ action: z.literal("reset-sources"), sourceIds: z.array(z.string().uuid()).max(40) }),
   z.object({ action: z.literal("proof"), language: z.enum(languages) }),
+  z.object({ action: z.literal("retry-proof"), language: z.enum(languages) }),
   z.object({ action: z.literal("activate") }),
 ]);
 
@@ -115,6 +116,15 @@ export async function POST(request: NextRequest) {
         ]),
       ),
     });
+  }
+  if (command.action === "retry-proof") {
+    const raw = await repos.rawArticleRepository.findTabloidProof(
+      command.language,
+      tabloid.TABLOID_PROMPT,
+    );
+    if (!raw) return NextResponse.json({ error: "proof article not found" }, { status: 404 });
+    const result = await publishTabloid(raw.id, repos, { retryFailedWriter: true });
+    return NextResponse.json({ language: command.language, ...result });
   }
   // Persist one proof identity per language BEFORE any writer call. Repeated
   // requests reuse it and cannot exceed the four-call controlled rollout.

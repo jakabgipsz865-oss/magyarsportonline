@@ -65,7 +65,7 @@ function fixtures() {
         attempts.add(id);
         return true;
       },
-      releaseTabloidQuotaDeferral: vi.fn(),
+      releaseTabloidQuotaDeferral: vi.fn(async (id: string) => attempts.delete(id)),
     },
     sourceRepository: {
       getById: (id: string) => ({
@@ -257,5 +257,15 @@ describe("tabloid publication", () => {
     await expect(publishTabloid("one", repos)).rejects.toThrow("invalid writer");
     await expect(publishTabloid("one", repos)).rejects.toThrow("already attempted");
     expect(mocks.write).toHaveBeenCalledTimes(1);
+  });
+  it("retries a failed writer only when an operator explicitly requests recovery", async () => {
+    const { repos } = fixtures();
+    mocks.write.mockRejectedValueOnce(new Error("timed out"));
+    await expect(publishTabloid("one", repos)).rejects.toThrow("timed out");
+
+    await publishTabloid("one", repos, { retryFailedWriter: true });
+
+    expect(repos.rawArticleRepository.releaseTabloidQuotaDeferral).toHaveBeenCalledWith("one");
+    expect(mocks.write).toHaveBeenCalledTimes(2);
   });
 });
