@@ -47,7 +47,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
       - name: Build and deploy web Worker
-        run: pnpm --filter @magyarsportonline/web deploy
+        run: pnpm --filter @magyarsportonline/web run deploy
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -62,7 +62,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
       - name: Deploy scheduler Worker
-        run: pnpm --filter @magyarsportonline/ingest-scheduler deploy
+        run: pnpm --filter @magyarsportonline/ingest-scheduler run deploy
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
