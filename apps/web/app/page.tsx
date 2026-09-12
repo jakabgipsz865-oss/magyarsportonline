@@ -4,6 +4,9 @@ import { MediaThumb } from "../components/media-thumb";
 import { createRepositories } from "../lib/db";
 import { toStorySummaryView, type StorySummaryView } from "../lib/story-view";
 
+// Render against Hyperdrive at request time. This keeps deployment builds
+// independent from production database credentials and avoids relying on an
+// R2 incremental cache before R2 is enabled for the Cloudflare account.
 export const dynamic = "force-dynamic";
 
 const HOMEPAGE_STORY_LIMIT = 24;

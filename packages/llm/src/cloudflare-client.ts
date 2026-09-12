@@ -191,7 +191,7 @@ function assertRequiredFields(data: unknown, jsonSchema: Record<string, unknown>
  * `usage.prompt_tokens`/`completion_tokens`) stabil, jól dokumentált
  * szerződés, míg a natív végpont mezőnevei modellenként eltérhetnek.
  *
- * `CLOUDFLARE_API_TOKEN` kizárólag ebből a szerveroldali modulból
+ * `WORKERS_AI_API_TOKEN` kizárólag ebből a szerveroldali modulból
  * (apps/web/lib/llm.ts, a Next.js szerver-futtatókörnyezetből) érhető el —
  * sosem kerül a kliens-oldali bundle-be (apps/web/lib/env.ts `server`
  * blokkja, nem `client`).

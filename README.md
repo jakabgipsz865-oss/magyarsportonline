@@ -14,8 +14,8 @@ A fejlesztési munka a [`docs/architecture/08-roadmap.md`](docs/architecture/08-
 A V1 ezen felül tartalmazza:
 
 - **Admin/review felület** — `/admin/review` (HTTP Basic auth, `ADMIN_SECRET` env): a Publish Gate által visszatartott Story-k kézi jóváhagyása/elutasítása;
-- **Több LLM adapter** — `LLM_PROVIDER=cloudflare` (Cloudflare Workers AI, ingyenes napi Neuron-keret, Cloudflare billing nélkül, jelenlegi aktív provider), `LLM_PROVIDER=gemini` (Google ingyenes tier) és `LLM_PROVIDER=anthropic` (fizetős) mind megmaradnak, de csak a Cloudflare-ág aktív; mindegyik token-/költségadata (`provider`, `model`, tokenek, `cost_usd`) a `llm_usage` táblába kerül. A Cloudflare- és Gemini-adaptert egy reaktív fallback (`ProviderFallbackLlmClient`) csomagolja: 4xx/5xx, kvóta-, parse- vagy sémahiba esetén automatikusan No-LLM módra vált, a pipeline nem áll le. Az Anthropic-ág emellett proaktív havi költségplafonnal is véd (`LLM_MONTHLY_BUDGET_USD`, alapértelmezés: 5 USD);
-- **Ütemezett ingest** — Vercel cron (napi, `apps/web/vercel.json`) + 30 percenkénti GitHub Actions workflow (`.github/workflows/scheduled-ingest.yml`, a `PRODUCTION_URL` és `CRON_SECRET` repo-secretek beállítása után él);
+- **Kétlépcsős production AI** — a Fact Extraction és Self Check Cloudflare Workers AI-t használ, a Final Hungarian Writer pedig a `gemini-3.5-flash-lite` modellt hívja a Cloudflare AI Gatewayen keresztül. A hívásokat kvóta, napi alkalmazásoldali limit és fail-closed várakoztatás védi; a `none` passthrough csak explicit helyi tesztmód;
+- **Ütemezett ingest** — külön Cloudflare scheduler Worker hívja percenként a web Worker hitelesített ingest- és jobfeldolgozó végpontjait;
 - **SEO** — canonical URL-ek, OpenGraph, schema.org NewsArticle JSON-LD, `sitemap.xml`, `robots.txt`, publikus RSS feed (`/rss.xml`);
 - **Alapvédelem** — per-IP rate limit a publikus API-n, HTML-escape a Story-törzsön, prompt-injection heurisztika (gyanú esetén review queue), retry/backoff az RSS-fetch-en.
 

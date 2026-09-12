@@ -17,6 +17,8 @@ export interface GeminiLlmClientOptions {
   /** Alapértelmezés: DEFAULT_GEMINI_MODEL. Üres string esetén is az alapértelmezésre esik vissza. */
   model?: string;
   baseUrl?: string;
+  /** Optional Cloudflare AI Gateway authentication token. */
+  gatewayToken?: string;
   /** Tesztelhetőség: injektálható fetch. */
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
@@ -128,6 +130,7 @@ export class GeminiLlmClient implements LlmClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
   private readonly timeoutMs: number;
+  private readonly gatewayToken: string | undefined;
 
   constructor(options: GeminiLlmClientOptions) {
     this.apiKey = options.apiKey;
@@ -135,6 +138,7 @@ export class GeminiLlmClient implements LlmClient {
     this.baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.timeoutMs = options.timeoutMs ?? 60_000;
+    this.gatewayToken = options.gatewayToken;
   }
 
   get modelLabel(): string {
@@ -202,7 +206,7 @@ export class GeminiLlmClient implements LlmClient {
     request: TextCompletionRequest | JsonCompletionRequest,
     wantsJson: boolean,
   ): Promise<GeminiGenerateContentResponse> {
-    const url = `${this.baseUrl}/models/${encodeURIComponent(this.model)}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
+    const url = `${this.baseUrl}/models/${encodeURIComponent(this.model)}:generateContent`;
     const body = {
       system_instruction: { parts: [{ text: request.system }] },
       contents: request.messages.map((message) => ({
@@ -229,7 +233,13 @@ export class GeminiLlmClient implements LlmClient {
     try {
       httpResponse = await this.fetchImpl(url, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "x-goog-api-key": this.apiKey,
+          ...(this.gatewayToken
+            ? { "cf-aig-authorization": `Bearer ${this.gatewayToken}` }
+            : {}),
+        },
         body: JSON.stringify(body),
         signal: controller.signal,
       });

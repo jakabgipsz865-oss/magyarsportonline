@@ -21,8 +21,8 @@ import { z } from "zod";
  */
 export const env = createEnv({
   server: {
-    // Wired: packages/db kliens (lib/db.ts).
-    DATABASE_URL: z.string().url(),
+    // Node/local/CI fallback. The deployed Worker uses Hyperdrive.
+    DATABASE_URL: z.string().url().optional(),
 
     // LLM_PROVIDER=none esetén a pipeline a determinisztikus
     // NoLlmClient adaptert használja (packages/llm/src/no-llm-client.ts) —
@@ -41,7 +41,7 @@ export const env = createEnv({
     // → API Tokens) — kizárólag szerveroldalon (apps/web/lib/llm.ts) kerül
     // felhasználásra, sosem jut a kliens-oldali bundle-be (lásd `client: {}`
     // lent). Provider-kvótánál a tartós queue deferel; paid fallback nincs.
-    CLOUDFLARE_API_TOKEN: z.string().min(1).optional(),
+    WORKERS_AI_API_TOKEN: z.string().min(1).optional(),
 
     // Cloudflare JSON Mode-ot hivatalosan támogató modell. Az adapter a
     // korábbi/hibás, strukturált kimenetet nem támogató env-értéket is erre
@@ -58,6 +58,8 @@ export const env = createEnv({
     GEMINI_MODEL: z.string().min(1).default("gemini-3.5-flash-lite"),
     GEMINI_FREE_ONLY: z.literal("true").default("true"),
     GEMINI_DAILY_REQUEST_CAP: z.coerce.number().int().positive().max(450).default(450),
+    GEMINI_BASE_URL: z.string().url().optional(),
+    CLOUDFLARE_AI_GATEWAY_TOKEN: z.string().min(1).optional(),
 
     // Admin/review felület (/admin/review) HTTP Basic auth jelszava.
     // Ha nincs beállítva, az admin felület 503-mal letiltva marad —
@@ -66,7 +68,7 @@ export const env = createEnv({
 
     // A publikus site kanonikus origin-je (SEO: canonical URL, sitemap,
     // JSON-LD, RSS). Vercel-en alapértelmezésként a production URL.
-    SITE_URL: z.string().url().default("https://magyarsportonline-web.vercel.app"),
+    SITE_URL: z.string().url().default("https://magyarsportonline.hu"),
 
     // Content Quality & Reliability Hardening sprint operational kill switch
     // (packages/agents/publish-gate/rule.ts, roadmap Fázis 9 "soft launch"

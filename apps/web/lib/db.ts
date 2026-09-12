@@ -23,14 +23,51 @@ import {
   createDatabaseClient,
   type Database,
 } from "@magyarsportonline/db";
+import { getCloudflareContext } from "@opennextjs/cloudflare/cloudflare-context";
+import { cache } from "react";
 import { env } from "./env";
 
-let cachedDb: Database | undefined;
+let cachedNodeDb: Database | undefined;
 
-/** Lazily-created, process-wide Drizzle client — see packages/db/src/client.ts for why the connection string is a parameter, not a direct `process.env` read. */
+const createWorkerDatabase = cache((connectionString: string): Database => {
+  return createDatabaseClient(connectionString, {
+    // Workers allow at most six simultaneous outbound connections per
+    // request. Hyperdrive owns the durable pool behind these short-lived
+    // request clients.
+    max: 5,
+    // The schema contains PostgreSQL arrays, so Postgres.js must load type
+    // metadata instead of treating arrays as opaque strings.
+    fetchTypes: true,
+    prepare: true,
+  });
+});
+
+function hyperdriveConnectionString(): string | undefined {
+  try {
+    return getCloudflareContext().env.HYPERDRIVE?.connectionString;
+  } catch {
+    // `next build`, unit tests, and standalone Node development do not have
+    // a Cloudflare request context. They intentionally fall back to the
+    // explicit DATABASE_URL below.
+    return undefined;
+  }
+}
+
+/**
+ * Returns a request-scoped Hyperdrive client in Workers and a process-wide
+ * client in Node/local tooling. A database connection must never be shared
+ * across Worker requests; Hyperdrive performs the actual connection pooling.
+ */
 export function getDb(): Database {
-  cachedDb ??= createDatabaseClient(env.DATABASE_URL);
-  return cachedDb;
+  const hyperdriveUrl = hyperdriveConnectionString();
+  if (hyperdriveUrl) return createWorkerDatabase(hyperdriveUrl);
+
+  if (!env.DATABASE_URL) {
+    throw new Error("Database is not configured: set the HYPERDRIVE binding or DATABASE_URL");
+  }
+
+  cachedNodeDb ??= createDatabaseClient(env.DATABASE_URL);
+  return cachedNodeDb;
 }
 
 /** Bounded-context repository bag (docs/architecture/09-architecture-review.md §4) — construct once per request, pass the slice each agent actually needs. */

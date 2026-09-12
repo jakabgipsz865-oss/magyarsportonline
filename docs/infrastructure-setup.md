@@ -29,7 +29,7 @@ cp apps/web/.env.example apps/web/.env.local
 | `DATABASE_URL`     | igen     | Neon konzol → Project → Connection Details ("Pooled connection" ajánlott)           |
 | `LLM_PROVIDER`     | nem (alapértelmezés: `cloudflare`) | productionben `cloudflare`; `none` csak explicit helyi teszt |
 | `CLOUDFLARE_ACCOUNT_ID` | csak ha `LLM_PROVIDER=cloudflare` | Cloudflare Dashboard → jobb felső sáv → Account ID       |
-| `CLOUDFLARE_API_TOKEN`  | csak ha `LLM_PROVIDER=cloudflare` | Cloudflare Dashboard → My Profile → API Tokens ("Workers AI" jogosultsággal) |
+| `WORKERS_AI_API_TOKEN`  | csak ha `LLM_PROVIDER=cloudflare` | Cloudflare Dashboard → My Profile → API Tokens ("Workers AI" jogosultsággal) |
 | `CLOUDFLARE_AI_MODEL`   | nem (alapértelmezés: `@cf/meta/llama-3.3-70b-instruct-fp8-fast`) | csak JSON Mode-ot támogató Cloudflare modell |
 | `CRON_SECRET`      | igen     | tetszőleges, magad generált titkos érték (pl. `openssl rand -hex 32`)               |
 
@@ -45,7 +45,7 @@ Cloudflare-hitelesítés pedig hangos hibát okoz.
 ```bash
 LLM_PROVIDER=cloudflare
 CLOUDFLARE_ACCOUNT_ID=<Cloudflare Dashboard jobb felső sáv>
-CLOUDFLARE_API_TOKEN=<"Workers AI" jogosultságú API-token>
+WORKERS_AI_API_TOKEN=<"Workers AI" jogosultságú API-token>
 # opcionális; ez az alapértelmezés:
 CLOUDFLARE_AI_MODEL=@cf/meta/llama-3.3-70b-instruct-fp8-fast
 ```
@@ -80,7 +80,7 @@ feldolgozás. Sikeres hívás esetén a token-felhasználás, a
 becsült USD-költség (Cloudflare listaár alapján, a tényleges napi ingyenes
 Neuron-fogyasztás nyomon követéséhez) az `llm_usage` táblába kerül.
 
-`CLOUDFLARE_API_TOKEN` kizárólag szerveroldalon (`apps/web/lib/llm.ts`,
+`WORKERS_AI_API_TOKEN` kizárólag szerveroldalon (`apps/web/lib/llm.ts`,
 Next.js szerver-futtatókörnyezet) kerül felhasználásra — az
 `apps/web/lib/env.ts` Zod-sémájában a `server` blokkban van, sosem a
 `client`-ben, tehát a böngésző felé kiszolgált JS-bundle-ba nem kerülhet be.
