@@ -18,6 +18,7 @@ const requestSchema = z.discriminatedUnion("action", [
 
 async function status() {
   const repos = createRepositories();
+  const databaseUrl = env.DATABASE_URL ? new URL(env.DATABASE_URL) : null;
   const proofs = await Promise.all(
     languages.map(async (language) => {
       const raw = await repos.rawArticleRepository.findTabloidProof(language);
@@ -38,8 +39,8 @@ async function status() {
     proofs,
     autoPublish: env.TABLOID_AUTO_PUBLISH,
     promptVersion: tabloid.TABLOID_PROMPT,
-    databaseHost: new URL(env.DATABASE_URL).hostname,
-    databaseName: new URL(env.DATABASE_URL).pathname.slice(1),
+    databaseHost: databaseUrl?.hostname ?? "hyperdrive",
+    databaseName: databaseUrl?.pathname.slice(1) ?? null,
     model: tabloid.TABLOID_MODEL,
     freeOnly: env.GEMINI_FREE_ONLY,
     dailyCap: env.GEMINI_DAILY_REQUEST_CAP,

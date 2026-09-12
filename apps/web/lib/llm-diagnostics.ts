@@ -82,12 +82,12 @@ interface TokenVerifyOutcome {
  * wrong-account scope on it, not a corrupted/garbage string.
  */
 async function verifyCloudflareToken(): Promise<TokenVerifyOutcome> {
-  if (!env.CLOUDFLARE_API_TOKEN) {
+  if (!env.WORKERS_AI_API_TOKEN) {
     return { checked: false };
   }
   try {
     const response = await fetch("https://api.cloudflare.com/client/v4/user/tokens/verify", {
-      headers: { authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}` },
+      headers: { authorization: `Bearer ${env.WORKERS_AI_API_TOKEN}` },
     });
     const body = (await response.json()) as {
       success?: boolean;
@@ -120,7 +120,7 @@ interface RawCallOutcome {
 }
 
 async function tryRawCloudflareCall(): Promise<RawCallOutcome> {
-  if (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_API_TOKEN) {
+  if (!env.CLOUDFLARE_ACCOUNT_ID || !env.WORKERS_AI_API_TOKEN) {
     return {
       ok: false,
       errorName: "ConfigError",
@@ -129,7 +129,7 @@ async function tryRawCloudflareCall(): Promise<RawCallOutcome> {
   }
   const raw = new CloudflareWorkersAiLlmClient({
     accountId: env.CLOUDFLARE_ACCOUNT_ID,
-    apiToken: env.CLOUDFLARE_API_TOKEN,
+    apiToken: env.WORKERS_AI_API_TOKEN,
     model: env.CLOUDFLARE_AI_MODEL,
   });
   try {
@@ -256,7 +256,7 @@ export async function runLlmDiagnostics(): Promise<{
       effectiveCloudflareModel,
       cloudflareAccountIdMasked: maskAccountId(env.CLOUDFLARE_ACCOUNT_ID),
       cloudflareAccountIdConfigured: Boolean(env.CLOUDFLARE_ACCOUNT_ID),
-      cloudflareApiTokenConfigured: Boolean(env.CLOUDFLARE_API_TOKEN),
+      cloudflareApiTokenConfigured: Boolean(env.WORKERS_AI_API_TOKEN),
       vercelEnv: process.env["VERCEL_ENV"] ?? null,
       vercelDeploymentId: process.env["VERCEL_DEPLOYMENT_ID"] ?? null,
       vercelGitCommitSha: process.env["VERCEL_GIT_COMMIT_SHA"] ?? null,
@@ -279,9 +279,9 @@ export async function runLlmDiagnostics(): Promise<{
       accountIdCorruption: env.CLOUDFLARE_ACCOUNT_ID
         ? detectCorruption(env.CLOUDFLARE_ACCOUNT_ID)
         : [],
-      apiTokenFingerprint: env.CLOUDFLARE_API_TOKEN ? fingerprint(env.CLOUDFLARE_API_TOKEN) : null,
-      apiTokenCorruption: env.CLOUDFLARE_API_TOKEN
-        ? detectCorruption(env.CLOUDFLARE_API_TOKEN)
+      apiTokenFingerprint: env.WORKERS_AI_API_TOKEN ? fingerprint(env.WORKERS_AI_API_TOKEN) : null,
+      apiTokenCorruption: env.WORKERS_AI_API_TOKEN
+        ? detectCorruption(env.WORKERS_AI_API_TOKEN)
         : [],
       cloudflareTokenVerify,
     },

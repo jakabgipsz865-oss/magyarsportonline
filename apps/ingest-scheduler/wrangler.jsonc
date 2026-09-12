@@ -2,9 +2,15 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "magyarsportonline-ingest-scheduler",
   "main": "src/index.ts",
-  "compatibility_date": "2026-08-30",
+  "compatibility_date": "2026-09-12",
   "workers_dev": false,
+  "vars": {
+    "APP_ORIGIN": "https://magyarsportonline-web.footballinvestmentkft.workers.dev",
+  },
   "triggers": {
     "crons": ["* * * * *"],
+  },
+  "observability": {
+    "enabled": true,
   },
 }

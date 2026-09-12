@@ -32,15 +32,15 @@ export function getFactLlmClient(): LlmClient {
   }
 
   if (env.LLM_PROVIDER === "cloudflare") {
-    if (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_API_TOKEN) {
+    if (!env.CLOUDFLARE_ACCOUNT_ID || !env.WORKERS_AI_API_TOKEN) {
       throw new Error(
-        "LLM_PROVIDER=cloudflare requires CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN to be set (see docs/infrastructure-setup.md)",
+        "LLM_PROVIDER=cloudflare requires CLOUDFLARE_ACCOUNT_ID and WORKERS_AI_API_TOKEN to be set (see docs/infrastructure-setup.md)",
       );
     }
     cachedFactClient = new ProviderFallbackLlmClient({
       inner: new CloudflareWorkersAiLlmClient({
         accountId: env.CLOUDFLARE_ACCOUNT_ID,
-        apiToken: env.CLOUDFLARE_API_TOKEN,
+        apiToken: env.WORKERS_AI_API_TOKEN,
         model: env.CLOUDFLARE_AI_MODEL,
       }),
       fallback: new NoLlmClient(),
@@ -66,7 +66,14 @@ export function getWriterLlmClient(): LlmClient {
   }
   const repos = createRepositories();
   const metered = new ProviderFallbackLlmClient({
-    inner: new GeminiLlmClient({ apiKey: env.GEMINI_API_KEY, model: "gemini-3.5-flash-lite" }),
+    inner: new GeminiLlmClient({
+      apiKey: env.GEMINI_API_KEY,
+      model: env.GEMINI_MODEL,
+      ...(env.GEMINI_BASE_URL ? { baseUrl: env.GEMINI_BASE_URL } : {}),
+      ...(env.CLOUDFLARE_AI_GATEWAY_TOKEN
+        ? { gatewayToken: env.CLOUDFLARE_AI_GATEWAY_TOKEN }
+        : {}),
+    }),
     fallback: new NoLlmClient(),
     providerName: "gemini",
     describeError: describeGeminiError,

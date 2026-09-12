@@ -42,6 +42,27 @@ describe("GeminiLlmClient", () => {
     expect(client.modelLabel).toBe("gemini-custom-model");
   });
 
+  it("routes Gemini through an authenticated Cloudflare AI Gateway", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe(
+        "https://gateway.ai.cloudflare.com/v1/account/mso/google-ai-studio/v1/models/gemini-custom-model:generateContent",
+      );
+      const headers = new Headers(init?.headers);
+      expect(headers.get("cf-aig-authorization")).toBe("Bearer gateway-key");
+      expect(headers.get("x-goog-api-key")).toBe("key");
+      return jsonResponse({ candidates: [{ content: { parts: [{ text: "válasz" }] } }] });
+    });
+    const client = new GeminiLlmClient({
+      apiKey: "key",
+      model: "gemini-custom-model",
+      baseUrl: "https://gateway.ai.cloudflare.com/v1/account/mso/google-ai-studio/v1",
+      gatewayToken: "gateway-key",
+      fetchImpl,
+    });
+
+    await expect(client.completeText(textRequest)).resolves.toMatchObject({ text: "válasz" });
+  });
+
   it("parses JSON completions, including markdown-fenced output", async () => {
     const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as { generationConfig: Record<string, unknown> };
