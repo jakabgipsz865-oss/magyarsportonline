@@ -48,7 +48,11 @@ jobs:
               /tmp/status.json >/dev/null; then
               continue
             fi
-            jq -nc --arg language "$language" '{action:"proof", language:$language}' \
+            action=$(jq -r --arg language "$language" \
+              'if .proofs[] | select(.language == $language) | .rawArticleId then "retry-proof" else "proof" end' \
+              /tmp/status.json)
+            jq -nc --arg action "$action" --arg language "$language" \
+              '{action:$action, language:$language}' \
               > "/tmp/proof-$language.json"
             code=$(curl -sS --max-time 300 -o "/tmp/proof-$language-response.json" \
               -w '%{http_code}' -X POST "$APP_ORIGIN/api/internal/tabloid-rollout" \

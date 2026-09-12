@@ -12,7 +12,11 @@ import type { TabloidSourceMode } from "@magyarsportonline/shared";
 import { TABLOID_PUBLIC_START } from "@magyarsportonline/shared";
 
 /** One accepted raw article owns one Story. Retries reuse its persisted draft. */
-export async function publishTabloid(rawId: string, repos: Repositories = createRepositories()) {
+export async function publishTabloid(
+  rawId: string,
+  repos: Repositories = createRepositories(),
+  options: { retryFailedWriter?: boolean } = {},
+) {
   if (!env.TABLOID_AUTO_PUBLISH) return { paused: true, llmCalls: 0 };
   return repos.rawArticleRepository.withTabloidLock(rawId, async () => {
     const raw = await repos.rawArticleRepository.getById(rawId);
@@ -52,6 +56,8 @@ export async function publishTabloid(rawId: string, repos: Repositories = create
     let version = await repos.storyVersionRepository.getLatest(story.id);
     if (version && version.promptVersion !== tabloid.TABLOID_PROMPT) return { skipped: true };
     if (!version) {
+      if (options.retryFailedWriter)
+        await repos.rawArticleRepository.releaseTabloidQuotaDeferral(raw.id);
       if (!(await repos.rawArticleRepository.claimTabloidWriter(raw.id)))
         throw new Error("Tabloid writer already attempted; manual inspection required");
       const result = await tabloid
