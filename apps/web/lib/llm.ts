@@ -70,9 +70,7 @@ export function getWriterLlmClient(): LlmClient {
       apiKey: env.GEMINI_API_KEY,
       model: env.GEMINI_MODEL,
       ...(env.GEMINI_BASE_URL ? { baseUrl: env.GEMINI_BASE_URL } : {}),
-      ...(env.CLOUDFLARE_AI_GATEWAY_TOKEN
-        ? { gatewayToken: env.CLOUDFLARE_AI_GATEWAY_TOKEN }
-        : {}),
+      ...(env.CLOUDFLARE_AI_GATEWAY_TOKEN ? { gatewayToken: env.CLOUDFLARE_AI_GATEWAY_TOKEN } : {}),
     }),
     fallback: new NoLlmClient(),
     providerName: "gemini",

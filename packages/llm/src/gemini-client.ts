@@ -236,9 +236,7 @@ export class GeminiLlmClient implements LlmClient {
         headers: {
           "content-type": "application/json",
           "x-goog-api-key": this.apiKey,
-          ...(this.gatewayToken
-            ? { "cf-aig-authorization": `Bearer ${this.gatewayToken}` }
-            : {}),
+          ...(this.gatewayToken ? { "cf-aig-authorization": `Bearer ${this.gatewayToken}` } : {}),
         },
         body: JSON.stringify(body),
         signal: controller.signal,

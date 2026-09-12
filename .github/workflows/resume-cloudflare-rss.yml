@@ -1,0 +1,110 @@
+name: Resume Cloudflare RSS activation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: false
+
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    env:
+      APP_ORIGIN: https://magyarsportonline-web.footballinvestmentkft.workers.dev
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Wait for the enabled Worker version
+        run: |
+          ready=false
+          for attempt in $(seq 1 24); do
+            code=$(curl -sS --max-time 60 -o /tmp/status.json -w '%{http_code}' \
+              "$APP_ORIGIN/api/internal/tabloid-rollout" \
+              -H "Authorization: Bearer $CRON_SECRET")
+            if test "$code" = "200" && \
+              test "$(jq -r '.autoPublish' /tmp/status.json)" = "true" && \
+              test "$(jq -r '.promptVersion' /tmp/status.json)" = "tabloid-hu@2" && \
+              test "$(jq '.configuredSources | length' /tmp/status.json)" = "18"; then
+              ready=true
+              break
+            fi
+            sleep 5
+          done
+          jq . /tmp/status.json
+          test "$ready" = "true"
+
+      - name: Prove the current Writer generation in every source language
+        run: |
+          for language in en es it de; do
+            curl -fsS --max-time 60 "$APP_ORIGIN/api/internal/tabloid-rollout" \
+              -H "Authorization: Bearer $CRON_SECRET" -o /tmp/status.json
+            if jq -e --arg language "$language" \
+              '.proofs[] | select(.language == $language and .pass == true)' \
+              /tmp/status.json >/dev/null; then
+              continue
+            fi
+            jq -nc --arg language "$language" '{action:"proof", language:$language}' \
+              > "/tmp/proof-$language.json"
+            code=$(curl -sS --max-time 300 -o "/tmp/proof-$language-response.json" \
+              -w '%{http_code}' -X POST "$APP_ORIGIN/api/internal/tabloid-rollout" \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              -H 'Content-Type: application/json' \
+              --data-binary "@/tmp/proof-$language.json")
+            jq . "/tmp/proof-$language-response.json"
+            test "$code" = "200"
+          done
+          curl -fsS --max-time 60 "$APP_ORIGIN/api/internal/tabloid-rollout" \
+            -H "Authorization: Bearer $CRON_SECRET" -o /tmp/proved-status.json
+          jq . /tmp/proved-status.json
+          test "$(jq '[.proofs[] | select(.pass == true)] | length' /tmp/proved-status.json)" = "4"
+
+      - name: Activate the registered sources
+        run: |
+          code=$(curl -sS --max-time 300 -o /tmp/activate.json -w '%{http_code}' \
+            -X POST "$APP_ORIGIN/api/internal/tabloid-rollout" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H 'Content-Type: application/json' \
+            --data '{"action":"activate"}')
+          jq . /tmp/activate.json
+          test "$code" = "200"
+          expected=$(jq '.configuredSources | length' /tmp/proved-status.json)
+          test "$(jq -r '.activeSources' /tmp/activate.json)" = "$expected"
+
+      - name: Run the first post-cutover fetch
+        run: |
+          code=$(curl -sS --max-time 300 -o /tmp/first-dispatch.json -w '%{http_code}' \
+            -X POST "$APP_ORIGIN/api/internal/cron/dispatch-ingest" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          jq . /tmp/first-dispatch.json
+          test "$code" = "200"
+
+      - name: Verify the active production state
+        run: |
+          curl -fsS --max-time 60 "$APP_ORIGIN/api/internal/tabloid-rollout" \
+            -H "Authorization: Bearer $CRON_SECRET" -o /tmp/final-status.json
+          jq . /tmp/final-status.json
+          expected=$(jq '.configuredSources | length' /tmp/final-status.json)
+          test "$expected" = "18"
+          test "$(jq '.activeSources | length' /tmp/final-status.json)" = "$expected"
+          test "$(jq '[.proofs[] | select(.pass == true)] | length' /tmp/final-status.json)" = "4"
+          test "$(jq -r '.autoPublish' /tmp/final-status.json)" = "true"
+
+      - name: Upload activation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudflare-rss-resume-${{ github.run_id }}
+          path: |
+            /tmp/status.json
+            /tmp/proof-*-response.json
+            /tmp/proved-status.json
+            /tmp/activate.json
+            /tmp/first-dispatch.json
+            /tmp/final-status.json
+          if-no-files-found: ignore
+          retention-days: 30

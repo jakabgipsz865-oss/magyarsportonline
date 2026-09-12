@@ -69,8 +69,21 @@ jobs:
 
       - name: Prove the current Writer generation in every source language
         run: |
-          curl -fsS --max-time 60 "$APP_ORIGIN/api/internal/tabloid-rollout" \
-            -H "Authorization: Bearer $CRON_SECRET" -o /tmp/status.json
+          ready=false
+          for attempt in $(seq 1 24); do
+            code=$(curl -sS --max-time 60 -o /tmp/status.json -w '%{http_code}' \
+              "$APP_ORIGIN/api/internal/tabloid-rollout" \
+              -H "Authorization: Bearer $CRON_SECRET")
+            if test "$code" = "200" && \
+              test "$(jq -r '.autoPublish' /tmp/status.json)" = "true" && \
+              test "$(jq -r '.promptVersion' /tmp/status.json)" = "tabloid-hu@2"; then
+              ready=true
+              break
+            fi
+            sleep 5
+          done
+          jq . /tmp/status.json
+          test "$ready" = "true"
           for language in en es it de; do
             if jq -e --arg language "$language" \
               '.proofs[] | select(.language == $language and .pass == true)' \
@@ -79,12 +92,13 @@ jobs:
             fi
             jq -nc --arg language "$language" '{action:"proof", language:$language}' \
               > "/tmp/proof-$language.json"
-            curl -fsS --max-time 300 -X POST "$APP_ORIGIN/api/internal/tabloid-rollout" \
+            code=$(curl -sS --max-time 300 -o "/tmp/proof-$language-response.json" \
+              -w '%{http_code}' -X POST "$APP_ORIGIN/api/internal/tabloid-rollout" \
               -H "Authorization: Bearer $CRON_SECRET" \
               -H 'Content-Type: application/json' \
-              --data-binary "@/tmp/proof-$language.json" \
-              -o "/tmp/proof-$language-response.json"
+              --data-binary "@/tmp/proof-$language.json")
             jq . "/tmp/proof-$language-response.json"
+            test "$code" = "200"
           done
         env:
           APP_ORIGIN: https://magyarsportonline-web.footballinvestmentkft.workers.dev
