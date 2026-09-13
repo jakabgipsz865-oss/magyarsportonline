@@ -13,6 +13,18 @@ export const STRUCTURED_NEWS_DOMAINS = [
   "caughtoffside.com",
   "football365.com",
   "goal.com",
+  "sportbible.com",
+  "metro.co.uk",
+  "okdiario.com",
+  "mundodeportivo.com",
+  "golssip.it",
+  "sport.virgilio.it",
+  "tuttosport.com",
+  "gazzetta.it",
+  "corrieredellosport.it",
+  "bild.de",
+  "sportbild.bild.de",
+  "krone.at",
 ] as const;
 
 type JsonObject = Record<string, unknown>;

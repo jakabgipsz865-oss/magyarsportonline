@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   llm: {},
   env: { TABLOID_AUTO_PUBLISH: true },
   accepted: vi.fn((_title: string) => true),
+  fetchFullArticle: vi.fn(),
   fetchImages: vi.fn(),
   fetchRss: vi.fn(),
 }));
@@ -27,6 +28,9 @@ vi.mock("@magyarsportonline/agents", () => ({
   seo: { slugify: () => "magyar-hir" },
   readModelProjector: { handleStoryPublished: mocks.project },
   sourceIngest: {
+    ArticleFetcher: class {
+      fetch = mocks.fetchFullArticle;
+    },
     fetchArticleMedia: mocks.fetchImages,
     RssSourceAdapter: class {
       fetch = mocks.fetchRss;
@@ -110,6 +114,7 @@ describe("tabloid publication", () => {
     });
     mocks.project.mockResolvedValue(undefined);
     mocks.fetchImages.mockResolvedValue(null);
+    mocks.fetchFullArticle.mockResolvedValue(null);
   });
   it("pauses ingest and publication before any repository or writer access", async () => {
     mocks.env.TABLOID_AUTO_PUBLISH = false;
@@ -130,7 +135,7 @@ describe("tabloid publication", () => {
     expect(mocks.write).not.toHaveBeenCalled();
     expect(mocks.project).not.toHaveBeenCalled();
   });
-  it("stores rejected raw items without a queue job and enriches accepted source images", async () => {
+  it("stores rejected items and publishes accepted items only from a complete source page", async () => {
     const url = "https://publisher.test/photo.jpg?width=1200&signature=unchanged";
     mocks.accepted.mockImplementation((title) => title === "accepted");
     mocks.fetchRss.mockResolvedValue([
@@ -150,6 +155,14 @@ describe("tabloid publication", () => {
         image: { url, source: "media:content", width: 1200, height: 675 },
       },
     ]);
+    mocks.fetchFullArticle.mockResolvedValue({
+      titleOriginal: "accepted full title",
+      subtitleOriginal: null,
+      bodyOriginal: "Complete personal story from the source article page.",
+      authorOriginal: "Reporter",
+      publishedAtSource: new Date(),
+    });
+    mocks.fetchImages.mockResolvedValue({ primary: null, inlineImages: [] });
     const insert = vi.fn(async () => ({ id: "raw" }));
     const repos = {
       pipelineJobRepository: { getStatusCounts: async () => ({ pending: 0, inProgress: 0 }) },
@@ -177,7 +190,12 @@ describe("tabloid publication", () => {
       false,
     );
     expect(insert).toHaveBeenCalledWith(
-      expect.objectContaining({ titleOriginal: "accepted", imageUrl: url }),
+      expect.objectContaining({
+        titleOriginal: "accepted full title",
+        bodyOriginal: "Complete personal story from the source article page.",
+        contentOrigin: "full_article",
+        imageUrl: url,
+      }),
       true,
     );
     expect(mocks.fetchImages).toHaveBeenCalledOnce();
@@ -186,6 +204,48 @@ describe("tabloid publication", () => {
       "https://publisher.test/feed",
     );
     expect(mocks.write).not.toHaveBeenCalled();
+  });
+  it("defers an accepted RSS item when its complete source page cannot be extracted", async () => {
+    mocks.fetchRss.mockResolvedValue([
+      {
+        titleOriginal: "accepted",
+        bodyOriginal: "short RSS snippet about a footballer's private life",
+        sourceUrl: "https://publisher.test/accepted",
+        publishedAtSource: new Date(),
+        imageUrl: null,
+        contentOrigin: "rss_snippet",
+      },
+    ]);
+    const insert = vi.fn();
+    const repos = {
+      pipelineJobRepository: { getStatusCounts: async () => ({ pending: 0, inProgress: 0 }) },
+      sourceRepository: {
+        listActive: async () => [
+          {
+            id: "source-0",
+            name: "Publisher",
+            language: "en",
+            fetchConfig: {
+              tabloid: true,
+              mode: "DIRECT_GOSSIP",
+              footballFeed: true,
+              url: "https://publisher.test/feed",
+            },
+          },
+        ],
+        recordFetchResult: vi.fn(),
+      },
+      rawArticleRepository: { insertTabloid: insert },
+    } as unknown as Repositories;
+
+    const result = await ingestTabloid(repos);
+
+    expect(insert).not.toHaveBeenCalled();
+    if (!("results" in result)) throw new Error("expected ingest result");
+    expect(result.results[0]).toMatchObject({
+      ingestedCount: 0,
+      deferredWithoutFullArticle: 1,
+    });
   });
   it("ingests only dated RSS items published after the activation watermark", async () => {
     const watermark = new Date("2026-09-12T19:00:00.000Z");
@@ -212,6 +272,14 @@ describe("tabloid publication", () => {
         imageUrl: null,
       },
     ]);
+    mocks.fetchFullArticle.mockResolvedValue({
+      titleOriginal: "new",
+      subtitleOriginal: null,
+      bodyOriginal: "Complete personal football story from the source page.",
+      authorOriginal: null,
+      publishedAtSource: new Date("2026-09-12T19:00:01.000Z"),
+    });
+    mocks.fetchImages.mockResolvedValue({ primary: null, inlineImages: [] });
     const insert = vi.fn(async () => ({ id: "raw" }));
     const repos = {
       pipelineJobRepository: { getStatusCounts: async () => ({ pending: 0, inProgress: 0 }) },

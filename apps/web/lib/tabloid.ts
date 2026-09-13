@@ -37,6 +37,36 @@ export function mergeInlineImages(
     .slice(0, 8);
 }
 
+async function fetchCompleteTabloidArticle(
+  article: sourceIngest.NormalizedArticle,
+  publisherUrl: string,
+): Promise<sourceIngest.NormalizedArticle | null> {
+  const [fetched, pageMedia] = await Promise.all([
+    new sourceIngest.ArticleFetcher().fetch(article.sourceUrl),
+    sourceIngest.fetchArticleMedia(article.sourceUrl, publisherUrl),
+  ]);
+  // `null` means the page could not be inspected. An empty media object is
+  // valid and proves that the source page was checked but contains no usable image.
+  if (!fetched || !pageMedia) return null;
+  const image = article.image ?? pageMedia?.primary ?? null;
+  return {
+    ...article,
+    titleOriginal: fetched.titleOriginal || article.titleOriginal,
+    subtitleOriginal: fetched.subtitleOriginal,
+    bodyOriginal: fetched.bodyOriginal,
+    authorOriginal: fetched.authorOriginal,
+    publishedAtSource: fetched.publishedAtSource ?? article.publishedAtSource,
+    imageUrl: image?.url ?? article.imageUrl,
+    ...(image ? { image } : {}),
+    inlineImages: mergeInlineImages(
+      article.inlineImages,
+      pageMedia?.inlineImages,
+      image ? [{ ...image, alt: null, caption: null, credit: null }] : undefined,
+    ),
+    contentOrigin: "full_article",
+  };
+}
+
 /** One accepted raw article owns one Story. Retries reuse its persisted draft. */
 export async function publishTabloid(
   rawId: string,
@@ -170,6 +200,7 @@ export async function ingestTabloid(repos: Repositories = createRepositories()) 
     sourceId: string;
     sourceName: string;
     ingestedCount: number;
+    deferredWithoutFullArticle: number;
     status: "ok" | "error";
   }> = [];
   const adapter = new sourceIngest.RssSourceAdapter(undefined, false);
@@ -178,6 +209,7 @@ export async function ingestTabloid(repos: Repositories = createRepositories()) 
     await Promise.all(
       sources.slice(offset, offset + 8).map(async (source) => {
         let count = 0;
+        let deferredWithoutFullArticle = 0;
         try {
           const config = source.fetchConfig as {
             mode?: TabloidSourceMode;
@@ -207,30 +239,29 @@ export async function ingestTabloid(repos: Repositories = createRepositories()) 
               config.mode,
             );
             if (accepted) budget--;
-            const pageMedia =
-              accepted && (article.inlineImages?.length ?? 0) < 2
-                ? await sourceIngest.fetchArticleMedia(article.sourceUrl, config.url)
-                : null;
-            const image = article.image ?? pageMedia?.primary ?? null;
-            const inlineImages = mergeInlineImages(
-              article.inlineImages,
-              pageMedia?.inlineImages,
-              image ? [{ ...image, alt: null, caption: null, credit: null }] : undefined,
-            );
+            const complete = accepted
+              ? await fetchCompleteTabloidArticle(article, config.url)
+              : article;
+            if (accepted && !complete) {
+              budget++;
+              deferredWithoutFullArticle++;
+              continue;
+            }
+            const stored = complete!;
             const raw = await repos.rawArticleRepository.insertTabloid(
               {
                 sourceId: source.id,
-                sourceUrl: article.sourceUrl,
-                titleOriginal: article.titleOriginal,
-                bodyOriginal: article.bodyOriginal,
-                subtitleOriginal: article.subtitleOriginal,
-                authorOriginal: article.authorOriginal,
-                imageUrl: image?.url ?? null,
-                inlineImages,
+                sourceUrl: stored.sourceUrl,
+                titleOriginal: stored.titleOriginal,
+                bodyOriginal: stored.bodyOriginal,
+                subtitleOriginal: stored.subtitleOriginal,
+                authorOriginal: stored.authorOriginal,
+                imageUrl: stored.imageUrl,
+                inlineImages: stored.inlineImages ?? [],
                 language: source.language,
-                publishedAtSource: article.publishedAtSource,
-                contentOrigin: article.contentOrigin,
-                extractedEntities: { rssGuid: article.guid ?? article.sourceUrl },
+                publishedAtSource: stored.publishedAtSource,
+                contentOrigin: stored.contentOrigin,
+                extractedEntities: { rssGuid: stored.guid ?? stored.sourceUrl },
               },
               accepted,
             );
@@ -242,6 +273,7 @@ export async function ingestTabloid(repos: Repositories = createRepositories()) 
             sourceId: source.id,
             sourceName: source.name,
             ingestedCount: count,
+            deferredWithoutFullArticle,
             status: "ok",
           });
         } catch {
@@ -250,6 +282,7 @@ export async function ingestTabloid(repos: Repositories = createRepositories()) 
             sourceId: source.id,
             sourceName: source.name,
             ingestedCount: count,
+            deferredWithoutFullArticle,
             status: "error",
           });
         }

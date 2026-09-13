@@ -171,7 +171,10 @@ export function inlineImagesFromHtml(html: string, articleUrl: string): SourceIn
     .each((_, element) => {
       if (images.length >= 8) return;
       const image = $(element);
-      const candidate = srcsetUrl(image.attr("srcset")) ?? image.attr("src");
+      const candidate =
+        srcsetUrl(image.attr("srcset") ?? image.attr("data-srcset")) ??
+        image.attr("src") ??
+        image.attr("data-src");
       if (!candidate) return;
       let resolved: string;
       try {
@@ -243,7 +246,14 @@ export async function fetchArticleMedia(
 ): Promise<PublisherArticleMedia | null> {
   if (!remoteImageUrl(articleUrl)) return null;
   const hostname = (url: string) => new URL(url).hostname.replace(/^(?:www|api|feeds)\./, "");
-  if (hostname(articleUrl) !== hostname(publisherUrl)) return null;
+  const articleHost = hostname(articleUrl);
+  const publisherHost = hostname(publisherUrl);
+  if (
+    articleHost !== publisherHost &&
+    !articleHost.endsWith(`.${publisherHost}`) &&
+    !publisherHost.endsWith(`.${articleHost}`)
+  )
+    return null;
   try {
     const response = await fetcher(articleUrl, {
       redirect: "manual",

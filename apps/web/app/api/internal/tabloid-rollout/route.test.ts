@@ -12,13 +12,18 @@ const mocks = vi.hoisted(() => ({
   listRaws: vi.fn(),
   getStoryBySlug: vi.fn(),
   getSource: vi.fn(),
+  upgradeFromFullArticle: vi.fn(),
   updateInlineImages: vi.fn(),
+  fetchFullArticle: vi.fn(),
   fetchMedia: vi.fn(),
   fetchRss: vi.fn(),
   writer: vi.fn(),
 }));
 vi.mock("@magyarsportonline/agents", () => ({
   sourceIngest: {
+    ArticleFetcher: class {
+      fetch = mocks.fetchFullArticle;
+    },
     fetchArticleMedia: mocks.fetchMedia,
     RssSourceAdapter: class {
       fetch = mocks.fetchRss;
@@ -43,6 +48,7 @@ vi.mock("../../../../lib/db", () => ({
       findTabloidProof: mocks.findProof,
       getById: mocks.getRaw,
       listByStoryId: mocks.listRaws,
+      upgradeFromFullArticle: mocks.upgradeFromFullArticle,
       updateInlineImages: mocks.updateInlineImages,
     },
     storyVersionRepository: { getLatestPublished: mocks.latestPublished },
@@ -90,6 +96,7 @@ beforeEach(() => {
   mocks.getStoryBySlug.mockResolvedValue(null);
   mocks.getSource.mockResolvedValue(null);
   mocks.fetchMedia.mockResolvedValue(null);
+  mocks.fetchFullArticle.mockResolvedValue(null);
   mocks.fetchRss.mockResolvedValue([]);
 });
 describe("rollout status", () => {
@@ -143,6 +150,12 @@ describe("failed article recovery", () => {
         sourceId,
         storyId: "story",
         sourceUrl: "https://publisher.test/story",
+        titleOriginal: "RSS title",
+        bodyOriginal: "RSS snippet",
+        subtitleOriginal: null,
+        authorOriginal: null,
+        publishedAtSource: new Date("2026-09-12T10:00:00.000Z"),
+        contentOrigin: "rss_snippet",
         imageUrl: null,
         inlineImages: [],
       },
@@ -157,16 +170,53 @@ describe("failed article recovery", () => {
         inlineImages: [sourceImage],
       },
     ]);
+    mocks.fetchFullArticle.mockResolvedValue({
+      titleOriginal: "Complete source title",
+      subtitleOriginal: "Source subtitle",
+      bodyOriginal: "Complete source article body with all material details.",
+      authorOriginal: "Reporter",
+      publishedAtSource: new Date("2026-09-12T10:00:00.000Z"),
+    });
+    mocks.fetchMedia.mockResolvedValue({ primary: null, inlineImages: [] });
     mocks.writer.mockResolvedValue({ published: true, model: "gemini-3.5-flash" });
 
     const response = await POST(request({ action: "rewrite-story", slug: "public-story" }));
 
     expect(response.status).toBe(200);
+    expect(mocks.upgradeFromFullArticle).toHaveBeenCalledWith(
+      "raw",
+      expect.objectContaining({
+        titleOriginal: "Complete source title",
+        bodyOriginal: "Complete source article body with all material details.",
+      }),
+    );
     expect(mocks.updateInlineImages).toHaveBeenCalledWith("raw", [sourceImage], sourceImage.url);
     expect(mocks.writer).toHaveBeenCalledWith("raw", expect.any(Object), {
       retryFailedWriter: true,
       forceRewrite: true,
     });
+  });
+  it("refuses to rewrite a partial RSS story when the full source page is unavailable", async () => {
+    mocks.env.TABLOID_AUTO_PUBLISH = true;
+    mocks.getStoryBySlug.mockResolvedValue({ storyId: "story" });
+    mocks.listRaws.mockResolvedValue([
+      {
+        id: "raw",
+        sourceId,
+        storyId: "story",
+        sourceUrl: "https://publisher.test/story",
+        contentOrigin: "rss_snippet",
+        inlineImages: [],
+      },
+    ]);
+    mocks.getSource.mockResolvedValue({
+      fetchConfig: { url: "https://publisher.test/feed" },
+    });
+
+    const response = await POST(request({ action: "rewrite-story", slug: "public-story" }));
+
+    expect(response.status).toBe(422);
+    expect(mocks.writer).not.toHaveBeenCalled();
   });
 });
 describe("paused source reset", () => {
