@@ -120,6 +120,18 @@ describe("one-call Hungarian writer", () => {
     );
     expect(llm.completeText).not.toHaveBeenCalled();
   });
+  it("requires natural Hungarian while forbidding unsupported editorial additions", async () => {
+    const llm = client({
+      title_hu: "A családjáról mesélt az Arsenal kapitánya",
+      lead_hu: "Személyes témát érintett.",
+      body_hu: "Az Arsenal kapitánya a családjáról beszélt.",
+    });
+    await writeTabloid(llm, input);
+    const request = llm.completeJson.mock.calls[0]?.[0];
+    expect(request?.system).toContain("Ne tükörfordíts");
+    expect(request?.system).toContain("minden tényállítása legyen közvetlenül visszavezethető");
+    expect(request?.system).toContain("Ne tegyél a végére hangulati összegzést");
+  });
   it("rejects invalid schema without repair", async () => {
     const llm = client({ title_hu: "Cím", lead_hu: "", body_hu: "" });
     await expect(writeTabloid(llm, input)).rejects.toThrow();
