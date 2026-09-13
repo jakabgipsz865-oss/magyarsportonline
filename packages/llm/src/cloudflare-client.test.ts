@@ -4,6 +4,7 @@ import {
   CloudflareWorkersAiLlmClient,
   DEFAULT_CLOUDFLARE_MODEL,
   FAST_CLOUDFLARE_MODEL,
+  WRITER_CLOUDFLARE_MODEL,
   describeCloudflareError,
   isCloudflareDailyNeuronQuotaError,
 } from "./cloudflare-client";
@@ -125,6 +126,29 @@ describe("CloudflareWorkersAiLlmClient", () => {
       model: "@cf/qwen/qwen3-30b-a3b-fp8",
     });
     expect(client.modelLabel).toBe(FAST_CLOUDFLARE_MODEL);
+  });
+
+  it("uses the dedicated gpt-oss model for a structured writer request", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      expect(String(url)).toBe(
+        `https://api.cloudflare.com/client/v4/accounts/acc/ai/run/${WRITER_CLOUDFLARE_MODEL}`,
+      );
+      return structuredResponse({ title_hu: "Cím", lead_hu: "Lead" });
+    });
+    const client = new CloudflareWorkersAiLlmClient({
+      accountId: "acc",
+      apiToken: "tok",
+      model: WRITER_CLOUDFLARE_MODEL,
+      fetchImpl,
+    });
+
+    const result = await client.completeJson({
+      ...textRequest,
+      model: "gemini-3.5-flash",
+      jsonSchema: JSON_SCHEMA,
+    });
+
+    expect(result.modelLabel).toBe(WRITER_CLOUDFLARE_MODEL);
   });
 
   it("parses JSON completions, including markdown-fenced output", async () => {

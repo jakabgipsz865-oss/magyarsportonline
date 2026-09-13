@@ -5,6 +5,7 @@ import {
   GeminiLlmClient,
   NoLlmClient,
   ProviderFallbackLlmClient,
+  WRITER_CLOUDFLARE_MODEL,
   describeCloudflareError,
   describeGeminiError,
   estimateCloudflareCostUsd,
@@ -97,7 +98,7 @@ export function getWriterLlmClient(): LlmClient {
     inner: new CloudflareWorkersAiLlmClient({
       accountId: env.CLOUDFLARE_ACCOUNT_ID,
       apiToken: env.WORKERS_AI_API_TOKEN,
-      model: env.CLOUDFLARE_AI_MODEL,
+      model: WRITER_CLOUDFLARE_MODEL,
     }),
     fallback: new NoLlmClient(),
     providerName: "cloudflare",

@@ -40,6 +40,7 @@ export const CLOUDFLARE_MODEL_PRICING: Record<string, ModelPricing> = {
     inputUsdPerMTok: 0.29,
     outputUsdPerMTok: 2.25,
   },
+  "@cf/openai/gpt-oss-120b": { inputUsdPerMTok: 0.35, outputUsdPerMTok: 0.75 },
 };
 
 /** Konzervatív fallback ismeretlen Cloudflare modell-ID-re. */

@@ -16,6 +16,7 @@ const API_BASE = "https://api.cloudflare.com/client/v4";
  */
 export const DEFAULT_CLOUDFLARE_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 export const FAST_CLOUDFLARE_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
+export const WRITER_CLOUDFLARE_MODEL = "@cf/openai/gpt-oss-120b";
 
 /** A logikai gyors/olcsó tier Cloudflare-only production modellje. */
 const FAST_LOGICAL_MODEL_TIERS = new Set(["claude-haiku-4-5", "claude-sonnet-5"]);
@@ -31,6 +32,7 @@ const JSON_MODE_SUPPORTED_MODELS = new Set([
   "@hf/nousresearch/hermes-2-pro-mistral-7b",
   "@hf/thebloke/deepseek-coder-6.7b-instruct-awq",
   "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
+  WRITER_CLOUDFLARE_MODEL,
 ]);
 
 export interface CloudflareWorkersAiClientOptions {
