@@ -33,7 +33,7 @@ vi.mock("@magyarsportonline/agents", () => ({
     },
   },
 }));
-import { ingestTabloid, publishTabloid } from "./tabloid";
+import { ingestTabloid, mergeInlineImages, publishTabloid } from "./tabloid";
 
 function fixtures() {
   const raws = new Map(
@@ -279,5 +279,26 @@ describe("tabloid publication", () => {
 
     expect(repos.rawArticleRepository.releaseTabloidQuotaDeferral).toHaveBeenCalledWith("one");
     expect(mocks.write).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("source image merge", () => {
+  it("collapses WordPress size variants of the same source photo", () => {
+    const original = {
+      url: "https://cdn.example.test/photo.jpg",
+      alt: null,
+      caption: null,
+      credit: null,
+      width: 1400,
+      height: 900,
+    };
+    const resized = {
+      ...original,
+      url: "https://cdn.example.test/photo-1200x771.jpg",
+      width: 1200,
+      height: 771,
+    };
+
+    expect(mergeInlineImages([original], [resized])).toEqual([original]);
   });
 });
