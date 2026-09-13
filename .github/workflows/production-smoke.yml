@@ -4,7 +4,7 @@
 # is ellenőrzi; a hitelesített lépések (seed setup, ingest indítás) csak a
 # CRON_SECRET repo-secret megléte esetén futnak, addig SKIPPED-ként
 # jelennek meg a kimenetben. A cél-URL a PRODUCTION_URL secretből jön, ennek
-# hiányában az alapértelmezett Vercel production URL.
+# hiányában az alapértelmezett Cloudflare production URL.
 name: Production smoke test
 
 on:
@@ -15,6 +15,7 @@ permissions: {}
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 15
     steps:
       - name: Run smoke checks
@@ -23,7 +24,7 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -u
-          BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
+          BASE="${PRODUCTION_URL:-https://magyarsportonline.hu}"
           echo "Target: $BASE"
           FAILURES=0
 
