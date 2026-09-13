@@ -77,7 +77,8 @@ export async function publishTabloid(
   return repos.rawArticleRepository.withTabloidLock(rawId, async () => {
     const raw = await repos.rawArticleRepository.getById(rawId);
     if (!raw) throw new Error("Tabloid source article missing");
-    if (raw.ingestedAt < new Date(TABLOID_PUBLIC_START)) return { skipped: true };
+    if (raw.ingestedAt < new Date(TABLOID_PUBLIC_START) && !options.forceRewrite)
+      return { skipped: true };
     const source = await repos.sourceRepository.getById(raw.sourceId);
     if (!source) throw new Error("Tabloid source missing");
     const config = source.fetchConfig as {
@@ -88,6 +89,7 @@ export async function publishTabloid(
     if (!config.tabloid || !registry.some((item) => item.id === source.id))
       return { skipped: true };
     if (
+      !options.forceRewrite &&
       !tabloid.isFootballTabloid(
         raw.titleOriginal,
         raw.bodyOriginal,

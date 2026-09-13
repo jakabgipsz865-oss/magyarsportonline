@@ -331,6 +331,14 @@ describe("tabloid publication", () => {
     expect(mocks.write).toHaveBeenCalledTimes(2);
     expect(repos.rawArticleRepository.releaseTabloidQuotaDeferral).toHaveBeenCalledWith("one");
   });
+  it("lets an explicit operator repair bypass the new-article topic filter", async () => {
+    const { repos } = fixtures();
+    mocks.accepted.mockReturnValue(false);
+
+    await publishTabloid("one", repos, { retryFailedWriter: true, forceRewrite: true });
+
+    expect(mocks.write).toHaveBeenCalledTimes(1);
+  });
   it("does not automatically repair or repeat failed generation", async () => {
     const { repos } = fixtures();
     mocks.write.mockRejectedValueOnce(new Error("invalid writer output"));
