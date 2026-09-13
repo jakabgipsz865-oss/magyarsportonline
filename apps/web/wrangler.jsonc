@@ -30,7 +30,7 @@
     "LLM_PROVIDER": "cloudflare",
     "CLOUDFLARE_ACCOUNT_ID": "7a225d650d7e05daba6355e5526a8fb9",
     "CLOUDFLARE_AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-    "GEMINI_MODEL": "gemini-3.5-flash-lite",
+    "GEMINI_MODEL": "gemini-3.5-flash",
     "GEMINI_FREE_ONLY": "true",
     "GEMINI_DAILY_REQUEST_CAP": "450",
     "GEMINI_BASE_URL": "https://gateway.ai.cloudflare.com/v1/7a225d650d7e05daba6355e5526a8fb9/magyarsportonline/google-ai-studio/v1",

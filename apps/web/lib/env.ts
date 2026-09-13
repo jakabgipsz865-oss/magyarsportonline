@@ -55,7 +55,7 @@ export const env = createEnv({
       .transform((value) => value === "true"),
 
     GEMINI_API_KEY: z.string().min(1).optional(),
-    GEMINI_MODEL: z.string().min(1).default("gemini-3.5-flash-lite"),
+    GEMINI_MODEL: z.string().min(1).default("gemini-3.5-flash"),
     GEMINI_FREE_ONLY: z.literal("true").default("true"),
     GEMINI_DAILY_REQUEST_CAP: z.coerce.number().int().positive().max(450).default(450),
     GEMINI_BASE_URL: z.string().url().optional(),

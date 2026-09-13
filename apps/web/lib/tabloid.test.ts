@@ -21,7 +21,7 @@ vi.mock("@magyarsportonline/agents", () => ({
   tabloid: {
     writeTabloid: mocks.write,
     isFootballTabloid: mocks.accepted,
-    TABLOID_MODEL: "gemini-3.5-flash-lite",
+    TABLOID_MODEL: "gemini-3.5-flash",
     TABLOID_PROMPT: "tabloid-hu@2",
   },
   seo: { slugify: () => "magyar-hir" },
