@@ -161,12 +161,33 @@ export async function POST(request: NextRequest) {
         const rssArticle = feeds
           .flatMap((result) => (result.status === "fulfilled" ? result.value : []))
           .find((article) => article.sourceUrl === raw.sourceUrl);
-        const pageMedia = await sourceIngest.fetchArticleMedia(raw.sourceUrl, config.url);
+        const [fullArticle, pageMedia] = await Promise.all([
+          new sourceIngest.ArticleFetcher().fetch(raw.sourceUrl),
+          sourceIngest.fetchArticleMedia(raw.sourceUrl, config.url),
+        ]);
         const inlineImages = mergeInlineImages(
           raw.inlineImages,
           rssArticle?.inlineImages,
           pageMedia?.inlineImages,
         );
+        if (!fullArticle || !pageMedia) {
+          return NextResponse.json(
+            { error: "complete source page unavailable", rawArticleId: raw.id },
+            { status: 422 },
+          );
+        }
+        if (raw.contentOrigin === "rss_snippet") {
+          await repos.rawArticleRepository.upgradeFromFullArticle(raw.id, {
+            sourceUrl: raw.sourceUrl,
+            titleOriginal: fullArticle.titleOriginal || raw.titleOriginal,
+            subtitleOriginal: fullArticle.subtitleOriginal,
+            bodyOriginal: fullArticle.bodyOriginal,
+            authorOriginal: fullArticle.authorOriginal,
+            publishedAtSource: fullArticle.publishedAtSource ?? raw.publishedAtSource,
+            imageUrl: raw.imageUrl ?? rssArticle?.imageUrl ?? pageMedia?.primary?.url ?? null,
+            inlineImages,
+          });
+        }
         if (inlineImages.length > 0 || pageMedia?.primary || rssArticle?.imageUrl) {
           await repos.rawArticleRepository.updateInlineImages(
             raw.id,

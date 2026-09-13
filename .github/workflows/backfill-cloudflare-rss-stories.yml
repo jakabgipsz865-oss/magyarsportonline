@@ -1,0 +1,65 @@
+name: Backfill Cloudflare RSS stories
+
+on:
+  workflow_dispatch:
+    inputs:
+      page:
+        description: Public story-list page to repair
+        required: true
+        default: "1"
+        type: string
+      limit:
+        description: Number of stories to repair (maximum 50)
+        required: true
+        default: "50"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 60
+    steps:
+      - name: Rewrite published stories from complete source pages
+        run: |
+          set -o pipefail
+          : > /tmp/results.ndjson
+          curl -fsS --max-time 30 \
+            "$PUBLIC_ORIGIN/api/v1/stories?page=$PAGE&limit=$LIMIT" > /tmp/stories.json
+          jq -r '.data[].slug' /tmp/stories.json | while IFS= read -r slug; do
+            jq -nc --arg slug "$slug" '{action:"rewrite-story", slug:$slug}' > /tmp/request.json
+            code=$(curl -sS --max-time 300 -o /tmp/response.json -w '%{http_code}' \
+              -X POST "$WORKER_ORIGIN/api/internal/tabloid-rollout" \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              -H 'Content-Type: application/json' \
+              --data-binary @/tmp/request.json)
+            jq -nc \
+              --arg slug "$slug" \
+              --arg code "$code" \
+              --slurpfile response /tmp/response.json \
+              '{slug:$slug,httpStatus:($code|tonumber),response:$response[0]}' >> /tmp/results.ndjson
+          done
+          jq -s '.' /tmp/results.ndjson | tee /tmp/results.json
+          test "$(jq -s '[.[] | select(.httpStatus != 200 or .response.published != true)] | length' /tmp/results.ndjson)" = "0"
+        env:
+          PUBLIC_ORIGIN: https://magyarsportonline.hu
+          WORKER_ORIGIN: https://magyarsportonline-web.footballinvestmentkft.workers.dev
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PAGE: ${{ inputs.page }}
+          LIMIT: ${{ inputs.limit }}
+
+      - name: Upload backfill report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudflare-rss-backfill-${{ github.run_id }}
+          path: /tmp/results.json
+          if-no-files-found: ignore
+          retention-days: 30

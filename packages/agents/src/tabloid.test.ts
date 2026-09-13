@@ -150,6 +150,19 @@ describe("one-call Hungarian writer", () => {
     });
     await expect(writeTabloid(llm, input)).rejects.toThrow("untranslated");
   });
+  it("rejects a short draft for a detailed source article", async () => {
+    const llm = client({
+      title_hu: "Részletes történet",
+      lead_hu: "A történet röviden.",
+      body_hu: "Ez csak egy rövid bekezdés.",
+    });
+    await expect(
+      writeTabloid(llm, {
+        ...input,
+        content: "Detailed source sentence. ".repeat(60),
+      }),
+    ).rejects.toThrow("incomplete coverage");
+  });
   it("deterministically splits a long one-block draft into readable paragraphs", () => {
     expect(
       paragraphizeBody(

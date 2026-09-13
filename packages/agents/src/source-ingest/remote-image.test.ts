@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { articleMediaFromHtml, fetchArticleImage, imageFromHtml } from "./remote-image";
+import {
+  articleMediaFromHtml,
+  fetchArticleImage,
+  fetchArticleMedia,
+  imageFromHtml,
+} from "./remote-image";
 
 describe("remote image metadata only", () => {
   it("chooses declared large OG over a small image and keeps the exact signed URL", () => {
@@ -41,6 +46,15 @@ describe("remote image metadata only", () => {
       }),
     ]);
   });
+  it("extracts lazy-loaded source-body images", () => {
+    const media = articleMediaFromHtml(
+      '<article><p>Long source article paragraph with enough text to select this article root.<img data-src="https://cdn.publisher.test/lazy.jpg" alt="Lazy photo" width="1200" height="700"></p></article>',
+      "https://publisher.test/story",
+    );
+    expect(media.inlineImages).toEqual([
+      expect.objectContaining({ url: "https://cdn.publisher.test/lazy.jpg", alt: "Lazy photo" }),
+    ]);
+  });
   it("does not extract paywalled metadata", () => {
     expect(
       imageFromHtml(
@@ -64,6 +78,21 @@ describe("remote image metadata only", () => {
     ).toMatchObject({ url: "https://cdn.publisher.test/large.jpg" });
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(fetcher.mock.calls[0]?.[0]).toBe("https://publisher.test/story");
+  });
+  it("accepts an article on a publisher subdomain and records an inspected image-free page", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response("<article><p>Text only.</p></article>", {
+        headers: { "Content-Type": "text/html" },
+      }),
+    );
+    await expect(
+      fetchArticleMedia(
+        "https://sportbild.bild.de/fussball/story",
+        "https://www.bild.de/feed/alles.xml",
+        fetcher,
+      ),
+    ).resolves.toEqual({ primary: null, inlineImages: [] });
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
   it.each([403, 302])("does not bypass HTTP %s", async (status) => {
     const fetcher = vi

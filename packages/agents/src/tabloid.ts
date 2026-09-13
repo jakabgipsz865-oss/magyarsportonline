@@ -106,6 +106,15 @@ export async function writeTabloid(
   if (result.isFallback) throw new Error("Tabloid writer returned a fallback");
   const parsed = tabloidOutputSchema.parse(result.data);
   const output = { ...parsed, body_hu: paragraphizeBody(parsed.body_hu) };
+  const sourceCharacters = input.content.replace(/\s+/g, " ").trim().length;
+  const outputCharacters = output.body_hu.replace(/\s+/g, " ").trim().length;
+  const outputParagraphs = output.body_hu.split(/\n\s*\n/).filter(Boolean).length;
+  if (
+    sourceCharacters >= 900 &&
+    (outputParagraphs < 3 || outputCharacters < Math.max(600, Math.floor(sourceCharacters * 0.5)))
+  ) {
+    throw new Error("Tabloid writer returned incomplete coverage for a detailed source");
+  }
   const words = `${output.lead_hu} ${output.body_hu}`.toLowerCase().match(/\p{L}+/gu) ?? [];
   const hu = words.filter((word) =>
     /^(a|az|és|hogy|egy|nem|is|de|meg|szerint|volt|már|még|miatt|után|előtt|aki|azt|ezt|csak)$/.test(
