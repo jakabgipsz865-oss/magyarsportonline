@@ -64,6 +64,13 @@ describe("remote image metadata only", () => {
       expect.objectContaining({ url: "https://images.bild.de/story/hash,photo?w=992" }),
     ]);
   });
+  it("collapses presentation variants of the same body image", () => {
+    const media = articleMediaFromHtml(
+      '<article><p>Article text.<img src="https://i2-prod.mirror.test/article1.ece/ALTERNATES/s1200d/1_photo.jpg" width="1200" height="800"><img src="https://i2-prod.mirror.test/article1.ece/ALTERNATES/s1200f/1_photo.jpg" width="1200" height="800"></p></article>',
+      "https://mirror.test/story",
+    );
+    expect(media.inlineImages).toHaveLength(1);
+  });
   it("does not extract paywalled metadata", () => {
     expect(
       imageFromHtml(

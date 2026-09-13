@@ -114,14 +114,13 @@ function StoryBody({
               {/* A kép a kiadó szerveréről töltődik; az MSO nem tárolja a képfájlt. */}
               <img
                 src={image.url}
-                alt={image.alt ?? title}
+                alt={title}
                 loading="lazy"
                 referrerPolicy="no-referrer"
                 {...(image.width ? { width: image.width } : {})}
                 {...(image.height ? { height: image.height } : {})}
               />
               <figcaption>
-                {image.caption ? <span>{image.caption} · </span> : null}
                 <span>
                   Forrás:{" "}
                   <a href={image.sourceUrl} target="_blank" rel="noreferrer">

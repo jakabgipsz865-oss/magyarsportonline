@@ -146,6 +146,32 @@ describe("toStoryDetailView", () => {
     ).toEqual([]);
   });
 
+  it("deduplicates CDN variants and hides foreign captions while retaining the credit", () => {
+    const base = {
+      url: "https://i2-prod.mirror.co.uk/article1.ece/ALTERNATES/s1200d/1_photo.jpg",
+      alt: "Foreign description",
+      caption: "Beschreibung des Fotos Foto: Example Agency",
+      credit: null,
+      width: 1200,
+      height: 800,
+      sourceName: "Publisher",
+      sourceUrl: "https://publisher.test/story",
+    };
+    const images = toStoryDetailView(
+      row({
+        inlineImages: [
+          base,
+          {
+            ...base,
+            url: "https://i2-prod.mirror.co.uk/article1.ece/ALTERNATES/s1200f/1_photo.jpg",
+          },
+        ],
+      }),
+    ).inlineImages;
+
+    expect(images).toEqual([{ ...base, caption: null, credit: "Kép: Example Agency" }]);
+  });
+
   it("drops malformed source entries instead of throwing", () => {
     const result = toStoryDetailView(row({ sourcesSummary: [{ missing: "fields" }] }));
     expect(result.sources).toEqual([]);

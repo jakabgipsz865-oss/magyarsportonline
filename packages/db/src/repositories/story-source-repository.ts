@@ -1,8 +1,9 @@
-import type {
-  PublishedSourceInlineImage,
-  SourceCategory,
-  SourceReliabilityTier,
-  StorySourceContributionType,
+import {
+  deduplicateSourceImages,
+  type PublishedSourceInlineImage,
+  type SourceCategory,
+  type SourceReliabilityTier,
+  type StorySourceContributionType,
 } from "@magyarsportonline/shared";
 import { and, eq } from "drizzle-orm";
 import type { Database } from "../client";
@@ -134,13 +135,14 @@ export class StorySourceRepository {
       .innerJoin(rawArticles, eq(storySources.rawArticleId, rawArticles.id))
       .innerJoin(sources, eq(rawArticles.sourceId, sources.id))
       .where(and(eq(storySources.storyId, storyId), eq(storySources.excluded, false)));
-    const seen = new Set<string>();
-    return rows.flatMap((row) =>
-      row.images.flatMap((image) => {
-        if (seen.has(image.url)) return [];
-        seen.add(image.url);
-        return [{ ...image, sourceName: row.sourceName, sourceUrl: row.sourceUrl }];
-      }),
+    return deduplicateSourceImages(
+      rows.flatMap((row) =>
+        row.images.map((image) => ({
+          ...image,
+          sourceName: row.sourceName,
+          sourceUrl: row.sourceUrl,
+        })),
+      ),
     );
   }
 

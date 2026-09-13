@@ -1,6 +1,6 @@
 import Parser from "rss-parser";
 import { load } from "cheerio";
-import type { SourceInlineImage } from "@magyarsportonline/shared";
+import { sourceImageIdentityKey, type SourceInlineImage } from "@magyarsportonline/shared";
 import {
   imageDimension,
   remoteImageUrl,
@@ -117,7 +117,8 @@ export function extractInlineImages(html: string, articleUrl?: string): SourceIn
       return;
     }
     const url = remoteImageUrl(resolved);
-    if (!url || seen.has(url)) return;
+    const identity = url ? sourceImageIdentityKey(url) : null;
+    if (!url || !identity || seen.has(identity)) return;
     const width = imageDimension(image.attr("width"));
     const height = imageDimension(image.attr("height"));
     if ((width !== null && width < 300) || (height !== null && height < 180)) return;
@@ -130,7 +131,7 @@ export function extractInlineImages(html: string, articleUrl?: string): SourceIn
     const credit = clean(
       image.attr("data-credit") ?? figure.find(".credit, .photo-credit, .copyright").first().text(),
     );
-    seen.add(url);
+    seen.add(identity);
     images.push({
       url,
       alt: clean(image.attr("alt")),

@@ -1,5 +1,9 @@
 import { load } from "cheerio";
-import type { SourceInlineImage } from "@magyarsportonline/shared";
+import {
+  deduplicateSourceImages,
+  sourceImageIdentityKey,
+  type SourceInlineImage,
+} from "@magyarsportonline/shared";
 
 export interface RemoteImage {
   url: string;
@@ -185,13 +189,14 @@ export function inlineImagesFromHtml(html: string, articleUrl: string): SourceIn
         return;
       }
       const url = remoteImageUrl(resolved);
-      if (!url || seen.has(url)) return;
+      const identity = url ? sourceImageIdentityKey(url) : null;
+      if (!url || !identity || seen.has(identity)) return;
       const width = imageDimension(image.attr("width"));
       const height = imageDimension(image.attr("height"));
       if ((width !== null && width < 300) || (height !== null && height < 180)) return;
       const figure = image.closest("figure");
       const text = (value: string | undefined) => value?.replace(/\s+/g, " ").trim() || null;
-      seen.add(url);
+      seen.add(identity);
       images.push({
         url,
         alt: text(image.attr("alt")),
@@ -211,14 +216,8 @@ export function articleMediaFromHtml(html: string, articleUrl: string): Publishe
   const primary = imageFromHtml(html, articleUrl);
   const inlineImages = inlineImagesFromHtml(html, articleUrl);
   const combined: SourceInlineImage[] = [];
-  const seen = new Set<string>();
-  const add = (image: SourceInlineImage) => {
-    if (seen.has(image.url)) return;
-    seen.add(image.url);
-    combined.push(image);
-  };
   if (primary) {
-    add({
+    combined.push({
       url: primary.url,
       alt: null,
       caption: null,
@@ -227,8 +226,8 @@ export function articleMediaFromHtml(html: string, articleUrl: string): Publishe
       height: primary.height,
     });
   }
-  inlineImages.forEach(add);
-  return { primary, inlineImages: combined.slice(0, 8) };
+  combined.push(...inlineImages);
+  return { primary, inlineImages: deduplicateSourceImages(combined).slice(0, 8) };
 }
 
 /** Accepted articles only. Fetch HTML, never the referenced image, never follow access redirects. */

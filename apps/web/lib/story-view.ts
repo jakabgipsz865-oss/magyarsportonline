@@ -1,5 +1,9 @@
 import type { StoryReadModelRow } from "@magyarsportonline/db";
-import { publicCredibilityRating, type PublicCredibilityLevel } from "@magyarsportonline/shared";
+import {
+  deduplicateSourceImages,
+  publicCredibilityRating,
+  type PublicCredibilityLevel,
+} from "@magyarsportonline/shared";
 import { z } from "zod";
 
 const sourceSummarySchema = z.object({
@@ -175,7 +179,24 @@ function parseVersionHistory(value: unknown): z.infer<typeof versionHistoryEntry
 
 function parseInlineImages(value: unknown): Array<z.infer<typeof inlineImageSchema>> {
   const result = z.array(inlineImageSchema).safeParse(value);
-  return result.success ? result.data : [];
+  if (!result.success) return [];
+  return deduplicateSourceImages(result.data).map((image) => ({
+    ...image,
+    // Publisher captions are often foreign-language prose. The public page
+    // shows only source attribution and a compact photographer credit.
+    caption: null,
+    credit: imageCredit(image.credit, image.caption),
+  }));
+}
+
+function imageCredit(credit: string | null, caption: string | null): string | null {
+  for (const value of [credit, caption]) {
+    if (!value) continue;
+    const labeled = value.match(/(?:credit|foto|photo|bild)\s*:\s*(.+)$/i)?.[1]?.trim();
+    if (labeled) return `Kép: ${labeled}`;
+    if (value === credit && value.trim()) return `Kép: ${value.trim()}`;
+  }
+  return null;
 }
 
 /** `story_read_model` → the public `/api/v1/stories` list item shape (docs/architecture/04-api-spec.md §4.1). */

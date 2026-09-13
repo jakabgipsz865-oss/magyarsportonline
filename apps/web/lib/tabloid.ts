@@ -4,6 +4,7 @@ import { createEventEnvelope } from "@magyarsportonline/events";
 import { isDailyLlmQuotaError, isGeminiDailyQuotaError } from "@magyarsportonline/llm";
 import {
   TABLOID_PUBLIC_START,
+  deduplicateSourceImages,
   type SourceInlineImage,
   type TabloidSourceMode,
 } from "@magyarsportonline/shared";
@@ -17,24 +18,7 @@ import registry from "./tabloid-sources.json";
 export function mergeInlineImages(
   ...groups: Array<SourceInlineImage[] | undefined>
 ): SourceInlineImage[] {
-  const seen = new Set<string>();
-  return groups
-    .flatMap((group) => group ?? [])
-    .filter((image) => {
-      let key = image.url;
-      try {
-        const parsed = new URL(image.url);
-        parsed.hash = "";
-        parsed.pathname = parsed.pathname.replace(/-\d{2,5}x\d{2,5}(?=\.[a-z0-9]{2,5}$)/i, "");
-        key = parsed.href;
-      } catch {
-        // URLs are validated before persistence; retain exact-value dedup as a fallback.
-      }
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .slice(0, 8);
+  return deduplicateSourceImages(groups.flatMap((group) => group ?? [])).slice(0, 8);
 }
 
 /** Rebuild the public row after source-image metadata changes, without an LLM call. */

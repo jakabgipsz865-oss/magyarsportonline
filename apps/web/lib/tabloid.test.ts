@@ -399,4 +399,21 @@ describe("source image merge", () => {
 
     expect(mergeInlineImages([original], [resized])).toEqual([original]);
   });
+
+  it("collapses publisher CDN presentation variants of the same photo", () => {
+    const first = {
+      url: "https://i2-prod.mirror.co.uk/article1.ece/ALTERNATES/s1200d/1_photo.jpg",
+      alt: null,
+      caption: null,
+      credit: null,
+      width: 1200,
+      height: 800,
+    };
+    const second = {
+      ...first,
+      url: "https://i2-prod.mirror.co.uk/article1.ece/ALTERNATES/s1200f/1_photo.jpg",
+    };
+
+    expect(mergeInlineImages([first], [second])).toEqual([first]);
+  });
 });
