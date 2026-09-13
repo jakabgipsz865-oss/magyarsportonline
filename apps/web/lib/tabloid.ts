@@ -21,8 +21,17 @@ export function mergeInlineImages(
   return groups
     .flatMap((group) => group ?? [])
     .filter((image) => {
-      if (seen.has(image.url)) return false;
-      seen.add(image.url);
+      let key = image.url;
+      try {
+        const parsed = new URL(image.url);
+        parsed.hash = "";
+        parsed.pathname = parsed.pathname.replace(/-\d{2,5}x\d{2,5}(?=\.[a-z0-9]{2,5}$)/i, "");
+        key = parsed.href;
+      } catch {
+        // URLs are validated before persistence; retain exact-value dedup as a fallback.
+      }
+      if (seen.has(key)) return false;
+      seen.add(key);
       return true;
     })
     .slice(0, 8);
