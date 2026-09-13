@@ -25,7 +25,7 @@ vi.mock("@magyarsportonline/agents", () => ({
     },
   },
   tabloid: {
-    TABLOID_MODEL: "gemini-3.5-flash-lite",
+    TABLOID_MODEL: "gemini-3.5-flash",
     TABLOID_PROMPT: "tabloid-hu@2",
     isFootballTabloid: vi.fn(() => true),
   },
@@ -114,7 +114,7 @@ describe("failed article recovery", () => {
   it("requires an already-linked article from the configured registry", async () => {
     mocks.env.TABLOID_AUTO_PUBLISH = true;
     mocks.getRaw.mockResolvedValue({ id: "raw", sourceId, storyId: "story" });
-    mocks.writer.mockResolvedValue({ published: true, model: "gemini-3.5-flash-lite" });
+    mocks.writer.mockResolvedValue({ published: true, model: "gemini-3.5-flash" });
 
     const response = await POST(
       request({ action: "retry-article", rawArticleId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }),
@@ -157,7 +157,7 @@ describe("failed article recovery", () => {
         inlineImages: [sourceImage],
       },
     ]);
-    mocks.writer.mockResolvedValue({ published: true, model: "gemini-3.5-flash-lite" });
+    mocks.writer.mockResolvedValue({ published: true, model: "gemini-3.5-flash" });
 
     const response = await POST(request({ action: "rewrite-story", slug: "public-story" }));
 

@@ -24,7 +24,7 @@ const textRequest = {
 describe("GeminiLlmClient", () => {
   it("uses the default model when none is configured", () => {
     const client = new GeminiLlmClient({ apiKey: "key" });
-    expect(DEFAULT_GEMINI_MODEL).toBe("gemini-3.5-flash-lite");
+    expect(DEFAULT_GEMINI_MODEL).toBe("gemini-3.5-flash");
     expect(client.modelLabel).toBe(DEFAULT_GEMINI_MODEL);
   });
 
