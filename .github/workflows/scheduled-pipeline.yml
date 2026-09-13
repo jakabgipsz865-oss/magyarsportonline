@@ -15,6 +15,7 @@ permissions: {}
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 30
     steps:
       - name: Dispatch ingest (RSS poll + enqueue)
