@@ -339,6 +339,18 @@ describe("tabloid publication", () => {
 
     expect(mocks.write).toHaveBeenCalledTimes(1);
   });
+  it("lets an explicit operator repair a registry source with legacy database config", async () => {
+    const { repos } = fixtures();
+    repos.sourceRepository.getById = vi.fn(async (id: string) => ({
+      id,
+      name: "Source",
+      fetchConfig: { footballFeed: true },
+    })) as unknown as typeof repos.sourceRepository.getById;
+
+    await publishTabloid("one", repos, { retryFailedWriter: true, forceRewrite: true });
+
+    expect(mocks.write).toHaveBeenCalledTimes(1);
+  });
   it("does not automatically repair or repeat failed generation", async () => {
     const { repos } = fixtures();
     mocks.write.mockRejectedValueOnce(new Error("invalid writer output"));

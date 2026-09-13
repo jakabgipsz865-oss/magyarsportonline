@@ -86,7 +86,10 @@ export async function publishTabloid(
       footballFeed?: boolean;
       mode?: TabloidSourceMode;
     };
-    if (!config.tabloid || !registry.some((item) => item.id === source.id))
+    if (
+      (!config.tabloid && !options.forceRewrite) ||
+      !registry.some((item) => item.id === source.id)
+    )
       return { skipped: true };
     if (
       !options.forceRewrite &&
