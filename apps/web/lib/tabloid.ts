@@ -1,21 +1,38 @@
 import { createHash } from "node:crypto";
 import { readModelProjector, seo, sourceIngest, tabloid } from "@magyarsportonline/agents";
-import { isDailyLlmQuotaError, isGeminiDailyQuotaError } from "@magyarsportonline/llm";
 import { createEventEnvelope } from "@magyarsportonline/events";
+import { isDailyLlmQuotaError, isGeminiDailyQuotaError } from "@magyarsportonline/llm";
+import {
+  TABLOID_PUBLIC_START,
+  type SourceInlineImage,
+  type TabloidSourceMode,
+} from "@magyarsportonline/shared";
 import { revalidatePath } from "next/cache";
 import { createRepositories, type Repositories } from "./db";
+import { env } from "./env";
 import { getWriterLlmClient } from "./llm";
 import { getLogger } from "./logger";
-import { env } from "./env";
 import registry from "./tabloid-sources.json";
-import type { TabloidSourceMode } from "@magyarsportonline/shared";
-import { TABLOID_PUBLIC_START } from "@magyarsportonline/shared";
+
+export function mergeInlineImages(
+  ...groups: Array<SourceInlineImage[] | undefined>
+): SourceInlineImage[] {
+  const seen = new Set<string>();
+  return groups
+    .flatMap((group) => group ?? [])
+    .filter((image) => {
+      if (seen.has(image.url)) return false;
+      seen.add(image.url);
+      return true;
+    })
+    .slice(0, 8);
+}
 
 /** One accepted raw article owns one Story. Retries reuse its persisted draft. */
 export async function publishTabloid(
   rawId: string,
   repos: Repositories = createRepositories(),
-  options: { retryFailedWriter?: boolean } = {},
+  options: { retryFailedWriter?: boolean; forceRewrite?: boolean } = {},
 ) {
   if (!env.TABLOID_AUTO_PUBLISH) return { paused: true, llmCalls: 0 };
   return repos.rawArticleRepository.withTabloidLock(rawId, async () => {
@@ -54,9 +71,10 @@ export async function publishTabloid(
     await repos.rawArticleRepository.linkToStory(raw.id, story.id);
     await repos.storySourceRepository.link(story.id, raw.id, "initial");
     let version = await repos.storyVersionRepository.getLatest(story.id);
-    if (version && version.promptVersion !== tabloid.TABLOID_PROMPT) return { skipped: true };
-    if (!version) {
-      if (options.retryFailedWriter)
+    if (version && version.promptVersion !== tabloid.TABLOID_PROMPT && !options.forceRewrite)
+      return { skipped: true };
+    if (!version || options.forceRewrite) {
+      if (options.retryFailedWriter || options.forceRewrite)
         await repos.rawArticleRepository.releaseTabloidQuotaDeferral(raw.id);
       if (!(await repos.rawArticleRepository.claimTabloidWriter(raw.id)))
         throw new Error("Tabloid writer already attempted; manual inspection required");
@@ -78,7 +96,9 @@ export async function publishTabloid(
         titleHu: result.title_hu,
         leadHu: result.lead_hu,
         bodyHu: result.body_hu,
-        changeSummaryHu: null,
+        changeSummaryHu: version
+          ? "A forrás részletesebb feldolgozása és a forrásképek beágyazása."
+          : null,
         generatedByModel: tabloid.TABLOID_MODEL,
         isAiGenerated: true,
         promptVersion: tabloid.TABLOID_PROMPT,
@@ -178,11 +198,16 @@ export async function ingestTabloid(repos: Repositories = createRepositories()) 
               config.mode,
             );
             if (accepted) budget--;
-            const image =
-              article.image ??
-              (accepted
-                ? await sourceIngest.fetchArticleImage(article.sourceUrl, config.url)
-                : null);
+            const pageMedia =
+              accepted && (article.inlineImages?.length ?? 0) < 2
+                ? await sourceIngest.fetchArticleMedia(article.sourceUrl, config.url)
+                : null;
+            const image = article.image ?? pageMedia?.primary ?? null;
+            const inlineImages = mergeInlineImages(
+              article.inlineImages,
+              pageMedia?.inlineImages,
+              image ? [{ ...image, alt: null, caption: null, credit: null }] : undefined,
+            );
             const raw = await repos.rawArticleRepository.insertTabloid(
               {
                 sourceId: source.id,
@@ -192,6 +217,7 @@ export async function ingestTabloid(repos: Repositories = createRepositories()) 
                 subtitleOriginal: article.subtitleOriginal,
                 authorOriginal: article.authorOriginal,
                 imageUrl: image?.url ?? null,
+                inlineImages,
                 language: source.language,
                 publishedAtSource: article.publishedAtSource,
                 contentOrigin: article.contentOrigin,

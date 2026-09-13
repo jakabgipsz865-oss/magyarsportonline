@@ -1,4 +1,5 @@
 import type { RemoteImage } from "./remote-image";
+import type { SourceInlineImage } from "@magyarsportonline/shared";
 export interface NormalizedArticle {
   sourceUrl: string;
   guid?: string;
@@ -14,6 +15,8 @@ export interface NormalizedArticle {
   /** RSS media:thumbnail/enclosure image URL, if the feed item provided one. */
   imageUrl: string | null;
   image?: RemoteImage;
+  /** Ordered, publisher-hosted images found inside the source article body. */
+  inlineImages?: SourceInlineImage[];
   /** Explicit provenance: publication is allowed only after at least one source page was fetched successfully. */
   contentOrigin: "rss_snippet" | "full_article";
 }

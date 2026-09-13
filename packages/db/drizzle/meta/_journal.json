@@ -183,6 +183,13 @@
       "when": 1789067628825,
       "tag": "0025_tabloid_exact_source",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789279483229,
+      "tag": "0026_tricky_golden_guardian",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { cache, type ReactNode } from "react";
+import { cache, Fragment, type ReactNode } from "react";
 import { deduplication } from "@magyarsportonline/agents";
 import { MediaThumb } from "../../../components/media-thumb";
 import { StoryRiver } from "../../../components/story-river";
@@ -80,6 +80,62 @@ function jsonLdStringify(value: unknown): string {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
+function StoryBody({
+  bodyHtml,
+  images,
+  title,
+}: {
+  bodyHtml: string;
+  images: NonNullable<Awaited<ReturnType<typeof loadStory>>>["inlineImages"];
+  title: string;
+}): ReactNode {
+  const parsedParagraphs = Array.from(
+    bodyHtml.matchAll(/<p>([\s\S]*?)<\/p>/g),
+    (match) => match[1] ?? "",
+  );
+  const paragraphs = parsedParagraphs.length > 0 ? parsedParagraphs : [bodyHtml];
+  const afterParagraph = new Map<number, typeof images>();
+  images.forEach((image, index) => {
+    const placement = Math.min(
+      paragraphs.length - 1,
+      Math.floor(((index + 1) * paragraphs.length) / (images.length + 1)),
+    );
+    afterParagraph.set(placement, [...(afterParagraph.get(placement) ?? []), image]);
+  });
+  return (
+    <div className="story-article__body">
+      {paragraphs.map((paragraph, index) => (
+        <Fragment key={index}>
+          {/* biztonságos: a projector HTML-escape-elt, kizárólag <p> elemeket állít elő */}
+          <p dangerouslySetInnerHTML={{ __html: paragraph }} />
+          {(afterParagraph.get(index) ?? []).map((image) => (
+            <figure className="story-article__source-image" key={image.url}>
+              {/* A kép a kiadó szerveréről töltődik; az MSO nem tárolja a képfájlt. */}
+              <img
+                src={image.url}
+                alt={image.alt ?? title}
+                loading="lazy"
+                {...(image.width ? { width: image.width } : {})}
+                {...(image.height ? { height: image.height } : {})}
+              />
+              <figcaption>
+                {image.caption ? <span>{image.caption} · </span> : null}
+                <span>
+                  Forrás:{" "}
+                  <a href={image.sourceUrl} target="_blank" rel="noreferrer">
+                    {image.sourceName}
+                  </a>
+                </span>
+                {image.credit ? <span> · {image.credit}</span> : null}
+              </figcaption>
+            </figure>
+          ))}
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
 /**
  * Publikus Story-oldal (docs/architecture/08-roadmap.md Fázis 9, 77-79. lépés).
  * Kizárólag a `story_read_model` CQRS-projekcióból olvas, sosem a
@@ -136,14 +192,12 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
                 </a>
               </p>
             ) : null}
-            <div className="story-article__hero">
-              <MediaThumb imageUrl={story.imageUrl} title={story.title} seed={story.id} />
-            </div>
-            {/* biztonságos: story.bodyHtml a projector (packages/agents/read-model-projector) HTML-escape-elt kimenete */}
-            <div
-              className="story-article__body"
-              dangerouslySetInnerHTML={{ __html: story.bodyHtml }}
-            />
+            {story.inlineImages.length === 0 ? (
+              <div className="story-article__hero">
+                <MediaThumb imageUrl={story.imageUrl} title={story.title} seed={story.id} />
+              </div>
+            ) : null}
+            <StoryBody bodyHtml={story.bodyHtml} images={story.inlineImages} title={story.title} />
           </article>
 
           {story.versionHistory.length > 1 && (

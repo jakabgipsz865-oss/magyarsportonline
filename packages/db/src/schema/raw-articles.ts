@@ -1,5 +1,6 @@
 import { jsonb, pgTable, text, timestamp, uuid, vector, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import type { SourceInlineImage } from "@magyarsportonline/shared";
 import { ingestStatusEnum } from "./enums";
 import { sources } from "./sources";
 import { stories } from "./stories";
@@ -35,6 +36,9 @@ export const rawArticles = pgTable(
     // hero/thumbnail display (Real Sports Portal UX sprint). Never re-hosted,
     // just the source URL.
     imageUrl: text("image_url"),
+    // Publisher-hosted images that appeared inside the RSS article body.
+    // URLs are embedded directly on the public article; image files are never copied.
+    inlineImages: jsonb("inline_images").$type<SourceInlineImage[]>().notNull().default([]),
     language: text("language").notNull(),
     embedding: vector("embedding", {
       dimensions: RAW_ARTICLE_EMBEDDING_DIMENSIONS,

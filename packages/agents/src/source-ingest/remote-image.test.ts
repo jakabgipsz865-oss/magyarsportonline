@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchArticleImage, imageFromHtml } from "./remote-image";
+import { articleMediaFromHtml, fetchArticleImage, imageFromHtml } from "./remote-image";
 
 describe("remote image metadata only", () => {
   it("chooses declared large OG over a small image and keeps the exact signed URL", () => {
@@ -27,6 +27,19 @@ describe("remote image metadata only", () => {
         "https://publisher.test/story",
       ),
     ).toMatchObject({ source: "json-ld", width: 1920, height: 1080 });
+  });
+  it("keeps the primary and ordered body images without downloading them", () => {
+    const media = articleMediaFromHtml(
+      '<meta property="og:image" content="https://cdn.publisher.test/hero.jpg"><article><p>Long source article paragraph with enough text to select this article root.<img src="https://cdn.publisher.test/body.jpg" alt="Body image" width="1200" height="700"></p></article>',
+      "https://publisher.test/story",
+    );
+    expect(media.inlineImages).toEqual([
+      expect.objectContaining({ url: "https://cdn.publisher.test/hero.jpg" }),
+      expect.objectContaining({
+        url: "https://cdn.publisher.test/body.jpg",
+        alt: "Body image",
+      }),
+    ]);
   });
   it("does not extract paywalled metadata", () => {
     expect(

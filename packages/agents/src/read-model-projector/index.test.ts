@@ -56,6 +56,16 @@ function version(overrides?: Partial<Record<string, unknown>>) {
 
 function buildDeps(overrides?: {
   versions?: ReturnType<typeof version>[];
+  inlineImages?: Array<{
+    url: string;
+    alt: string | null;
+    caption: string | null;
+    credit: string | null;
+    width: number | null;
+    height: number | null;
+    sourceName: string;
+    sourceUrl: string;
+  }>;
 }): ReadModelProjectorDeps & { upserts: unknown[] } {
   const upserts: unknown[] = [];
   return {
@@ -72,6 +82,7 @@ function buildDeps(overrides?: {
           reliabilityTier: "B" as const,
         },
       ]),
+      inlineImagesByStoryId: vi.fn(async () => overrides?.inlineImages ?? []),
     },
     storyCredibilityHistoryRepository: {
       listByStoryId: vi.fn(async () => [
@@ -142,6 +153,7 @@ describe("handleStoryPublished", () => {
         titleHu: "Liverpool nyert",
         leadHu: "Lead szöveg.",
         bodyHtml: "<p>Törzs szöveg.</p>\n<p>Második bekezdés.</p>",
+        inlineImages: [],
         isAiGenerated: true,
         confidenceScore: STORY.confidenceScore,
         isDeveloping: false,
@@ -173,6 +185,24 @@ describe("handleStoryPublished", () => {
         { prompt_version: "tabloid-hu@1", is_current: false },
       ],
     });
+  });
+
+  it("projects publisher-hosted images with their source attribution", async () => {
+    const image = {
+      url: "https://cdn.example.com/photo.jpg",
+      alt: "A játékos",
+      caption: "Edzés közben",
+      credit: "Example Photo",
+      width: 1200,
+      height: 800,
+      sourceName: "Example Sport",
+      sourceUrl: "https://example.com/story",
+    };
+    const deps = buildDeps({ inlineImages: [image] });
+
+    await handleStoryPublished(deps, publishedEvent());
+
+    expect(deps.upserts[0]).toMatchObject({ inlineImages: [image] });
   });
 
   it("includes a source breakdown and score breakdown in the projected credibilitySummary", async () => {
