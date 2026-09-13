@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { deduplication } from "@magyarsportonline/agents";
 import { StoryRiver } from "../../../components/story-river";
+import { SiteFooter } from "../../../components/site-footer";
 import { createRepositories } from "../../../lib/db";
 import { entitySlug } from "../../../lib/entity-slug";
 import { toStorySummaryView } from "../../../lib/story-view";
@@ -63,6 +64,7 @@ export default async function EntityPage({ params }: PageProps): Promise<ReactNo
         <h1>{entity.nameHu}</h1>
       </div>
       <StoryRiver stories={stories} />
+      <SiteFooter />
     </main>
   );
 }

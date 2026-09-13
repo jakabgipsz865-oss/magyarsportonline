@@ -46,7 +46,7 @@ export function MediaThumb({ imageUrl, title, seed, className, alt }: MediaThumb
     return (
       <div className={className ? `media ${className}` : "media"}>
         {/* Plain <img>, not next/image: source images come from arbitrary RSS/CDN domains, not worth a remotePatterns allowlist for an MVP. */}
-        <img src={imageUrl} alt={alt ?? title} loading="lazy" />
+        <img src={imageUrl} alt={alt ?? title} loading="lazy" referrerPolicy="no-referrer" />
       </div>
     );
   }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { MediaThumb } from "../components/media-thumb";
+import { SiteFooter } from "../components/site-footer";
 import { createRepositories } from "../lib/db";
 import { toStorySummaryView, type StorySummaryView } from "../lib/story-view";
 
@@ -64,6 +65,7 @@ export default async function HomePage(): Promise<ReactNode> {
               <p>Futball, személyes történetek és pályán kívüli események.</p>
             </section>
           </div>
+          <SiteFooter className="home-footer" />
         </main>
       </div>
     );
@@ -121,12 +123,7 @@ export default async function HomePage(): Promise<ReactNode> {
           </section>
         ) : null}
 
-        <footer className="site-footer home-footer">
-          <span>© MagyarSportOnline</span>
-          <span>
-            <Link href="/impresszum">Impresszum</Link> · Források az egyes cikkeknél
-          </span>
-        </footer>
+        <SiteFooter className="home-footer" />
       </main>
     </div>
   );

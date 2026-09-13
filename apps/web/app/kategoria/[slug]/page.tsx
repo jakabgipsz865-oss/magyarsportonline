@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { StoryRiver } from "../../../components/story-river";
+import { SiteFooter } from "../../../components/site-footer";
 import { createRepositories } from "../../../lib/db";
 import { toStorySummaryView } from "../../../lib/story-view";
 
@@ -51,6 +52,7 @@ export default async function CategoryPage({ params }: PageProps): Promise<React
         <h1>{category.nameHu}</h1>
       </div>
       <StoryRiver stories={stories} />
+      <SiteFooter />
     </main>
   );
 }

@@ -1,50 +1,44 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import type { ReactNode } from "react";
+import { SiteFooter } from "../../components/site-footer";
 
 export const metadata: Metadata = {
   title: "Impresszum",
 };
 
-/**
- * A magyar sajtószabályozás (2010. évi CIV. törvény a sajtószabadságról és a
- * médiatartalmak alapvető szabályairól) kötelezővé teszi a felelős
- * szerkesztő és a kiadó adatainak nyilvános feltüntetését — ez jogi
- * követelmény, amit nem lehet automatizálni (lásd docs/feasibility-analysis.md
- * §9, docs/architecture/08-roadmap.md Fázis 0, 8. lépés).
- *
- * A lenti mezők ZÁRÓJELES, "KITÖLTENDŐ" jelölésű helyőrzői SZÁNDÉKOSAN nem
- * valós adatok — ezeket a tényleges üzemeltetőnek kell kitöltenie éles
- * indulás előtt, mert a Fázis 0 implementáció nem rendelkezik hiteles
- * cégjogi/szerkesztőségi adatokkal.
- */
 export default function ImpresszumPage(): ReactNode {
   return (
-    <main className="public-surface">
-      <h1>Impresszum</h1>
-      <p>
-        <strong>
-          Ez az oldal jelenleg fejlesztés alatt áll, a lenti adatok kitöltendő helyőrzők.
-        </strong>{" "}
-        Éles publikálás előtt a tényleges üzemeltetőnek/kiadónak hiteles adatokkal kell
-        kiegészítenie.
-      </p>
-      <dl>
-        <dt>Kiadó neve</dt>
-        <dd>[KITÖLTENDŐ: kiadó cégneve]</dd>
-        <dt>Székhely</dt>
-        <dd>[KITÖLTENDŐ: székhely címe]</dd>
-        <dt>Cégjegyzékszám</dt>
-        <dd>[KITÖLTENDŐ: cégjegyzékszám]</dd>
-        <dt>Felelős szerkesztő</dt>
-        <dd>[KITÖLTENDŐ: felelős szerkesztő neve]</dd>
-        <dt>Kapcsolat</dt>
-        <dd>[KITÖLTENDŐ: e-mail elérhetőség]</dd>
-      </dl>
-      <p>
-        A tartalmak előállításában AI-alapú, automatizált rendszer vesz részt, forrásmegjelöléssel
-        és emberi felügyeleti eljárással — lásd a <code>docs/feasibility-analysis.md</code> és{" "}
-        <code>docs/architecture/</code> dokumentációt.
-      </p>
+    <main className="public-surface legal-page">
+      <article>
+        <h1>Impresszum</h1>
+        <dl className="legal-details">
+          <dt>Weboldal</dt>
+          <dd>MagyarSportOnline — magyarsportonline.hu</dd>
+          <dt>Üzemeltető és a tartalomért felelős személy</dt>
+          <dd>Lovas Zoltán magánszemély</dd>
+          <dt>Kapcsolat</dt>
+          <dd>
+            <a href="mailto:lovas.zoltan1986@gmail.com">lovas.zoltan1986@gmail.com</a>
+          </dd>
+        </dl>
+
+        <h2>Az oldal működése</h2>
+        <p>
+          A MagyarSportOnline magánszemélyként működtetett, nem üzletszerű, bevételt nem termelő
+          hobbioldal. Az oldalon nincs hirdetés, előfizetés vagy értékesítés.
+        </p>
+        <p>
+          A cikkek előállításában automatizált, mesterséges intelligenciát használó rendszer vesz
+          részt. Az egyes cikkek alapjául szolgáló eredeti forrásokat és a külső forrásból
+          beágyazott képek forrását az adott cikknél feltüntetjük.
+        </p>
+        <p>
+          Helyesbítési vagy eltávolítási kérelem a fenti e-mail-címen küldhető. A személyes adatok
+          kezeléséről az <Link href="/adatkezeles">adatkezelési tájékoztatóban</Link> olvashat.
+        </p>
+      </article>
+      <SiteFooter />
     </main>
   );
 }

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { createRepositories } from "../../lib/db";
 import { entitySlug } from "../../lib/entity-slug";
+import { SiteFooter } from "../../components/site-footer";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,7 @@ export default async function TeamsIndexPage(): Promise<ReactNode> {
           ))}
         </div>
       )}
+      <SiteFooter />
     </main>
   );
 }

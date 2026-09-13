@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { cache, Fragment, type ReactNode } from "react";
 import { deduplication } from "@magyarsportonline/agents";
 import { MediaThumb } from "../../../components/media-thumb";
+import { SiteFooter } from "../../../components/site-footer";
 import { StoryRiver } from "../../../components/story-river";
 import { createRepositories } from "../../../lib/db";
 import { env } from "../../../lib/env";
@@ -69,8 +70,8 @@ function newsArticleJsonLd(story: NonNullable<Awaited<ReturnType<typeof loadStor
     mainEntityOfPage: `${env.SITE_URL}/hir/${story.slug}`,
     ...(story.imageUrl ? { image: story.imageUrl } : {}),
     publisher: {
-      "@type": "Organization",
-      name: "MagyarSportOnline",
+      "@type": "Person",
+      name: "Lovas Zoltán",
       url: env.SITE_URL,
     },
   });
@@ -115,6 +116,7 @@ function StoryBody({
                 src={image.url}
                 alt={image.alt ?? title}
                 loading="lazy"
+                referrerPolicy="no-referrer"
                 {...(image.width ? { width: image.width } : {})}
                 {...(image.height ? { height: image.height } : {})}
               />
@@ -250,6 +252,7 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
           ) : null}
         </aside>
       </div>
+      <SiteFooter />
     </main>
   );
 }
