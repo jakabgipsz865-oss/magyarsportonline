@@ -214,20 +214,24 @@ export function inlineImagesFromHtml(html: string, articleUrl: string): SourceIn
 
 export function articleMediaFromHtml(html: string, articleUrl: string): PublisherArticleMedia {
   const primary = imageFromHtml(html, articleUrl);
-  const inlineImages = inlineImagesFromHtml(html, articleUrl);
-  const combined: SourceInlineImage[] = [];
-  if (primary) {
-    combined.push({
-      url: primary.url,
-      alt: null,
-      caption: null,
-      credit: null,
-      width: primary.width,
-      height: primary.height,
-    });
-  }
-  combined.push(...inlineImages);
-  return { primary, inlineImages: deduplicateSourceImages(combined).slice(0, 8) };
+  const bodyImages = inlineImagesFromHtml(html, articleUrl);
+  // OG/JSON-LD commonly points at another crop of the first body photo.
+  // Use that metadata image only when the article body contains no image.
+  const inlineImages: SourceInlineImage[] = bodyImages.length
+    ? bodyImages
+    : primary
+      ? [
+          {
+            url: primary.url,
+            alt: null,
+            caption: null,
+            credit: null,
+            width: primary.width,
+            height: primary.height,
+          },
+        ]
+      : [];
+  return { primary, inlineImages: deduplicateSourceImages(inlineImages).slice(0, 8) };
 }
 
 /** Accepted articles only. Fetch HTML, never the referenced image, never follow access redirects. */

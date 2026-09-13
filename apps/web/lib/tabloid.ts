@@ -69,11 +69,12 @@ async function fetchCompleteTabloidArticle(
     publishedAtSource: fetched.publishedAtSource ?? article.publishedAtSource,
     imageUrl: image?.url ?? article.imageUrl,
     ...(image ? { image } : {}),
-    inlineImages: mergeInlineImages(
-      article.inlineImages,
-      pageMedia?.inlineImages,
-      image ? [{ ...image, alt: null, caption: null, credit: null }] : undefined,
-    ),
+    inlineImages: pageMedia?.inlineImages.length
+      ? mergeInlineImages(pageMedia.inlineImages)
+      : mergeInlineImages(
+          article.inlineImages,
+          image ? [{ ...image, alt: null, caption: null, credit: null }] : undefined,
+        ),
     contentOrigin: "full_article",
   };
 }
@@ -107,6 +108,7 @@ export async function publishTabloid(
           raw.bodyOriginal,
           config.footballFeed !== false,
           config.mode,
+          raw.sourceUrl,
         )
       )
         return { skipped: true, reason: "topic-filter" };
@@ -252,6 +254,7 @@ export async function ingestTabloid(repos: Repositories = createRepositories()) 
               article.bodyOriginal,
               config.footballFeed !== false,
               config.mode,
+              article.sourceUrl,
             );
             if (accepted) budget--;
             const complete = accepted
@@ -304,5 +307,66 @@ export async function ingestTabloid(repos: Repositories = createRepositories()) 
       }),
     );
   }
-  return { results, queueBefore, ingestBudget, ingestDeferred: ingestBudget === 0 };
+  // Gradually recover complete articles that the former tabloid-only filter
+  // stored but never queued. Full-page extraction happens before enqueueing,
+  // so the writer never receives an RSS fragment.
+  const backfillLimit = Math.min(4, budget);
+  let backfilled = 0;
+  let backfillDeferredWithoutFullArticle = 0;
+  if (backfillLimit > 0) {
+    const byId = new Map(sources.map((source) => [source.id, source]));
+    const candidates = await repos.rawArticleRepository.listUnqueuedTabloidCandidates(
+      [...byId.keys()],
+      new Date(TABLOID_PUBLIC_START),
+      100,
+    );
+    for (const raw of candidates) {
+      if (backfilled >= backfillLimit) break;
+      const source = byId.get(raw.sourceId);
+      if (!source) continue;
+      const config = source.fetchConfig as {
+        mode?: TabloidSourceMode;
+        footballFeed?: boolean;
+        url: string;
+      };
+      if (
+        !tabloid.isFootballTabloid(
+          raw.titleOriginal,
+          raw.bodyOriginal,
+          config.footballFeed !== false,
+          config.mode,
+          raw.sourceUrl,
+        )
+      )
+        continue;
+      const page = await new sourceIngest.ArticleFetcher().fetchWithMedia(
+        raw.sourceUrl,
+        config.url,
+      );
+      if (!page) {
+        backfillDeferredWithoutFullArticle++;
+        continue;
+      }
+      const imageUrl = raw.imageUrl ?? page.media.primary?.url ?? null;
+      const queued = await repos.rawArticleRepository.upgradeAndEnqueueTabloid(raw.id, {
+        sourceUrl: raw.sourceUrl,
+        titleOriginal: page.article.titleOriginal || raw.titleOriginal,
+        subtitleOriginal: page.article.subtitleOriginal,
+        bodyOriginal: page.article.bodyOriginal,
+        authorOriginal: page.article.authorOriginal,
+        publishedAtSource: page.article.publishedAtSource ?? raw.publishedAtSource,
+        imageUrl,
+        inlineImages: mergeInlineImages(page.media.inlineImages),
+      });
+      if (queued) backfilled++;
+    }
+  }
+  return {
+    results,
+    queueBefore,
+    ingestBudget,
+    ingestDeferred: ingestBudget === 0,
+    backfilled,
+    backfillDeferredWithoutFullArticle,
+  };
 }

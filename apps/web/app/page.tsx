@@ -35,7 +35,7 @@ function NewsCard({ story }: { story: StorySummaryView }): ReactNode {
     <Link href={`/hir/${story.slug}`} className="home-news-card">
       <MediaThumb imageUrl={story.imageUrl} title={story.title} seed={story.id} />
       <div className="home-news-card__body">
-        <span className="home-kicker">Futballbulvár</span>
+        <span className="home-kicker">Futballhírek</span>
         <h3>{story.title}</h3>
         <StoryMeta story={story} />
       </div>
@@ -57,11 +57,11 @@ export default async function HomePage(): Promise<ReactNode> {
     return (
       <div className="home-redesign public-surface">
         <main className="home-main">
-          <h1 className="sr-only">Friss futballbulvárhírek</h1>
+          <h1 className="sr-only">Friss futballhírek</h1>
           <div className="home-empty-grid home-empty-grid--tabloid">
             <section className="home-empty" aria-labelledby="home-empty-title">
-              <span className="home-empty__eyebrow">Futballbulvár</span>
-              <h2 id="home-empty-title">Hamarosan friss bulvárhírekkel jelentkezünk</h2>
+              <span className="home-empty__eyebrow">Futballhírek</span>
+              <h2 id="home-empty-title">Hamarosan friss futballhírekkel jelentkezünk</h2>
               <p>Futball, személyes történetek és pályán kívüli események.</p>
             </section>
           </div>
@@ -74,7 +74,7 @@ export default async function HomePage(): Promise<ReactNode> {
   return (
     <div className="home-redesign public-surface">
       <main className="home-main">
-        <h1 className="sr-only">Friss futballbulvárhírek</h1>
+        <h1 className="sr-only">Friss futballhírek</h1>
         <section className="home-hero-layout home-hero-layout--tabloid" aria-label="Kiemelt hírek">
           <Link href={`/hir/${hero.slug}`} className="home-hero">
             <MediaThumb imageUrl={hero.imageUrl} title={hero.title} seed={hero.id} />
@@ -101,8 +101,8 @@ export default async function HomePage(): Promise<ReactNode> {
 
         <section id="friss-hirek" className="home-news-section">
           <div className="home-section-title home-section-title--line">
-            <h2>Friss bulvárhírek</h2>
-            <Link href="/kategoria/labdarugas">Összes bulvárhír →</Link>
+            <h2>Friss futballhírek</h2>
+            <Link href="/kategoria/labdarugas">Összes futballhír →</Link>
           </div>
           <div className="home-news-grid">
             {latest.slice(3, 12).map((story) => (

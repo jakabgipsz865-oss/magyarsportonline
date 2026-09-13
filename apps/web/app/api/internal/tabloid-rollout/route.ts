@@ -224,11 +224,9 @@ export async function POST(request: NextRequest) {
         );
         const fullArticle = page?.article ?? null;
         const pageMedia = page?.media ?? null;
-        const inlineImages = mergeInlineImages(
-          raw.inlineImages,
-          rssArticle?.inlineImages,
-          pageMedia?.inlineImages,
-        );
+        const inlineImages = pageMedia?.inlineImages.length
+          ? mergeInlineImages(pageMedia.inlineImages)
+          : mergeInlineImages(raw.inlineImages, rssArticle?.inlineImages);
         if (!fullArticle || !pageMedia) {
           return NextResponse.json(
             { error: "complete source page unavailable", rawArticleId: raw.id },
@@ -295,6 +293,7 @@ export async function POST(request: NextRequest) {
                 item.bodyOriginal,
                 source.footballFeed,
                 source.mode as TabloidSourceMode,
+                item.sourceUrl,
               ),
           );
           if (!article) continue;

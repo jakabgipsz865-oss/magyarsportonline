@@ -33,17 +33,25 @@ describe("remote image metadata only", () => {
       ),
     ).toMatchObject({ source: "json-ld", width: 1920, height: 1080 });
   });
-  it("keeps the primary and ordered body images without downloading them", () => {
+  it("keeps ordered body images without repeating the metadata hero", () => {
     const media = articleMediaFromHtml(
       '<meta property="og:image" content="https://cdn.publisher.test/hero.jpg"><article><p>Long source article paragraph with enough text to select this article root.<img src="https://cdn.publisher.test/body.jpg" alt="Body image" width="1200" height="700"></p></article>',
       "https://publisher.test/story",
     );
     expect(media.inlineImages).toEqual([
-      expect.objectContaining({ url: "https://cdn.publisher.test/hero.jpg" }),
       expect.objectContaining({
         url: "https://cdn.publisher.test/body.jpg",
         alt: "Body image",
       }),
+    ]);
+  });
+  it("uses the metadata hero when the article body has no image", () => {
+    const media = articleMediaFromHtml(
+      '<meta property="og:image" content="https://cdn.publisher.test/hero.jpg"><article><p>Text only.</p></article>',
+      "https://publisher.test/story",
+    );
+    expect(media.inlineImages).toEqual([
+      expect.objectContaining({ url: "https://cdn.publisher.test/hero.jpg" }),
     ]);
   });
   it("extracts lazy-loaded source-body images", () => {

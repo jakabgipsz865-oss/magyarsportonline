@@ -192,7 +192,11 @@ describe("tabloid publication", () => {
         ],
         recordFetchResult: vi.fn(),
       },
-      rawArticleRepository: { insertTabloid: insert },
+      rawArticleRepository: {
+        insertTabloid: insert,
+        listUnqueuedTabloidCandidates: vi.fn(async () => []),
+        upgradeAndEnqueueTabloid: vi.fn(),
+      },
     } as unknown as Repositories;
     await ingestTabloid(repos);
     expect(insert).toHaveBeenCalledWith(
@@ -245,7 +249,11 @@ describe("tabloid publication", () => {
         ],
         recordFetchResult: vi.fn(),
       },
-      rawArticleRepository: { insertTabloid: insert },
+      rawArticleRepository: {
+        insertTabloid: insert,
+        listUnqueuedTabloidCandidates: vi.fn(async () => []),
+        upgradeAndEnqueueTabloid: vi.fn(),
+      },
     } as unknown as Repositories;
 
     const result = await ingestTabloid(repos);
@@ -310,13 +318,77 @@ describe("tabloid publication", () => {
         ],
         recordFetchResult: vi.fn(),
       },
-      rawArticleRepository: { insertTabloid: insert },
+      rawArticleRepository: {
+        insertTabloid: insert,
+        listUnqueuedTabloidCandidates: vi.fn(async () => []),
+        upgradeAndEnqueueTabloid: vi.fn(),
+      },
     } as unknown as Repositories;
 
     await ingestTabloid(repos);
 
     expect(insert).toHaveBeenCalledTimes(1);
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ titleOriginal: "new" }), true);
+  });
+  it("upgrades and queues old football items rejected by the former filter", async () => {
+    mocks.fetchRss.mockResolvedValue([]);
+    mocks.fetchFullArticle.mockResolvedValue({
+      titleOriginal: "Complete match report",
+      subtitleOriginal: null,
+      bodyOriginal: "The complete football article from the publisher page.",
+      authorOriginal: "Reporter",
+      publishedAtSource: new Date("2026-09-13T08:00:00.000Z"),
+    });
+    mocks.fetchImages.mockResolvedValue({
+      primary: { url: "https://cdn.test/hero.jpg", width: 1200, height: 675 },
+      inlineImages: [{ url: "https://cdn.test/body.jpg" }],
+    });
+    const upgradeAndEnqueue = vi.fn(async () => true);
+    const repos = {
+      pipelineJobRepository: { getStatusCounts: async () => ({ pending: 0, inProgress: 0 }) },
+      sourceRepository: {
+        listActive: async () => [
+          {
+            id: "source-0",
+            name: "Football feed",
+            language: "en",
+            ingestWatermarkAt: new Date(),
+            fetchConfig: {
+              tabloid: true,
+              footballFeed: true,
+              url: "https://publisher.test/feed",
+            },
+          },
+        ],
+        recordFetchResult: vi.fn(),
+      },
+      rawArticleRepository: {
+        insertTabloid: vi.fn(),
+        listUnqueuedTabloidCandidates: vi.fn(async () => [
+          {
+            id: "old-raw",
+            sourceId: "source-0",
+            sourceUrl: "https://publisher.test/old-match",
+            titleOriginal: "Routine match report",
+            bodyOriginal: "RSS fragment",
+            imageUrl: null,
+            publishedAtSource: new Date("2026-09-13T08:00:00.000Z"),
+          },
+        ]),
+        upgradeAndEnqueueTabloid: upgradeAndEnqueue,
+      },
+    } as unknown as Repositories;
+
+    const result = await ingestTabloid(repos);
+
+    expect(upgradeAndEnqueue).toHaveBeenCalledWith(
+      "old-raw",
+      expect.objectContaining({
+        bodyOriginal: "The complete football article from the publisher page.",
+        inlineImages: [{ url: "https://cdn.test/body.jpg" }],
+      }),
+    );
+    expect(result).toMatchObject({ backfilled: 1 });
   });
   it("keeps different sources separate even when content and URL are identical", async () => {
     const { repos, stories } = fixtures();

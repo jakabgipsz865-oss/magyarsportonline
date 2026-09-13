@@ -42,6 +42,7 @@ export async function tabloidSourcePreflight(language?: string, includeImages = 
               article.bodyOriginal,
               source.footballFeed,
               source.mode as TabloidSourceMode,
+              article.sourceUrl,
             ),
           );
           const acceptedSet = new Set(accepted);

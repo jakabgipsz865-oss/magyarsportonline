@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "../client";
 import { pipelineJobs, rawArticles } from "../schema/index";
 import type { SourceInlineImage } from "@magyarsportonline/shared";
@@ -41,6 +41,83 @@ export class RawArticleRepository {
         });
       }
       return row;
+    });
+  }
+
+  /** Previously stored feed items that the old topic filter never queued. */
+  async listUnqueuedTabloidCandidates(
+    sourceIds: string[],
+    since: Date,
+    limit: number,
+  ): Promise<RawArticle[]> {
+    if (sourceIds.length === 0 || limit <= 0) return [];
+    return this.db
+      .select()
+      .from(rawArticles)
+      .where(
+        and(
+          inArray(rawArticles.sourceId, sourceIds),
+          gte(rawArticles.ingestedAt, since),
+          isNull(rawArticles.storyId),
+          sql`NOT EXISTS (
+            SELECT 1 FROM ${pipelineJobs}
+            WHERE ${pipelineJobs.event}->>'type' = 'source/article.ingested'
+              AND ${pipelineJobs.event}->'payload'->>'raw_article_id' = ${rawArticles.id}::text
+          )`,
+        ),
+      )
+      .orderBy(asc(rawArticles.publishedAtSource), asc(rawArticles.ingestedAt))
+      .limit(limit);
+  }
+
+  /** Upgrade a rejected RSS row and create its publication job atomically. */
+  async upgradeAndEnqueueTabloid(
+    id: string,
+    data: Pick<
+      NewRawArticle,
+      | "titleOriginal"
+      | "sourceUrl"
+      | "subtitleOriginal"
+      | "bodyOriginal"
+      | "authorOriginal"
+      | "publishedAtSource"
+      | "imageUrl"
+      | "inlineImages"
+    >,
+  ): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${"tabloid:" + id}, 0))`);
+      const [raw] = await tx
+        .select({ id: rawArticles.id, sourceId: rawArticles.sourceId })
+        .from(rawArticles)
+        .where(eq(rawArticles.id, id))
+        .limit(1);
+      if (!raw) return false;
+      const [existing] = await tx
+        .select({ id: pipelineJobs.id })
+        .from(pipelineJobs)
+        .where(
+          sql`${pipelineJobs.event}->>'type' = 'source/article.ingested'
+            AND ${pipelineJobs.event}->'payload'->>'raw_article_id' = ${id}`,
+        )
+        .limit(1);
+      if (existing) return false;
+      await tx
+        .update(rawArticles)
+        .set({ ...data, contentOrigin: "full_article" })
+        .where(eq(rawArticles.id, id));
+      await tx.insert(pipelineJobs).values({
+        event: {
+          id: crypto.randomUUID(),
+          correlation_id: crypto.randomUUID(),
+          occurred_at: new Date().toISOString(),
+          version: 1,
+          trace_id: crypto.randomUUID(),
+          type: "source/article.ingested",
+          payload: { raw_article_id: raw.id, source_id: raw.sourceId },
+        },
+      });
+      return true;
     });
   }
 

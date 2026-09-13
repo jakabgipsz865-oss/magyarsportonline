@@ -129,7 +129,7 @@
     "url": "https://www.mundodeportivo.com/feed/rss/elotromundo",
     "feedUrls": ["https://www.mundodeportivo.com/feed/rss/elotromundo"],
     "footballFeed": false,
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "86d1eedf-4ab2-502f-9898-56b1482ef21c",
@@ -214,8 +214,8 @@
     "language": "de",
     "mode": "BROAD_TABLOID_FOOTBALL",
     "tier": "CORE",
-    "url": "https://www.bild.de/feed/alles.xml",
-    "feedUrls": ["https://www.bild.de/feed/alles.xml"],
+    "url": "https://www.bild.de/feed/sport.xml",
+    "feedUrls": ["https://www.bild.de/feed/sport.xml"],
     "footballFeed": false,
     "enabled": true
   },

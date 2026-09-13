@@ -37,17 +37,18 @@ async function post(url: string, label: string, env: Env, signal?: AbortSignal):
 async function runCron(env: Env): Promise<void> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  try {
-    await post(
+  const results = await Promise.allSettled([
+    post(
       endpoint(env.APP_ORIGIN, "/api/internal/cron/dispatch-ingest"),
       "dispatch-ingest",
       env,
       controller.signal,
-    );
-  } finally {
-    clearTimeout(timeout);
-  }
-  await post(endpoint(env.APP_ORIGIN, "/api/internal/jobs/process"), "jobs/process", env);
+    ),
+    post(endpoint(env.APP_ORIGIN, "/api/internal/jobs/process"), "jobs/process", env),
+  ]);
+  clearTimeout(timeout);
+  const failures = results.filter((result) => result.status === "rejected");
+  if (failures.length > 0) throw new AggregateError(failures, "scheduled work failed");
 }
 
 export default {

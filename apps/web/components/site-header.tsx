@@ -7,8 +7,8 @@ import type { ReactNode } from "react";
 
 const NAV_LINKS = [
   { href: "/", label: "Kezdőlap" },
-  { href: "/#friss-hirek", label: "Friss bulvárhírek" },
-  { href: "/kategoria/labdarugas", label: "Összes bulvárhír" },
+  { href: "/#friss-hirek", label: "Friss futballhírek" },
+  { href: "/kategoria/labdarugas", label: "Összes futballhír" },
 ];
 
 function isActive(pathname: string, href: string): boolean {

@@ -99,17 +99,6 @@
     "enabled": true
   },
   {
-    "id": "07056b24-0d7b-5435-bf9d-4286fc9994e5",
-    "name": "Mundo Deportivo El Otro Mundo",
-    "language": "es",
-    "mode": "DIRECT_GOSSIP",
-    "tier": "SECONDARY",
-    "url": "https://www.mundodeportivo.com/feed/rss/elotromundo",
-    "feedUrls": ["https://www.mundodeportivo.com/feed/rss/elotromundo"],
-    "footballFeed": false,
-    "enabled": true
-  },
-  {
     "id": "d9b5c007-3d31-40ae-a642-697dfe445a87",
     "name": "Golssip",
     "language": "it",
@@ -170,8 +159,8 @@
     "language": "de",
     "mode": "BROAD_TABLOID_FOOTBALL",
     "tier": "CORE",
-    "url": "https://www.bild.de/feed/alles.xml",
-    "feedUrls": ["https://www.bild.de/feed/alles.xml"],
+    "url": "https://www.bild.de/feed/sport.xml",
+    "feedUrls": ["https://www.bild.de/feed/sport.xml"],
     "footballFeed": false,
     "enabled": true
   },
