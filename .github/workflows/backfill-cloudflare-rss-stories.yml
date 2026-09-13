@@ -13,6 +13,9 @@ on:
         required: true
         default: "50"
         type: string
+  push:
+    tags:
+      - "rss-backfill-*"
 
 permissions:
   contents: read
@@ -64,8 +67,8 @@ jobs:
           PUBLIC_ORIGIN: https://magyarsportonline.hu
           WORKER_ORIGIN: https://magyarsportonline-web.footballinvestmentkft.workers.dev
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          PAGE: ${{ inputs.page }}
-          LIMIT: ${{ inputs.limit }}
+          PAGE: ${{ inputs.page || '1' }}
+          LIMIT: ${{ inputs.limit || '50' }}
 
       - name: Upload backfill report
         if: always()
