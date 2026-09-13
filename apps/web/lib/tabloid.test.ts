@@ -131,7 +131,10 @@ describe("tabloid publication", () => {
     for (const version of versions.values()) version["promptVersion"] = "tabloid-hu@1";
     mocks.write.mockClear();
     mocks.project.mockClear();
-    expect(await publishTabloid("one", repos)).toEqual({ skipped: true });
+    expect(await publishTabloid("one", repos)).toEqual({
+      skipped: true,
+      reason: "legacy-prompt-version",
+    });
     expect(mocks.write).not.toHaveBeenCalled();
     expect(mocks.project).not.toHaveBeenCalled();
   });

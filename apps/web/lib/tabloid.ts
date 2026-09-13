@@ -77,8 +77,6 @@ export async function publishTabloid(
   return repos.rawArticleRepository.withTabloidLock(rawId, async () => {
     const raw = await repos.rawArticleRepository.getById(rawId);
     if (!raw) throw new Error("Tabloid source article missing");
-    if (raw.ingestedAt < new Date(TABLOID_PUBLIC_START) && !options.forceRewrite)
-      return { skipped: true };
     const source = await repos.sourceRepository.getById(raw.sourceId);
     if (!source) throw new Error("Tabloid source missing");
     const config = source.fetchConfig as {
@@ -86,21 +84,22 @@ export async function publishTabloid(
       footballFeed?: boolean;
       mode?: TabloidSourceMode;
     };
-    if (
-      (!config.tabloid && !options.forceRewrite) ||
-      !registry.some((item) => item.id === source.id)
-    )
-      return { skipped: true };
-    if (
-      !options.forceRewrite &&
-      !tabloid.isFootballTabloid(
-        raw.titleOriginal,
-        raw.bodyOriginal,
-        config.footballFeed !== false,
-        config.mode,
+    if (!registry.some((item) => item.id === source.id))
+      return { skipped: true, reason: "source-not-in-tabloid-registry" };
+    if (!options.forceRewrite) {
+      if (raw.ingestedAt < new Date(TABLOID_PUBLIC_START))
+        return { skipped: true, reason: "before-public-start" };
+      if (!config.tabloid) return { skipped: true, reason: "source-not-enabled-for-tabloid" };
+      if (
+        !tabloid.isFootballTabloid(
+          raw.titleOriginal,
+          raw.bodyOriginal,
+          config.footballFeed !== false,
+          config.mode,
+        )
       )
-    )
-      return { skipped: true };
+        return { skipped: true, reason: "topic-filter" };
+    }
     const { story } = await repos.storyRepository.createOrMatchByFingerprint(
       createHash("sha256").update(`tabloid:${raw.sourceId}:${raw.id}`).digest("hex"),
       {
@@ -116,7 +115,7 @@ export async function publishTabloid(
     await repos.storySourceRepository.link(story.id, raw.id, "initial");
     let version = await repos.storyVersionRepository.getLatest(story.id);
     if (version && version.promptVersion !== tabloid.TABLOID_PROMPT && !options.forceRewrite)
-      return { skipped: true };
+      return { skipped: true, reason: "legacy-prompt-version" };
     if (!version || options.forceRewrite) {
       if (options.retryFailedWriter || options.forceRewrite)
         await repos.rawArticleRepository.releaseTabloidQuotaDeferral(raw.id);
