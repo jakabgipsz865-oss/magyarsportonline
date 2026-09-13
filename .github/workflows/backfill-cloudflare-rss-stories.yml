@@ -34,20 +34,32 @@ jobs:
           curl -fsS --max-time 30 \
             "$PUBLIC_ORIGIN/api/v1/stories?page=$PAGE&limit=$LIMIT" > /tmp/stories.json
           jq -r '.data[].slug' /tmp/stories.json | while IFS= read -r slug; do
+            echo "Rewriting $slug"
             jq -nc --arg slug "$slug" '{action:"rewrite-story", slug:$slug}' > /tmp/request.json
+            : > /tmp/response.json
+            set +e
             code=$(curl -sS --max-time 300 -o /tmp/response.json -w '%{http_code}' \
               -X POST "$WORKER_ORIGIN/api/internal/tabloid-rollout" \
               -H "Authorization: Bearer $CRON_SECRET" \
               -H 'Content-Type: application/json' \
               --data-binary @/tmp/request.json)
+            curl_status=$?
+            set -e
+            if jq -e . /tmp/response.json > /dev/null 2>&1; then
+              response=$(jq -c . /tmp/response.json)
+            else
+              response=$(jq -Rs . /tmp/response.json)
+            fi
             jq -nc \
               --arg slug "$slug" \
               --arg code "$code" \
-              --slurpfile response /tmp/response.json \
-              '{slug:$slug,httpStatus:($code|tonumber),response:$response[0]}' >> /tmp/results.ndjson
+              --arg curlStatus "$curl_status" \
+              --argjson response "$response" \
+              '{slug:$slug,httpStatus:($code|tonumber),curlStatus:($curlStatus|tonumber),response:$response}' \
+              >> /tmp/results.ndjson
           done
           jq -s '.' /tmp/results.ndjson | tee /tmp/results.json
-          test "$(jq -s '[.[] | select(.httpStatus != 200 or .response.published != true)] | length' /tmp/results.ndjson)" = "0"
+          test "$(jq -s '[.[] | select(.httpStatus != 200 or .curlStatus != 0 or .response.published? != true)] | length' /tmp/results.ndjson)" = "0"
         env:
           PUBLIC_ORIGIN: https://magyarsportonline.hu
           WORKER_ORIGIN: https://magyarsportonline-web.footballinvestmentkft.workers.dev
