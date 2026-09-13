@@ -200,7 +200,9 @@ export async function ingestTabloid(repos: Repositories = createRepositories()) 
   if (!env.TABLOID_AUTO_PUBLISH) return { paused: true, llmCalls: 0 };
   const queueBefore = await repos.pipelineJobRepository.getStatusCounts();
   let budget = Math.max(0, 36 - queueBefore.pending - queueBefore.inProgress);
-  const ingestBudget = Math.min(12, budget);
+  // Full-page extraction is CPU-heavy on Workers. Four new pages per minute
+  // keeps the request bounded while the durable queue preserves throughput.
+  const ingestBudget = Math.min(4, budget);
   budget = ingestBudget;
   const sources = (await repos.sourceRepository.listActive())
     .filter(
@@ -257,34 +259,49 @@ export async function ingestTabloid(repos: Repositories = createRepositories()) 
               article.sourceUrl,
             );
             if (accepted) budget--;
-            const complete = accepted
-              ? await fetchCompleteTabloidArticle(article, config.url)
-              : article;
-            if (accepted && !complete) {
+            // Persist/deduplicate the cheap RSS row before fetching HTML. The
+            // old order repeatedly parsed full pages for rows already stored
+            // by the former filter and could exceed the Worker CPU budget.
+            const raw = await repos.rawArticleRepository.insertTabloid(
+              {
+                sourceId: source.id,
+                sourceUrl: article.sourceUrl,
+                titleOriginal: article.titleOriginal,
+                bodyOriginal: article.bodyOriginal,
+                subtitleOriginal: article.subtitleOriginal,
+                authorOriginal: article.authorOriginal,
+                imageUrl: article.imageUrl,
+                inlineImages: article.inlineImages ?? [],
+                language: source.language,
+                publishedAtSource: article.publishedAtSource,
+                contentOrigin: article.contentOrigin,
+                extractedEntities: { rssGuid: article.guid ?? article.sourceUrl },
+              },
+              false,
+            );
+            if (!accepted) continue;
+            if (!raw) {
+              budget++;
+              continue;
+            }
+            const complete = await fetchCompleteTabloidArticle(article, config.url);
+            if (!complete) {
               budget++;
               deferredWithoutFullArticle++;
               continue;
             }
-            const stored = complete!;
-            const raw = await repos.rawArticleRepository.insertTabloid(
-              {
-                sourceId: source.id,
-                sourceUrl: stored.sourceUrl,
-                titleOriginal: stored.titleOriginal,
-                bodyOriginal: stored.bodyOriginal,
-                subtitleOriginal: stored.subtitleOriginal,
-                authorOriginal: stored.authorOriginal,
-                imageUrl: stored.imageUrl,
-                inlineImages: stored.inlineImages ?? [],
-                language: source.language,
-                publishedAtSource: stored.publishedAtSource,
-                contentOrigin: stored.contentOrigin,
-                extractedEntities: { rssGuid: stored.guid ?? stored.sourceUrl },
-              },
-              accepted,
-            );
-            if (accepted && !raw) budget++;
-            if (accepted && raw) count++;
+            const queued = await repos.rawArticleRepository.upgradeAndEnqueueTabloid(raw.id, {
+              sourceUrl: complete.sourceUrl,
+              titleOriginal: complete.titleOriginal,
+              subtitleOriginal: complete.subtitleOriginal,
+              bodyOriginal: complete.bodyOriginal,
+              authorOriginal: complete.authorOriginal,
+              publishedAtSource: complete.publishedAtSource,
+              imageUrl: complete.imageUrl,
+              inlineImages: complete.inlineImages ?? [],
+            });
+            if (queued) count++;
+            else budget++;
           }
           await repos.sourceRepository.recordFetchResult(source.id, { status: "ok" });
           results.push({
@@ -310,7 +327,7 @@ export async function ingestTabloid(repos: Repositories = createRepositories()) 
   // Gradually recover complete articles that the former tabloid-only filter
   // stored but never queued. Full-page extraction happens before enqueueing,
   // so the writer never receives an RSS fragment.
-  const backfillLimit = Math.min(4, budget);
+  const backfillLimit = Math.min(2, budget);
   let backfilled = 0;
   let backfillDeferredWithoutFullArticle = 0;
   if (backfillLimit > 0) {

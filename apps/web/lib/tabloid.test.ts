@@ -174,6 +174,7 @@ describe("tabloid publication", () => {
     });
     mocks.fetchImages.mockResolvedValue({ primary: null, inlineImages: [] });
     const insert = vi.fn(async () => ({ id: "raw" }));
+    const upgradeAndEnqueue = vi.fn(async () => true);
     const repos = {
       pipelineJobRepository: { getStatusCounts: async () => ({ pending: 0, inProgress: 0 }) },
       sourceRepository: {
@@ -195,7 +196,7 @@ describe("tabloid publication", () => {
       rawArticleRepository: {
         insertTabloid: insert,
         listUnqueuedTabloidCandidates: vi.fn(async () => []),
-        upgradeAndEnqueueTabloid: vi.fn(),
+        upgradeAndEnqueueTabloid: upgradeAndEnqueue,
       },
     } as unknown as Repositories;
     await ingestTabloid(repos);
@@ -205,12 +206,19 @@ describe("tabloid publication", () => {
     );
     expect(insert).toHaveBeenCalledWith(
       expect.objectContaining({
-        titleOriginal: "accepted full title",
-        bodyOriginal: "Complete personal story from the source article page.",
-        contentOrigin: "full_article",
+        titleOriginal: "accepted",
+        bodyOriginal: "personal story",
         imageUrl: url,
       }),
-      true,
+      false,
+    );
+    expect(upgradeAndEnqueue).toHaveBeenCalledWith(
+      "raw",
+      expect.objectContaining({
+        titleOriginal: "accepted full title",
+        bodyOriginal: "Complete personal story from the source article page.",
+        imageUrl: url,
+      }),
     );
     expect(mocks.fetchImages).toHaveBeenCalledOnce();
     expect(mocks.fetchImages).toHaveBeenCalledWith(
@@ -230,7 +238,7 @@ describe("tabloid publication", () => {
         contentOrigin: "rss_snippet",
       },
     ]);
-    const insert = vi.fn();
+    const insert = vi.fn(async () => ({ id: "raw" }));
     const repos = {
       pipelineJobRepository: { getStatusCounts: async () => ({ pending: 0, inProgress: 0 }) },
       sourceRepository: {
@@ -258,12 +266,54 @@ describe("tabloid publication", () => {
 
     const result = await ingestTabloid(repos);
 
-    expect(insert).not.toHaveBeenCalled();
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ titleOriginal: "accepted" }),
+      false,
+    );
     if (!("results" in result)) throw new Error("expected ingest result");
     expect(result.results[0]).toMatchObject({
       ingestedCount: 0,
       deferredWithoutFullArticle: 1,
     });
+  });
+  it("does not fetch a full page again when the RSS row already exists", async () => {
+    mocks.fetchRss.mockResolvedValue([
+      {
+        titleOriginal: "existing match",
+        bodyOriginal: "football result",
+        sourceUrl: "https://publisher.test/existing",
+        publishedAtSource: new Date(),
+        imageUrl: null,
+      },
+    ]);
+    const repos = {
+      pipelineJobRepository: { getStatusCounts: async () => ({ pending: 0, inProgress: 0 }) },
+      sourceRepository: {
+        listActive: async () => [
+          {
+            id: "source-0",
+            name: "Publisher",
+            language: "en",
+            fetchConfig: {
+              tabloid: true,
+              footballFeed: true,
+              url: "https://publisher.test/feed",
+            },
+          },
+        ],
+        recordFetchResult: vi.fn(),
+      },
+      rawArticleRepository: {
+        insertTabloid: vi.fn(async () => null),
+        listUnqueuedTabloidCandidates: vi.fn(async () => []),
+        upgradeAndEnqueueTabloid: vi.fn(),
+      },
+    } as unknown as Repositories;
+
+    await ingestTabloid(repos);
+
+    expect(mocks.fetchFullArticle).not.toHaveBeenCalled();
+    expect(mocks.fetchImages).not.toHaveBeenCalled();
   });
   it("ingests only dated RSS items published after the activation watermark", async () => {
     const watermark = new Date("2026-09-12T19:00:00.000Z");
@@ -299,6 +349,7 @@ describe("tabloid publication", () => {
     });
     mocks.fetchImages.mockResolvedValue({ primary: null, inlineImages: [] });
     const insert = vi.fn(async () => ({ id: "raw" }));
+    const upgradeAndEnqueue = vi.fn(async () => true);
     const repos = {
       pipelineJobRepository: { getStatusCounts: async () => ({ pending: 0, inProgress: 0 }) },
       sourceRepository: {
@@ -321,14 +372,20 @@ describe("tabloid publication", () => {
       rawArticleRepository: {
         insertTabloid: insert,
         listUnqueuedTabloidCandidates: vi.fn(async () => []),
-        upgradeAndEnqueueTabloid: vi.fn(),
+        upgradeAndEnqueueTabloid: upgradeAndEnqueue,
       },
     } as unknown as Repositories;
 
     await ingestTabloid(repos);
 
     expect(insert).toHaveBeenCalledTimes(1);
-    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ titleOriginal: "new" }), true);
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ titleOriginal: "new" }), false);
+    expect(upgradeAndEnqueue).toHaveBeenCalledWith(
+      "raw",
+      expect.objectContaining({
+        bodyOriginal: "Complete personal football story from the source page.",
+      }),
+    );
   });
   it("upgrades and queues old football items rejected by the former filter", async () => {
     mocks.fetchRss.mockResolvedValue([]);
