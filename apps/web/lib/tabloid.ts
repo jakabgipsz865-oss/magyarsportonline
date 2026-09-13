@@ -37,6 +37,34 @@ export function mergeInlineImages(
     .slice(0, 8);
 }
 
+/** Rebuild the public row after source-image metadata changes, without an LLM call. */
+export async function refreshPublishedTabloidProjection(
+  storyId: string,
+  slug: string,
+  repos: Repositories = createRepositories(),
+) {
+  const version = await repos.storyVersionRepository.getLatestPublished(storyId);
+  if (!version) throw new Error("Published tabloid version missing");
+  await readModelProjector.handleStoryPublished(
+    {
+      storyRepository: repos.storyRepository,
+      storyVersionRepository: repos.storyVersionRepository,
+      storySourceRepository: repos.storySourceRepository,
+      storyCredibilityHistoryRepository: { listByStoryId: async () => [] },
+      storyReadModelRepository: repos.storyReadModelRepository,
+      logger: getLogger(),
+    },
+    {
+      ...createEventEnvelope({ correlationId: crypto.randomUUID() }),
+      type: "story/published",
+      payload: { story_id: storyId, story_version_id: version.id },
+    },
+  );
+  revalidatePath("/");
+  revalidatePath(`/hir/${slug}`);
+  return { storyId, versionId: version.id, slug, imagesRefreshed: true, llmCalls: 0 };
+}
+
 async function fetchCompleteTabloidArticle(
   article: sourceIngest.NormalizedArticle,
   publisherUrl: string,

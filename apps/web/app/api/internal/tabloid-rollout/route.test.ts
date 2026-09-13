@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   updateStoryStatus: vi.fn(),
   rejectStoryReviews: vi.fn(),
   deletePublicStory: vi.fn(),
+  refreshProjection: vi.fn(),
 }));
 vi.mock("@magyarsportonline/agents", () => ({
   sourceIngest: {
@@ -83,6 +84,7 @@ vi.mock("../../../../lib/tabloid", () => ({
       });
   },
   publishTabloid: mocks.writer,
+  refreshPublishedTabloidProjection: mocks.refreshProjection,
 }));
 vi.mock("../../../../lib/tabloid-sources.json", () => ({
   default: [
@@ -114,6 +116,7 @@ beforeEach(() => {
   mocks.fetchMedia.mockResolvedValue(null);
   mocks.fetchFullArticle.mockResolvedValue(null);
   mocks.fetchRss.mockResolvedValue([]);
+  mocks.refreshProjection.mockResolvedValue({ imagesRefreshed: true, llmCalls: 0 });
 });
 describe("rollout status", () => {
   it("reports every enabled source even immediately after it was fetched", async () => {
@@ -152,6 +155,42 @@ describe("failed article recovery", () => {
       "Kézi visszavonás: a cikk nem futballbulvár témájú.",
     );
     expect(mocks.deletePublicStory).toHaveBeenCalledWith("story");
+  });
+  it("replaces broken stored image candidates from a freshly inspected source page", async () => {
+    mocks.env.TABLOID_AUTO_PUBLISH = true;
+    mocks.getStoryBySlug.mockResolvedValue({ storyId: "story" });
+    mocks.listRaws.mockResolvedValue([
+      {
+        id: "raw",
+        sourceId,
+        storyId: "story",
+        sourceUrl: "https://publisher.test/story",
+        imageUrl: "https://cdn.publisher.test/hero.jpg",
+        inlineImages: [{ url: "https://publisher.test/truncated" }],
+      },
+    ]);
+    mocks.getSource.mockResolvedValue({ fetchConfig: { url: "https://publisher.test/feed" } });
+    mocks.fetchFullArticle.mockResolvedValue({ bodyOriginal: "Full article" });
+    mocks.fetchMedia.mockResolvedValue({
+      primary: null,
+      inlineImages: [{ url: "https://cdn.publisher.test/complete,photo.jpg" }],
+    });
+
+    const response = await POST(
+      request({ action: "refresh-story-images", slug: "published-story" }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.updateInlineImages).toHaveBeenCalledWith(
+      "raw",
+      [{ url: "https://cdn.publisher.test/complete,photo.jpg" }],
+      "https://cdn.publisher.test/hero.jpg",
+    );
+    expect(mocks.refreshProjection).toHaveBeenCalledWith(
+      "story",
+      "published-story",
+      expect.any(Object),
+    );
   });
   it("requires an already-linked article from the configured registry", async () => {
     mocks.env.TABLOID_AUTO_PUBLISH = true;

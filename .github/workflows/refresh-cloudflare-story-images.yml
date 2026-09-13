@@ -1,0 +1,49 @@
+name: Refresh one Cloudflare story's images
+
+on:
+  workflow_dispatch:
+    inputs:
+      story_slug:
+        description: Public story slug whose source images should be refreshed
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - name: Refresh the selected story images
+        run: |
+          jq -nc --arg slug "$STORY_SLUG" \
+            '{action:"refresh-story-images", slug:$slug}' > /tmp/request.json
+          code=$(curl -sS --max-time 60 -o /tmp/response.json -w '%{http_code}' \
+            -X POST "$APP_ORIGIN/api/internal/tabloid-rollout" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/request.json)
+          jq . /tmp/response.json
+          test "$code" = "200"
+          test "$(jq -r '.imagesRefreshed' /tmp/response.json)" = "true"
+          test "$(jq -r '.llmCalls' /tmp/response.json)" = "0"
+        env:
+          APP_ORIGIN: https://magyarsportonline-web.footballinvestmentkft.workers.dev
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          STORY_SLUG: ${{ inputs.story_slug }}
+
+      - name: Upload refresh evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudflare-story-images-${{ github.run_id }}
+          path: /tmp/response.json
+          if-no-files-found: ignore
+          retention-days: 30

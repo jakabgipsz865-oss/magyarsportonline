@@ -5,7 +5,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createRepositories } from "../../../../lib/db";
 import { env } from "../../../../lib/env";
-import { mergeInlineImages, publishTabloid } from "../../../../lib/tabloid";
+import {
+  mergeInlineImages,
+  publishTabloid,
+  refreshPublishedTabloidProjection,
+} from "../../../../lib/tabloid";
 import registry from "../../../../lib/tabloid-sources.json";
 
 export const maxDuration = 300;
@@ -19,6 +23,7 @@ const requestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("rewrite-article"), rawArticleId: z.string().uuid() }),
   z.object({ action: z.literal("rewrite-story"), slug: z.string().min(1).max(240) }),
   z.object({ action: z.literal("retract-story"), slug: z.string().min(1).max(240) }),
+  z.object({ action: z.literal("refresh-story-images"), slug: z.string().min(1).max(240) }),
   z.object({ action: z.literal("activate") }),
 ]);
 
@@ -141,6 +146,38 @@ export async function POST(request: NextRequest) {
       storyId: storyRow.storyId,
       slug: command.slug,
     });
+  }
+  if (command.action === "refresh-story-images") {
+    const storyRow = await repos.storyReadModelRepository.getBySlug(command.slug);
+    if (!storyRow)
+      return NextResponse.json({ error: "published tabloid story not found" }, { status: 404 });
+    const raw = (await repos.rawArticleRepository.listByStoryId(storyRow.storyId)).find((item) =>
+      registry.some((source) => source.id === item.sourceId),
+    );
+    if (!raw)
+      return NextResponse.json({ error: "recoverable tabloid article not found" }, { status: 404 });
+    const source = await repos.sourceRepository.getById(raw.sourceId);
+    const publisherUrl = (source?.fetchConfig as { url?: string } | undefined)?.url;
+    if (!publisherUrl)
+      return NextResponse.json({ error: "tabloid source unavailable" }, { status: 422 });
+    const page = await new sourceIngest.ArticleFetcher().fetchWithMedia(
+      raw.sourceUrl,
+      publisherUrl,
+    );
+    if (!page)
+      return NextResponse.json(
+        { error: "complete source page unavailable", rawArticleId: raw.id },
+        { status: 422 },
+      );
+    const inlineImages = mergeInlineImages(page.media.inlineImages);
+    await repos.rawArticleRepository.updateInlineImages(
+      raw.id,
+      inlineImages,
+      raw.imageUrl ?? page.media.primary?.url,
+    );
+    return NextResponse.json(
+      await refreshPublishedTabloidProjection(storyRow.storyId, command.slug, repos),
+    );
   }
   if (command.action === "retry-proof") {
     const raw = await repos.rawArticleRepository.findTabloidProof(
