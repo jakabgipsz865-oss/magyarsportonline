@@ -56,7 +56,7 @@ export function isFootballTabloid(
   )
     return false;
   const football =
-    /\b(football|soccer|futbol|futbolista\w*|calcio|calciator\w*|fussball\w*|bundesliga|premier league|champions league|la ?liga|serie a|fifa|uefa|real madrid|barcelona|liverpool|arsenal|manchester|juventus|bayern|dortmund|chelsea|tottenham|psg|atletico|inter milan|ac milan|as roma|napoli|ronaldo|messi|mbappe|haaland)\b/;
+    /\b(football|soccer|futbol|futbolista\w*|calcio|calciator\w*|fussball\w*|bundesliga|premier league|champions league|la ?liga|serie a|fifa|uefa|real madrid|barcelona|liverpool|arsenal|manchester|juventus|fc bayern|bayern munich|bayern munchen|bayern[- ](?:star|spieler|profi|trainer|coach|torwart|stuermer)|dortmund|chelsea|tottenham|psg|atletico|inter milan|ac milan|as roma|napoli|ronaldo|messi|mbappe|haaland)\b/;
   const footballRole =
     /\b(striker|goalkeeper|midfielder|defender|footballer|vestuario|spogliatoio|kabinen\w*|futbolista\w*|calciator\w*|torwart|stuermer)\b/;
   if (!football.test(text) && !(footballFeed && footballRole.test(text))) return false;

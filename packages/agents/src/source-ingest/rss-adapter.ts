@@ -80,7 +80,9 @@ function largestSrcsetUrl(value: string | undefined): string | null {
   if (!value) return null;
   return (
     value
-      .split(",")
+      // Preserve commas inside image URLs; srcset candidate separators carry
+      // following whitespace on the publisher feeds we accept.
+      .split(/,\s+(?=\S)/)
       .map((item) => {
         const [url, descriptor = ""] = item.trim().split(/\s+/, 2);
         const width = Number(descriptor.replace(/w$/, ""));

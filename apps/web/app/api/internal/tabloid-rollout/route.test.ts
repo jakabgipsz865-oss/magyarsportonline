@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => ({
   fetchMedia: vi.fn(),
   fetchRss: vi.fn(),
   writer: vi.fn(),
+  updateStoryStatus: vi.fn(),
+  rejectStoryReviews: vi.fn(),
+  deletePublicStory: vi.fn(),
 }));
 vi.mock("@magyarsportonline/agents", () => ({
   sourceIngest: {
@@ -42,6 +45,7 @@ vi.mock("@magyarsportonline/agents", () => ({
     isFootballTabloid: vi.fn(() => true),
   },
 }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("../../../../lib/env", () => ({ env: mocks.env }));
 vi.mock("../../../../lib/db", () => ({
   createRepositories: () => ({
@@ -59,7 +63,12 @@ vi.mock("../../../../lib/db", () => ({
       updateInlineImages: mocks.updateInlineImages,
     },
     storyVersionRepository: { getLatestPublished: mocks.latestPublished },
-    storyReadModelRepository: { getBySlug: mocks.getStoryBySlug },
+    storyReadModelRepository: {
+      getBySlug: mocks.getStoryBySlug,
+      deleteByStoryId: mocks.deletePublicStory,
+    },
+    storyRepository: { updateStatus: mocks.updateStoryStatus },
+    reviewQueueRepository: { rejectAllPendingForStory: mocks.rejectStoryReviews },
   }),
 }));
 vi.mock("../../../../lib/tabloid", () => ({
@@ -125,6 +134,25 @@ describe("rollout status", () => {
   });
 });
 describe("failed article recovery", () => {
+  it("retracts an unrelated published story by slug", async () => {
+    mocks.env.TABLOID_AUTO_PUBLISH = true;
+    mocks.getStoryBySlug.mockResolvedValue({ storyId: "story" });
+
+    const response = await POST(request({ action: "retract-story", slug: "unrelated-story" }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      retracted: true,
+      storyId: "story",
+      slug: "unrelated-story",
+    });
+    expect(mocks.updateStoryStatus).toHaveBeenCalledWith("story", "retracted");
+    expect(mocks.rejectStoryReviews).toHaveBeenCalledWith(
+      "story",
+      "Kézi visszavonás: a cikk nem futballbulvár témájú.",
+    );
+    expect(mocks.deletePublicStory).toHaveBeenCalledWith("story");
+  });
   it("requires an already-linked article from the configured registry", async () => {
     mocks.env.TABLOID_AUTO_PUBLISH = true;
     mocks.getRaw.mockResolvedValue({ id: "raw", sourceId, storyId: "story" });

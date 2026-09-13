@@ -147,7 +147,9 @@ export function imageFromHtml(html: string, articleUrl: string): RemoteImage | n
 function srcsetUrl(value: string | undefined): string | null {
   if (!value) return null;
   const candidates = value
-    .split(",")
+    // A URL may itself contain commas (BILD does this). Candidate separators
+    // in publisher srcsets are followed by whitespace.
+    .split(/,\s+(?=\S)/)
     .map((item) => {
       const [url, descriptor = ""] = item.trim().split(/\s+/, 2);
       const width = Number(descriptor.replace(/w$/, ""));

@@ -38,6 +38,7 @@ describe("precision-first football tabloid filter", () => {
     ["Hollywood star reveals divorce", false],
     ["Tennis star cries after nightclub arrest", false],
     ["Bayern-Star nach Streit festgenommen", true],
+    ["Filmreife Verfolgungsjagd in Bayern: Polizei schiesst auf Autodieb", false],
     ["La esposa del futbolista denuncia amenazas", true],
     ["Il calciatore in lacrime dopo il divorzio", true],
     ["Arsenal footballer apologises for viral Instagram video", true],

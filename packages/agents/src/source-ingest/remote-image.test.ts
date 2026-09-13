@@ -55,6 +55,15 @@ describe("remote image metadata only", () => {
       expect.objectContaining({ url: "https://cdn.publisher.test/lazy.jpg", alt: "Lazy photo" }),
     ]);
   });
+  it("preserves commas inside BILD srcset URLs", () => {
+    const media = articleMediaFromHtml(
+      '<article><p>Article text.<img src="https://images.bild.de/story/hash,photo?w=992" srcset="https://images.bild.de/story/hash,photo?w=656 656w, https://images.bild.de/story/hash,photo?w=992 992w" width="992" height="558"></p></article>',
+      "https://www.bild.de/story",
+    );
+    expect(media.inlineImages).toEqual([
+      expect.objectContaining({ url: "https://images.bild.de/story/hash,photo?w=992" }),
+    ]);
+  });
   it("does not extract paywalled metadata", () => {
     expect(
       imageFromHtml(

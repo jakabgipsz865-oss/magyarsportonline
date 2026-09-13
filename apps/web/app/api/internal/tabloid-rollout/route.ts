@@ -1,5 +1,6 @@
 import { sourceIngest, tabloid } from "@magyarsportonline/agents";
 import type { TabloidSourceMode } from "@magyarsportonline/shared";
+import { revalidatePath } from "next/cache";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createRepositories } from "../../../../lib/db";
@@ -17,6 +18,7 @@ const requestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("retry-article"), rawArticleId: z.string().uuid() }),
   z.object({ action: z.literal("rewrite-article"), rawArticleId: z.string().uuid() }),
   z.object({ action: z.literal("rewrite-story"), slug: z.string().min(1).max(240) }),
+  z.object({ action: z.literal("retract-story"), slug: z.string().min(1).max(240) }),
   z.object({ action: z.literal("activate") }),
 ]);
 
@@ -120,6 +122,24 @@ export async function POST(request: NextRequest) {
             .reduce((sum, source) => sum + source.feedUrls.length, 0),
         ]),
       ),
+    });
+  }
+  if (command.action === "retract-story") {
+    const storyRow = await repos.storyReadModelRepository.getBySlug(command.slug);
+    if (!storyRow)
+      return NextResponse.json({ error: "published tabloid story not found" }, { status: 404 });
+    await repos.storyRepository.updateStatus(storyRow.storyId, "retracted");
+    await repos.reviewQueueRepository.rejectAllPendingForStory(
+      storyRow.storyId,
+      "Kézi visszavonás: a cikk nem futballbulvár témájú.",
+    );
+    await repos.storyReadModelRepository.deleteByStoryId(storyRow.storyId);
+    revalidatePath("/");
+    revalidatePath(`/hir/${command.slug}`);
+    return NextResponse.json({
+      retracted: true,
+      storyId: storyRow.storyId,
+      slug: command.slug,
     });
   }
   if (command.action === "retry-proof") {
