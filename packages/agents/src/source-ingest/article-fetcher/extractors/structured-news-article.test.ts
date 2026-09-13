@@ -85,6 +85,24 @@ describe("structuredNewsArticleExtractor.extract", () => {
     expect(result?.bodyOriginal.length).toBeGreaterThan(700);
   });
 
+  it("prefers a longer semantic article body over a valid but truncated JSON-LD body", () => {
+    const truncated = ARTICLE_BODY.slice(0, 320);
+    const fullBody = `${ARTICLE_BODY}\n\n${ARTICLE_BODY} Additional confirmed context from the same report.`;
+    const html = `<html><head><script type="application/ld+json">${JSON.stringify({
+      "@type": "NewsArticle",
+      headline: "Liverpool complete dramatic comeback win",
+      articleBody: truncated,
+    })}</script></head><body><article><h1>Liverpool complete dramatic comeback win</h1><p>${fullBody.replace("\n\n", "</p><p>")}</p></article></body></html>`;
+
+    const result = structuredNewsArticleExtractor.extract(
+      html,
+      "https://okdiario.com/deportes/full-story",
+    );
+
+    expect(result?.bodyOriginal).toBe(fullBody);
+    expect(result?.bodyOriginal.length).toBeGreaterThan(truncated.length);
+  });
+
   it("does not extract valid-looking JSON-LD from a non-allowlisted domain", () => {
     const html = jsonLdHtml({
       "@type": "NewsArticle",

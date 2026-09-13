@@ -23,6 +23,13 @@ vi.mock("@magyarsportonline/agents", () => ({
   sourceIngest: {
     ArticleFetcher: class {
       fetch = mocks.fetchFullArticle;
+      fetchWithMedia = async (...args: unknown[]) => {
+        const [article, media] = await Promise.all([
+          mocks.fetchFullArticle(...args),
+          mocks.fetchMedia(...args),
+        ]);
+        return article && media ? { article, media } : null;
+      };
     },
     fetchArticleMedia: mocks.fetchMedia,
     RssSourceAdapter: class {

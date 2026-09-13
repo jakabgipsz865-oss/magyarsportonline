@@ -154,12 +154,14 @@ export const structuredNewsArticleExtractor: ArticleExtractor = {
           // Egy hibás JSON-LD blokk nem teszi használhatatlanná a többit.
         }
       });
+      const semantic = semanticArticle(html);
       return (
-        candidates
-          .map(toFetchedArticle)
-          .filter((article): article is FetchedArticle => article !== null)
-          .sort((left, right) => right.bodyOriginal.length - left.bodyOriginal.length)[0] ??
-        semanticArticle(html)
+        [
+          ...candidates
+            .map(toFetchedArticle)
+            .filter((article): article is FetchedArticle => article !== null),
+          ...(semantic ? [semantic] : []),
+        ].sort((left, right) => right.bodyOriginal.length - left.bodyOriginal.length)[0] ?? null
       );
     } catch {
       return null;

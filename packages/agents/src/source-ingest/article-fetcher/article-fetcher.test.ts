@@ -44,6 +44,18 @@ describe("ArticleFetcher", () => {
     });
   });
 
+  it("extracts article text and media from one HTML download", async () => {
+    const html = `<html><head><meta property="og:image" content="https://cdn.example.com/photo.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="675"></head><body><article><p>Article body.</p></article></body></html>`;
+    const htmlFetcher: HtmlFetcher = { fetch: vi.fn(async () => html) };
+    const fetcher = new ArticleFetcher(htmlFetcher, [fakeExtractor()]);
+
+    const result = await fetcher.fetchWithMedia("https://example.com/article-1");
+
+    expect(htmlFetcher.fetch).toHaveBeenCalledOnce();
+    expect(result?.article.titleOriginal).toBe("T");
+    expect(result?.media.primary?.url).toBe("https://cdn.example.com/photo.jpg");
+  });
+
   it("returns null when the extractor cannot find the expected structure", async () => {
     const htmlFetcher: HtmlFetcher = { fetch: vi.fn(async () => "<html>unexpected</html>") };
     const fetcher = new ArticleFetcher(htmlFetcher, [fakeExtractor({ extract: () => null })]);

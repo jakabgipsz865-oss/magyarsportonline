@@ -1,7 +1,8 @@
 import type { Logger } from "@magyarsportonline/observability";
 import { withRetry } from "../../shared/retry";
+import { articleMediaFromHtml, type PublisherArticleMedia } from "../remote-image";
 import { ARTICLE_EXTRACTORS } from "./extractors/index";
-import type { ArticleExtractor, FetchedArticle, HtmlFetcher } from "./types";
+import type { ArticleExtractor, FetchedArticle, FetchedArticlePage, HtmlFetcher } from "./types";
 
 const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (compatible; MagyarSportOnlineBot/1.0; +https://magyarsportonline.hu)";
@@ -49,6 +50,24 @@ export class ArticleFetcher {
   ) {}
 
   async fetch(url: string): Promise<FetchedArticle | null> {
+    return (await this.fetchPage(url))?.article ?? null;
+  }
+
+  /** Extract text and media from one source-page download. */
+  async fetchWithMedia(
+    url: string,
+    _publisherUrl?: string,
+  ): Promise<{ article: FetchedArticle; media: PublisherArticleMedia } | null> {
+    const page = await this.fetchPage(url);
+    if (!page) return null;
+    return {
+      article: page.article,
+      media: articleMediaFromHtml(page.html, page.articleUrl),
+    };
+  }
+
+  /** Return the extracted article together with the exact HTML used for it. */
+  async fetchPage(url: string): Promise<FetchedArticlePage | null> {
     const extractor = this.extractors.find((candidate) => candidate.supports(url));
     if (!extractor) {
       return null;
@@ -64,7 +83,11 @@ export class ArticleFetcher {
           });
           const resolvedResult = extractor.extract(resolvedHtml, resolvedUrl);
           if (resolvedResult) {
-            return { ...resolvedResult, resolvedUrl };
+            return {
+              article: { ...resolvedResult, resolvedUrl },
+              html: resolvedHtml,
+              articleUrl: resolvedUrl,
+            };
           }
         } catch (error) {
           this.logger?.warn(
@@ -85,7 +108,7 @@ export class ArticleFetcher {
           "article extractor found no matching structure, falling back to RSS snippet",
         );
       }
-      return result;
+      return result ? { article: result, html, articleUrl: url } : null;
     } catch (error) {
       this.logger?.warn(
         {

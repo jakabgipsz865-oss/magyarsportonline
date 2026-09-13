@@ -41,13 +41,12 @@ async function fetchCompleteTabloidArticle(
   article: sourceIngest.NormalizedArticle,
   publisherUrl: string,
 ): Promise<sourceIngest.NormalizedArticle | null> {
-  const [fetched, pageMedia] = await Promise.all([
-    new sourceIngest.ArticleFetcher().fetch(article.sourceUrl),
-    sourceIngest.fetchArticleMedia(article.sourceUrl, publisherUrl),
-  ]);
-  // `null` means the page could not be inspected. An empty media object is
-  // valid and proves that the source page was checked but contains no usable image.
-  if (!fetched || !pageMedia) return null;
+  const page = await new sourceIngest.ArticleFetcher().fetchWithMedia(
+    article.sourceUrl,
+    publisherUrl,
+  );
+  if (!page) return null;
+  const { article: fetched, media: pageMedia } = page;
   const image = article.image ?? pageMedia?.primary ?? null;
   return {
     ...article,

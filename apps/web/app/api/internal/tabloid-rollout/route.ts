@@ -161,10 +161,12 @@ export async function POST(request: NextRequest) {
         const rssArticle = feeds
           .flatMap((result) => (result.status === "fulfilled" ? result.value : []))
           .find((article) => article.sourceUrl === raw.sourceUrl);
-        const [fullArticle, pageMedia] = await Promise.all([
-          new sourceIngest.ArticleFetcher().fetch(raw.sourceUrl),
-          sourceIngest.fetchArticleMedia(raw.sourceUrl, config.url),
-        ]);
+        const page = await new sourceIngest.ArticleFetcher().fetchWithMedia(
+          raw.sourceUrl,
+          config.url,
+        );
+        const fullArticle = page?.article ?? null;
+        const pageMedia = page?.media ?? null;
         const inlineImages = mergeInlineImages(
           raw.inlineImages,
           rssArticle?.inlineImages,

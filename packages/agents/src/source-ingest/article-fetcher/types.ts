@@ -19,6 +19,13 @@ export interface FetchedArticle {
   resolvedUrl?: string;
 }
 
+/** One successfully downloaded source page and the article extracted from that same HTML. */
+export interface FetchedArticlePage {
+  article: FetchedArticle;
+  html: string;
+  articleUrl: string;
+}
+
 /**
  * Egy konkrét forráshoz (pl. BBC Sport) igazított kinyerő. Minden
  * extractor a saját, ismert HTML-szerkezetéhez van kötve — ez SZÁNDÉKOSAN
