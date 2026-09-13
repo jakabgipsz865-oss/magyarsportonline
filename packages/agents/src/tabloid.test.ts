@@ -116,7 +116,7 @@ describe("one-call Hungarian writer", () => {
     expect((await writeTabloid(llm, input)).body_hu).toContain("családjáról");
     expect(llm.completeJson).toHaveBeenCalledTimes(1);
     expect(llm.completeJson).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "gemini-3.5-flash", thinkingLevel: "medium" }),
+      expect.objectContaining({ model: "gemini-3.5-flash", thinkingLevel: "low" }),
     );
     expect(llm.completeText).not.toHaveBeenCalled();
   });
