@@ -2,6 +2,7 @@ export * from "./budget-guard";
 export * from "./client";
 export * from "./daily-request-cap";
 export * from "./cloudflare-client";
+export * from "./conditional-fallback-client";
 export * from "./fake-client";
 export * from "./gemini-client";
 export * from "./model-router";

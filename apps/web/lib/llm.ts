@@ -1,5 +1,6 @@
 import {
   CloudflareWorkersAiLlmClient,
+  ConditionalFallbackLlmClient,
   DailyRequestCappedLlmClient,
   GeminiLlmClient,
   NoLlmClient,
@@ -8,6 +9,8 @@ import {
   describeGeminiError,
   estimateCloudflareCostUsd,
   isGeminiDefinitelyUnmeteredError,
+  isDailyLlmQuotaError,
+  isGeminiDailyQuotaError,
   type LlmClient,
 } from "@magyarsportonline/llm";
 import { createRepositories } from "./db";
@@ -21,10 +24,8 @@ let cachedWriterClient: LlmClient | undefined;
  * `LLM_PROVIDER=none` is an explicit local-development/test mode. Production
  * defaults to Cloudflare and must fail loudly if its credentials are missing.
  *
- * `LLM_PROVIDER=cloudflare` is the only production path. The wrapper records
- * usage but is deliberately fail-closed: quota, network, HTTP, JSON, and
- * schema failures are rethrown to the durable queue. It never creates a
- * schema-valid No-LLM article and never switches to another AI provider.
+ * `LLM_PROVIDER=cloudflare` is the production Fact path. The wrapper records
+ * usage and fails closed on provider or schema errors.
  */
 export function getFactLlmClient(): LlmClient {
   if (cachedFactClient) {
@@ -78,12 +79,38 @@ export function getWriterLlmClient(): LlmClient {
     logger: getLogger(),
     failClosed: true,
   });
-  cachedWriterClient = new DailyRequestCappedLlmClient(
+  // Preserve Gemini's stronger Hungarian output while its free 20-request
+  // allocation is available, then continue on the configured Workers AI
+  // model. Both real providers fail closed on invalid output.
+  const cappedGemini = new DailyRequestCappedLlmClient(
     metered,
     "gemini",
-    Math.min(450, env.GEMINI_DAILY_REQUEST_CAP),
+    Math.min(20, env.GEMINI_DAILY_REQUEST_CAP),
     repos.llmUsageRepository,
     isGeminiDefinitelyUnmeteredError,
+  );
+  if (!env.CLOUDFLARE_ACCOUNT_ID || !env.WORKERS_AI_API_TOKEN) {
+    cachedWriterClient = cappedGemini;
+    return cachedWriterClient;
+  }
+  const cloudflare = new ProviderFallbackLlmClient({
+    inner: new CloudflareWorkersAiLlmClient({
+      accountId: env.CLOUDFLARE_ACCOUNT_ID,
+      apiToken: env.WORKERS_AI_API_TOKEN,
+      model: env.CLOUDFLARE_AI_MODEL,
+    }),
+    fallback: new NoLlmClient(),
+    providerName: "cloudflare",
+    usageSink: repos.llmUsageRepository,
+    estimateCostUsd: estimateCloudflareCostUsd,
+    describeError: describeCloudflareError,
+    logger: getLogger(),
+    failClosed: true,
+  });
+  cachedWriterClient = new ConditionalFallbackLlmClient(
+    cappedGemini,
+    cloudflare,
+    (error) => isDailyLlmQuotaError(error) || isGeminiDailyQuotaError(error),
   );
   return cachedWriterClient;
 }

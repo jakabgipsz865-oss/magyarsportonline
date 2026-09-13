@@ -180,11 +180,7 @@ function assertRequiredFields(data: unknown, jsonSchema: Record<string, unknown>
 
 /**
  * Raw HTTP-alapú Cloudflare Workers AI kliens (nincs `@cloudflare/...`
- * SDK-függőség) — a Vercelről közvetlenül hívja a Workers AI
- * OpenAI-kompatibilis `/ai/v1/chat/completions` végpontját. NEM Cloudflare
- * Workerre települve fut, nincs Workers-deploy — csak egy plusz kimenő
- * HTTP-hívás a meglévő Vercel serverless függvényből
- * (docs/infrastructure-setup.md).
+ * SDK-függőség). A webalkalmazás Workeréből hívja a Workers AI REST API-t.
  *
  * Az OpenAI-kompatibilis végpontot választottuk a natív `/ai/run/{model}`
  * helyett: a válasz alakja (`choices[].message.content`,
@@ -232,6 +228,7 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
       text: extractText(response),
       inputTokens: response.usage?.prompt_tokens ?? 0,
       outputTokens: response.usage?.completion_tokens ?? 0,
+      modelLabel: this.modelForRequest(request.model),
     };
   }
 
@@ -255,6 +252,7 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
       data,
       inputTokens: response.result?.usage?.prompt_tokens ?? 0,
       outputTokens: response.result?.usage?.completion_tokens ?? 0,
+      modelLabel: this.modelForRequest(request.model),
     };
   }
 

@@ -73,7 +73,12 @@ describe("CloudflareWorkersAiLlmClient", () => {
       fetchImpl,
     });
     const result = await client.completeText(textRequest);
-    expect(result).toEqual({ text: "válasz", inputTokens: 10, outputTokens: 5 });
+    expect(result).toEqual({
+      text: "válasz",
+      inputTokens: 10,
+      outputTokens: 5,
+      modelLabel: FAST_CLOUDFLARE_MODEL,
+    });
   });
 
   it("routes extraction to 70B while self-check stays on 8B", async () => {

@@ -151,6 +151,7 @@ export class GeminiLlmClient implements LlmClient {
       text: extractText(response),
       inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
       outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
+      modelLabel: this.model,
     };
   }
 
@@ -199,6 +200,7 @@ export class GeminiLlmClient implements LlmClient {
       data,
       inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
       outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
+      modelLabel: this.model,
     };
   }
 

@@ -38,7 +38,12 @@ describe("GeminiLlmClient", () => {
     });
     const client = new GeminiLlmClient({ apiKey: "key", model: "gemini-custom-model", fetchImpl });
     const result = await client.completeText(textRequest);
-    expect(result).toEqual({ text: "válasz", inputTokens: 10, outputTokens: 5 });
+    expect(result).toEqual({
+      text: "válasz",
+      inputTokens: 10,
+      outputTokens: 5,
+      modelLabel: "gemini-custom-model",
+    });
     expect(client.modelLabel).toBe("gemini-custom-model");
   });
 

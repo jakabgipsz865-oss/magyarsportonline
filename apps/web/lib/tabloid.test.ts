@@ -58,6 +58,7 @@ function fixtures() {
         language: "en",
         sourceUrl: "https://example.com/same",
         imageUrl: null,
+        contentOrigin: "full_article",
         publishedAtSource: null,
         ingestedAt: new Date("2026-09-11T00:00:00Z"),
       },
@@ -77,12 +78,18 @@ function fixtures() {
         return true;
       },
       releaseTabloidQuotaDeferral: vi.fn(async (id: string) => attempts.delete(id)),
+      upgradeFromFullArticle: vi.fn(async (id: string, data: Record<string, unknown>) => {
+        const raw = raws.get(id);
+        if (!raw) return false;
+        Object.assign(raw, data, { contentOrigin: "full_article" });
+        return true;
+      }),
     },
     sourceRepository: {
       getById: (id: string) => ({
         id,
         name: "Source",
-        fetchConfig: { tabloid: true, footballFeed: true },
+        fetchConfig: { tabloid: true, footballFeed: true, url: "https://example.com/feed" },
       }),
     },
     storyRepository: {
@@ -106,7 +113,7 @@ function fixtures() {
     },
     storyReadModelRepository: {},
   } as unknown as Repositories;
-  return { repos, versions, stories };
+  return { repos, raws, versions, stories };
 }
 
 describe("tabloid publication", () => {
@@ -453,6 +460,32 @@ describe("tabloid publication", () => {
     await publishTabloid("two", repos);
     expect(stories.size).toBe(2);
     expect(mocks.write).toHaveBeenCalledTimes(2);
+  });
+  it("upgrades a legacy queued RSS fragment before the writer can publish it", async () => {
+    const { repos, raws } = fixtures();
+    Object.assign(raws.get("one")!, {
+      contentOrigin: "rss_snippet",
+      bodyOriginal: "Short RSS fragment",
+    });
+    mocks.fetchFullArticle.mockResolvedValue({
+      titleOriginal: "Complete title",
+      subtitleOriginal: null,
+      bodyOriginal: "Complete article body from the publisher page.",
+      authorOriginal: "Reporter",
+      publishedAtSource: new Date(),
+    });
+    mocks.fetchImages.mockResolvedValue({
+      primary: null,
+      inlineImages: [{ url: "https://example.com/complete.jpg" }],
+    });
+
+    await publishTabloid("one", repos);
+
+    expect(repos.rawArticleRepository.upgradeFromFullArticle).toHaveBeenCalledOnce();
+    expect(mocks.write).toHaveBeenCalledWith(
+      mocks.llm,
+      expect.objectContaining({ content: "Complete article body from the publisher page." }),
+    );
   });
   it("resumes projection failure from the persisted version without a second writer call", async () => {
     const { repos, versions } = fixtures();

@@ -87,7 +87,7 @@ export async function publishTabloid(
 ) {
   if (!env.TABLOID_AUTO_PUBLISH) return { paused: true, llmCalls: 0 };
   return repos.rawArticleRepository.withTabloidLock(rawId, async () => {
-    const raw = await repos.rawArticleRepository.getById(rawId);
+    let raw = await repos.rawArticleRepository.getById(rawId);
     if (!raw) throw new Error("Tabloid source article missing");
     const source = await repos.sourceRepository.getById(raw.sourceId);
     if (!source) throw new Error("Tabloid source missing");
@@ -95,9 +95,33 @@ export async function publishTabloid(
       tabloid?: boolean;
       footballFeed?: boolean;
       mode?: TabloidSourceMode;
+      url?: string;
     };
     if (!registry.some((item) => item.id === source.id))
       return { skipped: true, reason: "source-not-in-tabloid-registry" };
+    // Legacy jobs may have been queued before full-page extraction became
+    // mandatory. Upgrade them here so an RSS fragment can never be published.
+    if (raw.contentOrigin !== "full_article") {
+      if (!config.url) throw new Error("Tabloid source page configuration is missing");
+      const page = await new sourceIngest.ArticleFetcher().fetchWithMedia(
+        raw.sourceUrl,
+        config.url,
+      );
+      if (!page) throw new Error("Complete tabloid source page unavailable");
+      await repos.rawArticleRepository.upgradeFromFullArticle(raw.id, {
+        sourceUrl: raw.sourceUrl,
+        titleOriginal: page.article.titleOriginal || raw.titleOriginal,
+        subtitleOriginal: page.article.subtitleOriginal,
+        bodyOriginal: page.article.bodyOriginal,
+        authorOriginal: page.article.authorOriginal,
+        publishedAtSource: page.article.publishedAtSource ?? raw.publishedAtSource,
+        imageUrl: raw.imageUrl ?? page.media.primary?.url ?? null,
+        inlineImages: mergeInlineImages(page.media.inlineImages),
+      });
+      raw = await repos.rawArticleRepository.getById(raw.id);
+      if (!raw || raw.contentOrigin !== "full_article")
+        throw new Error("Tabloid source article could not be upgraded to a full article");
+    }
     if (!options.forceRewrite) {
       if (raw.ingestedAt < new Date(TABLOID_PUBLIC_START))
         return { skipped: true, reason: "before-public-start" };
@@ -155,7 +179,7 @@ export async function publishTabloid(
         changeSummaryHu: version
           ? "A forrás részletesebb feldolgozása és a forrásképek beágyazása."
           : null,
-        generatedByModel: tabloid.TABLOID_MODEL,
+        generatedByModel: result.generatedByModel,
         isAiGenerated: true,
         promptVersion: tabloid.TABLOID_PROMPT,
         // Legacy columns retained for schema compatibility, never used as gates.

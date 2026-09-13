@@ -42,7 +42,8 @@ const BUDGET_MS = 35_000; // short admission window: one slow LLM stage per work
 const STALE_LOCK_MS = 10 * 60_000; // an in_progress job locked longer than this is presumed abandoned
 const BASE_BACKOFF_MS = 30_000;
 const MAX_BACKOFF_MS = 30 * 60_000;
-const DAILY_AI_QUOTA_ERROR_PREFIX = "[daily_ai_quota]";
+const CLOUDFLARE_DAILY_QUOTA_ERROR_PREFIX = "[daily_ai_quota:cloudflare]";
+const GEMINI_DAILY_QUOTA_ERROR_PREFIX = "[daily_ai_quota:gemini]";
 
 /** Exponential backoff, capped — `attempts` is already post-increment (claimBatch increments it), so attempt 1 -> 30s, 2 -> 1min, 3 -> 2min, ... */
 function backoffFor(attempts: number): number {
@@ -63,7 +64,7 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
   const logger = getLogger();
   const deadline = Date.now() + BUDGET_MS;
   const activeQuotaDeferral = await repos.pipelineJobRepository.findActiveDeferral(
-    DAILY_AI_QUOTA_ERROR_PREFIX,
+    CLOUDFLARE_DAILY_QUOTA_ERROR_PREFIX,
   );
   if (activeQuotaDeferral) {
     const queue = await repos.pipelineJobRepository.getStatusCounts();
@@ -119,7 +120,7 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
         quotaRetryAt = new Date(now.getTime() + delayMs).toISOString();
         await repos.pipelineJobRepository.deferWithoutAttempt(
           job.id,
-          `${DAILY_AI_QUOTA_ERROR_PREFIX} ${message}`,
+          `${isGeminiQuota ? GEMINI_DAILY_QUOTA_ERROR_PREFIX : CLOUDFLARE_DAILY_QUOTA_ERROR_PREFIX} ${message}`,
           delayMs,
         );
         quotaDeferred = true;

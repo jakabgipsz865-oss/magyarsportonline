@@ -59,7 +59,7 @@ export class ProviderFallbackLlmClient implements LlmClient {
   async completeText(request: TextCompletionRequest): Promise<TextCompletionResult> {
     try {
       const result = await this.options.inner.completeText(request);
-      await this.recordUsage(result.inputTokens, result.outputTokens);
+      await this.recordUsage(result.inputTokens, result.outputTokens, result.modelLabel);
       return result;
     } catch (error) {
       const reason = this.logProviderFailure(error);
@@ -74,7 +74,7 @@ export class ProviderFallbackLlmClient implements LlmClient {
   async completeJson(request: JsonCompletionRequest): Promise<JsonCompletionResult> {
     try {
       const result = await this.options.inner.completeJson(request);
-      await this.recordUsage(result.inputTokens, result.outputTokens);
+      await this.recordUsage(result.inputTokens, result.outputTokens, result.modelLabel);
       return result;
     } catch (error) {
       const reason = this.logProviderFailure(error);
@@ -101,11 +101,15 @@ export class ProviderFallbackLlmClient implements LlmClient {
     return reason;
   }
 
-  private async recordUsage(inputTokens: number, outputTokens: number): Promise<void> {
+  private async recordUsage(
+    inputTokens: number,
+    outputTokens: number,
+    resultModelLabel?: string,
+  ): Promise<void> {
     if (!this.options.usageSink) {
       return;
     }
-    const model = this.options.inner.modelLabel ?? "unknown";
+    const model = resultModelLabel ?? this.options.inner.modelLabel ?? "unknown";
     const costUsd = this.options.estimateCostUsd?.(model, inputTokens, outputTokens) ?? 0;
     try {
       await this.options.usageSink.insert({

@@ -105,7 +105,11 @@ export async function writeTabloid(
   });
   if (result.isFallback) throw new Error("Tabloid writer returned a fallback");
   const parsed = tabloidOutputSchema.parse(result.data);
-  const output = { ...parsed, body_hu: paragraphizeBody(parsed.body_hu) };
+  const output = {
+    ...parsed,
+    body_hu: paragraphizeBody(parsed.body_hu),
+    generatedByModel: result.modelLabel ?? llm.modelLabel ?? TABLOID_MODEL,
+  };
   const sourceCharacters = input.content.replace(/\s+/g, " ").trim().length;
   const outputCharacters = output.body_hu.replace(/\s+/g, " ").trim().length;
   const outputParagraphs = output.body_hu.split(/\n\s*\n/).filter(Boolean).length;
