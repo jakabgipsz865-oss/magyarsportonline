@@ -24,6 +24,7 @@ function row(overrides?: Partial<StoryReadModelRow>): StoryReadModelRow {
     isDeveloping: false,
     isAiGenerated: true,
     imageUrl: null,
+    inlineImages: [],
     publishedAt: new Date("2026-07-27T21:00:00.000Z"),
     lastUpdatedAt: new Date("2026-07-27T21:05:00.000Z"),
     versionHistorySummary: [
@@ -110,6 +111,7 @@ describe("toStoryDetailView", () => {
   it("includes sources and version history alongside the summary fields", () => {
     const result = toStoryDetailView(row());
     expect(result.bodyHtml).toBe("<p>Törzs.</p>");
+    expect(result.inlineImages).toEqual([]);
     expect(result.sources).toEqual([
       {
         name: "BBC Sport - Football",
@@ -124,6 +126,24 @@ describe("toStoryDetailView", () => {
         changeSummary: null,
       },
     ]);
+  });
+
+  it("returns valid attributed source images and drops an unsafe image list", () => {
+    const valid = {
+      url: "https://cdn.example.com/image.jpg",
+      alt: "Kép",
+      caption: null,
+      credit: null,
+      width: 1200,
+      height: 800,
+      sourceName: "Example",
+      sourceUrl: "https://example.com/story",
+    };
+    expect(toStoryDetailView(row({ inlineImages: [valid] })).inlineImages).toEqual([valid]);
+    expect(
+      toStoryDetailView(row({ inlineImages: [{ ...valid, url: "javascript:alert(1)" }] }))
+        .inlineImages,
+    ).toEqual([]);
   });
 
   it("drops malformed source entries instead of throwing", () => {

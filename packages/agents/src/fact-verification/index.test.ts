@@ -49,6 +49,7 @@ function rawArticle(overrides: Partial<Record<string, unknown>>) {
     publishedAtSource: null,
     ingestedAt: new Date("2026-07-27T20:00:00.000Z"),
     imageUrl: null,
+    inlineImages: [],
     ...overrides,
   };
 }

@@ -16,7 +16,7 @@ export const PROJECTOR_VERSION = "read-model-projector@0.1.0";
 export interface ReadModelProjectorDeps {
   storyRepository: Pick<StoryRepository, "getById">;
   storyVersionRepository: Pick<StoryVersionRepository, "listByStoryId">;
-  storySourceRepository: Pick<StorySourceRepository, "summaryByStoryId">;
+  storySourceRepository: Pick<StorySourceRepository, "summaryByStoryId" | "inlineImagesByStoryId">;
   storyCredibilityHistoryRepository: Pick<StoryCredibilityHistoryRepository, "listByStoryId">;
   storyReadModelRepository: Pick<StoryReadModelRepository, "upsert">;
   logger: Logger;
@@ -62,6 +62,7 @@ export async function handleStoryPublished(
   }
 
   const sourcesSummary = await deps.storySourceRepository.summaryByStoryId(story.id);
+  const inlineImages = await deps.storySourceRepository.inlineImagesByStoryId(story.id);
   const versionHistorySummary = versions
     .filter((version) => version.isPublished)
     .map((version) => ({
@@ -122,6 +123,7 @@ export async function handleStoryPublished(
     leadHu: publishedVersion.leadHu,
     bodyHtml: toBodyHtml(publishedVersion.bodyHu),
     imageUrl: story.imageUrl,
+    inlineImages,
     isAiGenerated: publishedVersion.isAiGenerated,
     metaDescription: publishedVersion.metaDescription,
     structuredData: publishedVersion.structuredData,

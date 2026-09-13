@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "../client";
 import { pipelineJobs, rawArticles } from "../schema/index";
+import type { SourceInlineImage } from "@magyarsportonline/shared";
 
 export type RawArticle = typeof rawArticles.$inferSelect;
 export type NewRawArticle = typeof rawArticles.$inferInsert;
@@ -82,6 +83,17 @@ export class RawArticleRepository {
       .where(eq(rawArticles.id, id));
   }
 
+  async updateInlineImages(
+    id: string,
+    inlineImages: SourceInlineImage[],
+    imageUrl?: string | null,
+  ): Promise<void> {
+    await this.db
+      .update(rawArticles)
+      .set({ inlineImages, ...(imageUrl ? { imageUrl } : {}) })
+      .where(eq(rawArticles.id, id));
+  }
+
   async getContentHealth(): Promise<{
     total: number;
     fullArticle: number;
@@ -141,6 +153,7 @@ export class RawArticleRepository {
       | "authorOriginal"
       | "publishedAtSource"
       | "imageUrl"
+      | "inlineImages"
     >,
   ): Promise<boolean> {
     const rows = await this.db
@@ -163,6 +176,7 @@ export class RawArticleRepository {
       | "authorOriginal"
       | "publishedAtSource"
       | "imageUrl"
+      | "inlineImages"
     >,
   ): Promise<boolean> {
     const rows = await this.db

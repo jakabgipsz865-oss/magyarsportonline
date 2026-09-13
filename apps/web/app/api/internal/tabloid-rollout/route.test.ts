@@ -9,7 +9,26 @@ const mocks = vi.hoisted(() => ({
   findProof: vi.fn(),
   latestPublished: vi.fn(),
   getRaw: vi.fn(),
+  listRaws: vi.fn(),
+  getStoryBySlug: vi.fn(),
+  getSource: vi.fn(),
+  updateInlineImages: vi.fn(),
+  fetchMedia: vi.fn(),
+  fetchRss: vi.fn(),
   writer: vi.fn(),
+}));
+vi.mock("@magyarsportonline/agents", () => ({
+  sourceIngest: {
+    fetchArticleMedia: mocks.fetchMedia,
+    RssSourceAdapter: class {
+      fetch = mocks.fetchRss;
+    },
+  },
+  tabloid: {
+    TABLOID_MODEL: "gemini-3.5-flash-lite",
+    TABLOID_PROMPT: "tabloid-hu@2",
+    isFootballTabloid: vi.fn(() => true),
+  },
 }));
 vi.mock("../../../../lib/env", () => ({ env: mocks.env }));
 vi.mock("../../../../lib/db", () => ({
@@ -18,12 +37,31 @@ vi.mock("../../../../lib/db", () => ({
       pauseTabloidSources: mocks.pause,
       registerTabloidSource: mocks.register,
       listAll: mocks.listAll,
+      getById: mocks.getSource,
     },
-    rawArticleRepository: { findTabloidProof: mocks.findProof, getById: mocks.getRaw },
+    rawArticleRepository: {
+      findTabloidProof: mocks.findProof,
+      getById: mocks.getRaw,
+      listByStoryId: mocks.listRaws,
+      updateInlineImages: mocks.updateInlineImages,
+    },
     storyVersionRepository: { getLatestPublished: mocks.latestPublished },
+    storyReadModelRepository: { getBySlug: mocks.getStoryBySlug },
   }),
 }));
-vi.mock("../../../../lib/tabloid", () => ({ publishTabloid: mocks.writer }));
+vi.mock("../../../../lib/tabloid", () => ({
+  mergeInlineImages: (...groups: Array<Array<{ url: string }> | undefined>) => {
+    const seen = new Set<string>();
+    return groups
+      .flatMap((group) => group ?? [])
+      .filter((image) => {
+        if (seen.has(image.url)) return false;
+        seen.add(image.url);
+        return true;
+      });
+  },
+  publishTabloid: mocks.writer,
+}));
 vi.mock("../../../../lib/tabloid-sources.json", () => ({
   default: [
     {
@@ -48,6 +86,11 @@ beforeEach(() => {
   mocks.findProof.mockResolvedValue(null);
   mocks.latestPublished.mockResolvedValue(null);
   mocks.getRaw.mockResolvedValue(null);
+  mocks.listRaws.mockResolvedValue([]);
+  mocks.getStoryBySlug.mockResolvedValue(null);
+  mocks.getSource.mockResolvedValue(null);
+  mocks.fetchMedia.mockResolvedValue(null);
+  mocks.fetchRss.mockResolvedValue([]);
 });
 describe("rollout status", () => {
   it("reports every enabled source even immediately after it was fetched", async () => {
@@ -80,6 +123,49 @@ describe("failed article recovery", () => {
     expect(response.status).toBe(200);
     expect(mocks.writer).toHaveBeenCalledWith("raw", expect.any(Object), {
       retryFailedWriter: true,
+    });
+  });
+
+  it("refreshes source images and creates a new Gemini version by public slug", async () => {
+    const sourceImage = {
+      url: "https://cdn.example.test/source.jpg",
+      alt: "Source photo",
+      caption: null,
+      credit: null,
+      width: 1200,
+      height: 800,
+    };
+    mocks.env.TABLOID_AUTO_PUBLISH = true;
+    mocks.getStoryBySlug.mockResolvedValue({ storyId: "story" });
+    mocks.listRaws.mockResolvedValue([
+      {
+        id: "raw",
+        sourceId,
+        storyId: "story",
+        sourceUrl: "https://publisher.test/story",
+        imageUrl: null,
+        inlineImages: [],
+      },
+    ]);
+    mocks.getSource.mockResolvedValue({
+      fetchConfig: { url: "https://publisher.test/feed" },
+    });
+    mocks.fetchRss.mockResolvedValue([
+      {
+        sourceUrl: "https://publisher.test/story",
+        imageUrl: sourceImage.url,
+        inlineImages: [sourceImage],
+      },
+    ]);
+    mocks.writer.mockResolvedValue({ published: true, model: "gemini-3.5-flash-lite" });
+
+    const response = await POST(request({ action: "rewrite-story", slug: "public-story" }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.updateInlineImages).toHaveBeenCalledWith("raw", [sourceImage], sourceImage.url);
+    expect(mocks.writer).toHaveBeenCalledWith("raw", expect.any(Object), {
+      retryFailedWriter: true,
+      forceRewrite: true,
     });
   });
 });

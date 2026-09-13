@@ -31,8 +31,33 @@ describe("RssSourceAdapter", () => {
         authorOriginal: null,
         publishedAtSource: new Date("2026-07-27T10:00:00.000Z"),
         imageUrl: null,
+        inlineImages: [],
         contentOrigin: "rss_snippet",
       },
+    ]);
+  });
+
+  it("keeps ordered source-body images as remote embeds", async () => {
+    const adapter = new RssSourceAdapter({
+      parseURL: async () => ({
+        items: [
+          {
+            link: "https://publisher.test/story",
+            title: "Football story",
+            "content:encoded":
+              '<figure><img src="https://cdn.publisher.test/hero.jpg" alt="Hero" width="1200" height="800"><figcaption>Opening image</figcaption></figure><p>Story text <img data-src="/inside.jpg" data-srcset="/inside-400.jpg 400w, /inside-1200.jpg 1200w" alt="Inside"></p>',
+          },
+        ],
+      }),
+    });
+    const [article] = await adapter.fetch({ url: "https://publisher.test/feed" });
+    expect(article?.inlineImages).toEqual([
+      expect.objectContaining({
+        url: "https://cdn.publisher.test/hero.jpg",
+        alt: "Hero",
+        caption: "Opening image",
+      }),
+      expect.objectContaining({ url: "https://publisher.test/inside-1200.jpg", alt: "Inside" }),
     ]);
   });
 

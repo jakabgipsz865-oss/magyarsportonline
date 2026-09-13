@@ -1,4 +1,6 @@
 import Parser from "rss-parser";
+import { load } from "cheerio";
+import type { SourceInlineImage } from "@magyarsportonline/shared";
 import {
   imageDimension,
   remoteImageUrl,
@@ -74,6 +76,71 @@ function extractImage(item: RssFeedItem): RemoteImage | null {
   return selectRemoteImage(candidates);
 }
 
+function largestSrcsetUrl(value: string | undefined): string | null {
+  if (!value) return null;
+  return (
+    value
+      .split(",")
+      .map((item) => {
+        const [url, descriptor = ""] = item.trim().split(/\s+/, 2);
+        const width = Number(descriptor.replace(/w$/, ""));
+        return { url, width: Number.isFinite(width) ? width : 0 };
+      })
+      .filter((item): item is { url: string; width: number } => Boolean(item.url))
+      .sort((a, b) => b.width - a.width)[0]?.url ?? null
+  );
+}
+
+/** Keep source-body images as remote embeds; never download or rewrite the file URL. */
+export function extractInlineImages(html: string, articleUrl?: string): SourceInlineImage[] {
+  if (!html.includes("<img")) return [];
+  const $ = load(html);
+  const images: SourceInlineImage[] = [];
+  const seen = new Set<string>();
+  $("img").each((_, element) => {
+    if (images.length >= 8) return;
+    const image = $(element);
+    const candidate =
+      largestSrcsetUrl(image.attr("srcset") ?? image.attr("data-srcset")) ??
+      image.attr("src") ??
+      image.attr("data-src");
+    if (!candidate) return;
+    let resolved = candidate;
+    try {
+      if (!/^https?:\/\//i.test(candidate)) {
+        if (!articleUrl) return;
+        resolved = new URL(candidate, articleUrl).href;
+      }
+    } catch {
+      return;
+    }
+    const url = remoteImageUrl(resolved);
+    if (!url || seen.has(url)) return;
+    const width = imageDimension(image.attr("width"));
+    const height = imageDimension(image.attr("height"));
+    if ((width !== null && width < 300) || (height !== null && height < 180)) return;
+    const figure = image.closest("figure");
+    const clean = (value: string | undefined): string | null => {
+      const text = stripHtml(value ?? "").trim();
+      return text.length > 0 ? text : null;
+    };
+    const caption = clean(figure.find("figcaption").first().text());
+    const credit = clean(
+      image.attr("data-credit") ?? figure.find(".credit, .photo-credit, .copyright").first().text(),
+    );
+    seen.add(url);
+    images.push({
+      url,
+      alt: clean(image.attr("alt")),
+      caption,
+      credit,
+      width,
+      height,
+    });
+  });
+  return images;
+}
+
 function parsePublishedDate(value: string | undefined): Date | null {
   if (!value) return null;
   const parsed = new Date(
@@ -114,9 +181,8 @@ export class RssSourceAdapter implements SourceAdapter {
         if (!sourceUrl || !/^https?:\/\//i.test(sourceUrl) || !titleOriginal) {
           return null;
         }
-        const bodyOriginal = stripHtml(
-          item["content:encoded"] ?? item.content ?? item.contentSnippet ?? "",
-        );
+        const sourceBody = item["content:encoded"] ?? item.content ?? item.contentSnippet ?? "";
+        const bodyOriginal = stripHtml(sourceBody);
         const publishedAtSource = parsePublishedDate(item.isoDate ?? item.pubDate);
 
         const image = extractImage(item);
@@ -134,6 +200,7 @@ export class RssSourceAdapter implements SourceAdapter {
           publishedAtSource,
           imageUrl: image?.url ?? null,
           ...(image ? { image } : {}),
+          inlineImages: extractInlineImages(sourceBody, sourceUrl),
           contentOrigin: "rss_snippet",
         };
       })

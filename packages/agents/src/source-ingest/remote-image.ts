@@ -1,10 +1,16 @@
 import { load } from "cheerio";
+import type { SourceInlineImage } from "@magyarsportonline/shared";
 
 export interface RemoteImage {
   url: string;
   source: "media:content" | "thumbnail" | "enclosure" | "og" | "twitter" | "json-ld";
   width: number | null;
   height: number | null;
+}
+
+export interface PublisherArticleMedia {
+  primary: RemoteImage | null;
+  inlineImages: SourceInlineImage[];
 }
 
 export function imageDimension(value: unknown): number | null {
@@ -138,12 +144,103 @@ export function imageFromHtml(html: string, articleUrl: string): RemoteImage | n
   );
 }
 
+function srcsetUrl(value: string | undefined): string | null {
+  if (!value) return null;
+  const candidates = value
+    .split(",")
+    .map((item) => {
+      const [url, descriptor = ""] = item.trim().split(/\s+/, 2);
+      const width = Number(descriptor.replace(/w$/, ""));
+      return { url, width: Number.isFinite(width) ? width : 0 };
+    })
+    .filter((item): item is { url: string; width: number } => Boolean(item.url));
+  return candidates.sort((a, b) => b.width - a.width)[0]?.url ?? null;
+}
+
+/** Extract ordered article-body images without fetching the image files. */
+export function inlineImagesFromHtml(html: string, articleUrl: string): SourceInlineImage[] {
+  const $ = load(html);
+  const roots = $("article").toArray();
+  if (roots.length === 0) roots.push(...$("main").toArray());
+  const root = roots.sort((a, b) => $(b).text().length - $(a).text().length)[0];
+  if (!root) return [];
+  const images: SourceInlineImage[] = [];
+  const seen = new Set<string>();
+  $(root)
+    .find("figure img, p img")
+    .each((_, element) => {
+      if (images.length >= 8) return;
+      const image = $(element);
+      const candidate = srcsetUrl(image.attr("srcset")) ?? image.attr("src");
+      if (!candidate) return;
+      let resolved: string;
+      try {
+        resolved = new URL(candidate, articleUrl).href;
+      } catch {
+        return;
+      }
+      const url = remoteImageUrl(resolved);
+      if (!url || seen.has(url)) return;
+      const width = imageDimension(image.attr("width"));
+      const height = imageDimension(image.attr("height"));
+      if ((width !== null && width < 300) || (height !== null && height < 180)) return;
+      const figure = image.closest("figure");
+      const text = (value: string | undefined) => value?.replace(/\s+/g, " ").trim() || null;
+      seen.add(url);
+      images.push({
+        url,
+        alt: text(image.attr("alt")),
+        caption: text(figure.find("figcaption").first().text()),
+        credit: text(
+          image.attr("data-credit") ??
+            figure.find(".credit, .photo-credit, .copyright").first().text(),
+        ),
+        width,
+        height,
+      });
+    });
+  return images;
+}
+
+export function articleMediaFromHtml(html: string, articleUrl: string): PublisherArticleMedia {
+  const primary = imageFromHtml(html, articleUrl);
+  const inlineImages = inlineImagesFromHtml(html, articleUrl);
+  const combined: SourceInlineImage[] = [];
+  const seen = new Set<string>();
+  const add = (image: SourceInlineImage) => {
+    if (seen.has(image.url)) return;
+    seen.add(image.url);
+    combined.push(image);
+  };
+  if (primary) {
+    add({
+      url: primary.url,
+      alt: null,
+      caption: null,
+      credit: null,
+      width: primary.width,
+      height: primary.height,
+    });
+  }
+  inlineImages.forEach(add);
+  return { primary, inlineImages: combined.slice(0, 8) };
+}
+
 /** Accepted articles only. Fetch HTML, never the referenced image, never follow access redirects. */
 export async function fetchArticleImage(
   articleUrl: string,
   publisherUrl: string,
   fetcher: typeof fetch = fetch,
 ): Promise<RemoteImage | null> {
+  return (await fetchArticleMedia(articleUrl, publisherUrl, fetcher))?.primary ?? null;
+}
+
+/** Fetch one publisher HTML page and return remote image metadata only. */
+export async function fetchArticleMedia(
+  articleUrl: string,
+  publisherUrl: string,
+  fetcher: typeof fetch = fetch,
+): Promise<PublisherArticleMedia | null> {
   if (!remoteImageUrl(articleUrl)) return null;
   const hostname = (url: string) => new URL(url).hostname.replace(/^(?:www|api|feeds)\./, "");
   if (hostname(articleUrl) !== hostname(publisherUrl)) return null;
@@ -173,7 +270,7 @@ export async function fetchArticleImage(
         if (size > 2_000_000) return null;
         html += decoder.decode(value, { stream: true });
       }
-      return imageFromHtml(html + decoder.decode(), articleUrl);
+      return articleMediaFromHtml(html + decoder.decode(), articleUrl);
     } finally {
       await reader.cancel();
     }

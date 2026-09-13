@@ -1,0 +1,2 @@
+ALTER TABLE "raw_articles" ADD COLUMN "inline_images" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "story_read_model" ADD COLUMN "inline_images" jsonb DEFAULT '[]'::jsonb NOT NULL;

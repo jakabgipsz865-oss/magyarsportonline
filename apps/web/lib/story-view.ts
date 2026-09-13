@@ -12,6 +12,23 @@ const sourceSummarySchema = z.object({
   reliabilityTier: z.enum(["A", "B", "C"]).optional(),
 });
 
+const inlineImageSchema = z.object({
+  url: z
+    .string()
+    .url()
+    .refine((value) => /^https?:\/\//i.test(value)),
+  alt: z.string().nullable(),
+  caption: z.string().nullable(),
+  credit: z.string().nullable(),
+  width: z.number().nullable(),
+  height: z.number().nullable(),
+  sourceName: z.string(),
+  sourceUrl: z
+    .string()
+    .url()
+    .refine((value) => /^https?:\/\//i.test(value)),
+});
+
 const versionHistoryEntrySchema = z.object({
   version_number: z.number(),
   created_at: z.string(),
@@ -130,6 +147,7 @@ export interface StorySummaryView {
 
 export interface StoryDetailView extends StorySummaryView {
   bodyHtml: string;
+  inlineImages: Array<z.infer<typeof inlineImageSchema>>;
   metaDescription: string | null;
   sources: Array<{
     name: string;
@@ -152,6 +170,11 @@ function parseSources(value: unknown): z.infer<typeof sourceSummarySchema>[] {
 
 function parseVersionHistory(value: unknown): z.infer<typeof versionHistoryEntrySchema>[] {
   const result = z.array(versionHistoryEntrySchema).safeParse(value);
+  return result.success ? result.data : [];
+}
+
+function parseInlineImages(value: unknown): Array<z.infer<typeof inlineImageSchema>> {
+  const result = z.array(inlineImageSchema).safeParse(value);
   return result.success ? result.data : [];
 }
 
@@ -201,6 +224,7 @@ export function toStoryDetailView(row: StoryReadModelRow): StoryDetailView {
   return {
     ...toStorySummaryView(row),
     bodyHtml: row.bodyHtml,
+    inlineImages: parseInlineImages(row.inlineImages),
     metaDescription: row.metaDescription,
     sources: sources.map((source) => ({
       name: source.name,

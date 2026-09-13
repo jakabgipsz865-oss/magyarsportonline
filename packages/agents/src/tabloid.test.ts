@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { isFootballTabloid, writeTabloid } from "./tabloid";
+import { isFootballTabloid, paragraphizeBody, writeTabloid } from "./tabloid";
 import type { LlmClient } from "@magyarsportonline/llm";
 
 describe("precision-first football tabloid filter", () => {
@@ -134,5 +134,12 @@ describe("one-call Hungarian writer", () => {
       body_hu: input.content,
     });
     await expect(writeTabloid(llm, input)).rejects.toThrow("untranslated");
+  });
+  it("deterministically splits a long one-block draft into readable paragraphs", () => {
+    expect(
+      paragraphizeBody(
+        "Első mondat. Második mondat. Harmadik mondat. Negyedik mondat. Ötödik mondat. Hatodik mondat.",
+      ).split("\n\n"),
+    ).toHaveLength(3);
   });
 });

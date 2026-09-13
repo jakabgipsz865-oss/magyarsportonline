@@ -20,6 +20,7 @@ const RAW_ARTICLE = {
   publishedAtSource: null,
   ingestedAt: new Date(),
   imageUrl: null,
+  inlineImages: [],
 };
 
 const STORY = {

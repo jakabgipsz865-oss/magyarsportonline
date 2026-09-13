@@ -27,7 +27,7 @@ vi.mock("@magyarsportonline/agents", () => ({
   seo: { slugify: () => "magyar-hir" },
   readModelProjector: { handleStoryPublished: mocks.project },
   sourceIngest: {
-    fetchArticleImage: mocks.fetchImages,
+    fetchArticleMedia: mocks.fetchImages,
     RssSourceAdapter: class {
       fetch = mocks.fetchRss;
     },
@@ -109,6 +109,7 @@ describe("tabloid publication", () => {
       body_hu: "A játékos a családjáról beszélt.",
     });
     mocks.project.mockResolvedValue(undefined);
+    mocks.fetchImages.mockResolvedValue(null);
   });
   it("pauses ingest and publication before any repository or writer access", async () => {
     mocks.env.TABLOID_AUTO_PUBLISH = false;
@@ -129,7 +130,7 @@ describe("tabloid publication", () => {
     expect(mocks.write).not.toHaveBeenCalled();
     expect(mocks.project).not.toHaveBeenCalled();
   });
-  it("stores rejected raw items without a queue job or an HTML/image request, and preserves selected remote URLs", async () => {
+  it("stores rejected raw items without a queue job and enriches accepted source images", async () => {
     const url = "https://publisher.test/photo.jpg?width=1200&signature=unchanged";
     mocks.accepted.mockImplementation((title) => title === "accepted");
     mocks.fetchRss.mockResolvedValue([
@@ -179,7 +180,11 @@ describe("tabloid publication", () => {
       expect.objectContaining({ titleOriginal: "accepted", imageUrl: url }),
       true,
     );
-    expect(mocks.fetchImages).not.toHaveBeenCalled();
+    expect(mocks.fetchImages).toHaveBeenCalledOnce();
+    expect(mocks.fetchImages).toHaveBeenCalledWith(
+      "https://publisher.test/accepted",
+      "https://publisher.test/feed",
+    );
     expect(mocks.write).not.toHaveBeenCalled();
   });
   it("ingests only dated RSS items published after the activation watermark", async () => {
@@ -250,6 +255,13 @@ describe("tabloid publication", () => {
     await publishTabloid("one", repos);
     expect(mocks.write).toHaveBeenCalledTimes(1);
     expect(mocks.project).toHaveBeenCalledTimes(2);
+  });
+  it("creates a new Gemini version when an operator explicitly requests a rewrite", async () => {
+    const { repos } = fixtures();
+    await publishTabloid("one", repos);
+    await publishTabloid("one", repos, { forceRewrite: true });
+    expect(mocks.write).toHaveBeenCalledTimes(2);
+    expect(repos.rawArticleRepository.releaseTabloidQuotaDeferral).toHaveBeenCalledWith("one");
   });
   it("does not automatically repair or repeat failed generation", async () => {
     const { repos } = fixtures();

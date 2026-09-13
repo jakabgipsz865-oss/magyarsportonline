@@ -1,10 +1,10 @@
 import { sourceIngest, tabloid } from "@magyarsportonline/agents";
+import type { TabloidSourceMode } from "@magyarsportonline/shared";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createRepositories } from "../../../../lib/db";
 import { env } from "../../../../lib/env";
-import { publishTabloid } from "../../../../lib/tabloid";
-import type { TabloidSourceMode } from "@magyarsportonline/shared";
+import { mergeInlineImages, publishTabloid } from "../../../../lib/tabloid";
 import registry from "../../../../lib/tabloid-sources.json";
 
 export const maxDuration = 300;
@@ -15,6 +15,8 @@ const requestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("proof"), language: z.enum(languages) }),
   z.object({ action: z.literal("retry-proof"), language: z.enum(languages) }),
   z.object({ action: z.literal("retry-article"), rawArticleId: z.string().uuid() }),
+  z.object({ action: z.literal("rewrite-article"), rawArticleId: z.string().uuid() }),
+  z.object({ action: z.literal("rewrite-story"), slug: z.string().min(1).max(240) }),
   z.object({ action: z.literal("activate") }),
 ]);
 
@@ -129,11 +131,58 @@ export async function POST(request: NextRequest) {
     const result = await publishTabloid(raw.id, repos, { retryFailedWriter: true });
     return NextResponse.json({ language: command.language, ...result });
   }
-  if (command.action === "retry-article") {
-    const raw = await repos.rawArticleRepository.getById(command.rawArticleId);
+  if (
+    command.action === "retry-article" ||
+    command.action === "rewrite-article" ||
+    command.action === "rewrite-story"
+  ) {
+    const storyRow =
+      command.action === "rewrite-story"
+        ? await repos.storyReadModelRepository.getBySlug(command.slug)
+        : null;
+    if (command.action === "rewrite-story" && !storyRow)
+      return NextResponse.json({ error: "recoverable tabloid article not found" }, { status: 404 });
+    const raw =
+      command.action === "rewrite-story"
+        ? (await repos.rawArticleRepository.listByStoryId(storyRow!.storyId)).find((item) =>
+            registry.some((source) => source.id === item.sourceId),
+          )
+        : await repos.rawArticleRepository.getById(command.rawArticleId);
     if (!raw || !raw.storyId || !registry.some((source) => source.id === raw.sourceId))
       return NextResponse.json({ error: "recoverable tabloid article not found" }, { status: 404 });
-    const result = await publishTabloid(raw.id, repos, { retryFailedWriter: true });
+    if (command.action === "rewrite-article" || command.action === "rewrite-story") {
+      const source = await repos.sourceRepository.getById(raw.sourceId);
+      const config = source?.fetchConfig as { url?: string; feedUrls?: string[] } | undefined;
+      if (source && config?.url) {
+        const adapter = new sourceIngest.RssSourceAdapter(undefined, false);
+        const feeds = await Promise.allSettled(
+          (config.feedUrls ?? [config.url]).map((url) => adapter.fetch({ url })),
+        );
+        const rssArticle = feeds
+          .flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+          .find((article) => article.sourceUrl === raw.sourceUrl);
+        const pageMedia = await sourceIngest.fetchArticleMedia(raw.sourceUrl, config.url);
+        const inlineImages = mergeInlineImages(
+          raw.inlineImages,
+          rssArticle?.inlineImages,
+          pageMedia?.inlineImages,
+        );
+        if (inlineImages.length > 0 || pageMedia?.primary || rssArticle?.imageUrl) {
+          await repos.rawArticleRepository.updateInlineImages(
+            raw.id,
+            inlineImages,
+            raw.imageUrl ?? rssArticle?.imageUrl ?? pageMedia?.primary?.url,
+          );
+        }
+      }
+    }
+    const result = await publishTabloid(
+      raw.id,
+      repos,
+      command.action === "retry-article"
+        ? { retryFailedWriter: true }
+        : { retryFailedWriter: true, forceRewrite: true },
+    );
     return NextResponse.json({ rawArticleId: raw.id, ...result });
   }
   // Persist one proof identity per language BEFORE any writer call. Repeated
@@ -178,6 +227,7 @@ export async function POST(request: NextRequest) {
               language: command.language,
               publishedAtSource: article.publishedAtSource,
               imageUrl: article.imageUrl,
+              inlineImages: article.inlineImages ?? [],
               contentOrigin: article.contentOrigin,
               extractedEntities: {
                 rssGuid: article.guid ?? article.sourceUrl,

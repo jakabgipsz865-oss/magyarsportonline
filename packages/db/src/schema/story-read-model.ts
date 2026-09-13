@@ -1,5 +1,6 @@
 import { boolean, jsonb, numeric, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { stories } from "./stories";
+import type { PublishedSourceInlineImage } from "@magyarsportonline/shared";
 
 /**
  * CQRS olvasási projekció (docs/architecture/01-data-model.md §1.5.2,
@@ -26,6 +27,7 @@ export const storyReadModel = pgTable("story_read_model", {
   // source RSS provided one; null means the frontend renders a category-
   // tinted placeholder instead (Real Sports Portal UX sprint).
   imageUrl: text("image_url"),
+  inlineImages: jsonb("inline_images").$type<PublishedSourceInlineImage[]>().notNull().default([]),
   // Projected from story_versions.is_ai_generated (read-model-projector) —
   // false means LLM_PROVIDER=none produced this content (packages/llm's
   // NoLlmClient), so the frontend must show an explicit notice.

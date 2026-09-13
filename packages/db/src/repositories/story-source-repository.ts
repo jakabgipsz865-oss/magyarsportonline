@@ -1,4 +1,5 @@
 import type {
+  PublishedSourceInlineImage,
   SourceCategory,
   SourceReliabilityTier,
   StorySourceContributionType,
@@ -119,6 +120,28 @@ export class StorySourceRepository {
       firstSeenAt: row.firstSeenAt.toISOString(),
       reliabilityTier: row.reliabilityTier,
     }));
+  }
+
+  /** Publisher-hosted source images for inline display with explicit attribution. */
+  async inlineImagesByStoryId(storyId: string): Promise<PublishedSourceInlineImage[]> {
+    const rows = await this.db
+      .select({
+        sourceName: sources.name,
+        sourceUrl: rawArticles.sourceUrl,
+        images: rawArticles.inlineImages,
+      })
+      .from(storySources)
+      .innerJoin(rawArticles, eq(storySources.rawArticleId, rawArticles.id))
+      .innerJoin(sources, eq(rawArticles.sourceId, sources.id))
+      .where(and(eq(storySources.storyId, storyId), eq(storySources.excluded, false)));
+    const seen = new Set<string>();
+    return rows.flatMap((row) =>
+      row.images.flatMap((image) => {
+        if (seen.has(image.url)) return [];
+        seen.add(image.url);
+        return [{ ...image, sourceName: row.sourceName, sourceUrl: row.sourceUrl }];
+      }),
+    );
   }
 
   /**

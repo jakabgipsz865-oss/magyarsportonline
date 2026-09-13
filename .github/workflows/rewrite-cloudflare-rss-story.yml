@@ -1,0 +1,49 @@
+name: Rewrite one Cloudflare RSS story
+
+on:
+  workflow_dispatch:
+    inputs:
+      story_slug:
+        description: Public story slug to rewrite from its original source
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: false
+
+jobs:
+  rewrite:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Refresh source images and rewrite the selected story
+        run: |
+          jq -nc --arg slug "$STORY_SLUG" \
+            '{action:"rewrite-story", slug:$slug}' > /tmp/request.json
+          code=$(curl -sS --max-time 300 -o /tmp/response.json -w '%{http_code}' \
+            -X POST "$APP_ORIGIN/api/internal/tabloid-rollout" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/request.json)
+          jq . /tmp/response.json
+          test "$code" = "200"
+          test "$(jq -r '.published' /tmp/response.json)" = "true"
+          test "$(jq -r '.model' /tmp/response.json)" = "gemini-3.5-flash-lite"
+        env:
+          APP_ORIGIN: https://magyarsportonline-web.footballinvestmentkft.workers.dev
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          STORY_SLUG: ${{ inputs.story_slug }}
+
+      - name: Upload rewrite evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudflare-rss-story-rewrite-${{ github.run_id }}
+          path: /tmp/response.json
+          if-no-files-found: ignore
+          retention-days: 30
