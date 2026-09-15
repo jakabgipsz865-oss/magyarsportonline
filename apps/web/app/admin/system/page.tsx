@@ -14,11 +14,12 @@ export default async function AdminSystemPage(): Promise<ReactNode> {
   const now = new Date();
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const [sources, queue, lastPublication, quality, usage] = await Promise.all([
+  const [sources, queue, lastPublication, quality, usage24h, usageMonth] = await Promise.all([
     repos.sourceRepository.listAll(),
     repos.pipelineJobRepository.getStatusCounts(),
     repos.storyRepository.getLastPublicationAt(),
     repos.storyVersionRepository.getTabloidQualityMetricsSince(since),
+    repos.llmUsageRepository.getMonthlyRoleMetrics(since),
     repos.llmUsageRepository.getMonthlyRoleMetrics(monthStart),
   ]);
   const lastIngest =
@@ -31,23 +32,27 @@ export default async function AdminSystemPage(): Promise<ReactNode> {
       .map((source) => source.lastFetchedAt)
       .filter((value): value is Date => value instanceof Date)
       .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
-  const metric = (role: string, status?: string) =>
-    usage
+  const metric = (
+    rows: Array<{ role: string; status: string; calls: number; costUsd: number }>,
+    role: string,
+    status?: string,
+  ) =>
+    rows
       .filter((row) => row.role === role && (!status || row.status === status))
       .reduce(
         (total, row) => ({ calls: total.calls + row.calls, costUsd: total.costUsd + row.costUsd }),
         { calls: 0, costUsd: 0 },
       );
-  const primary = metric("primary");
-  const primarySuccess = metric("primary", "success");
-  const primaryFailed = metric("primary", "failed");
-  const repair = metric("targeted_repair");
-  const repairSuccess = metric("targeted_repair", "success");
-  const repairFailed = metric("targeted_repair", "failed");
-  const fallback = metric("technical_fallback");
-  const totalCost = usage.reduce((sum, row) => sum + row.costUsd, 0);
+  const primary = metric(usage24h, "primary");
+  const repair = metric(usage24h, "targeted_repair");
+  const fallback = metric(usage24h, "technical_fallback");
+  const primaryCost = metric(usageMonth, "primary");
+  const repairCost = metric(usageMonth, "targeted_repair");
+  const fallbackCost = metric(usageMonth, "technical_fallback");
+  const totalCost = usageMonth.reduce((sum, row) => sum + row.costUsd, 0);
   const flagRate = quality.checked ? Math.round((quality.flagged / quality.checked) * 100) : 0;
   const repairRate = quality.checked ? Math.round((repair.calls / quality.checked) * 100) : 0;
+  const primaryUsable = Math.max(0, primary.calls - fallback.calls);
 
   return (
     <main className="admin-page">
@@ -97,8 +102,7 @@ export default async function AdminSystemPage(): Promise<ReactNode> {
             <strong>Primary Writer</strong>
             <span>Gemini · {env.GEMINI_MODEL}</span>
             <span>
-              {primary.calls} hívás · {primarySuccess.calls} siker · {primaryFailed.calls} technikai
-              hiba
+              {primary.calls} hívás · {primaryUsable} siker · {fallback.calls} technikai hiba
             </span>
           </div>
           <div className="admin-metric-card">
@@ -118,8 +122,8 @@ export default async function AdminSystemPage(): Promise<ReactNode> {
             <strong>Targeted repair</strong>
             <span>Gemini · gemini-3.5-flash</span>
             <span>
-              {repair.calls} kísérlet · {repairSuccess.calls} siker · {repairFailed.calls} hiba ·{" "}
-              {repairRate}%
+              {repair.calls} kísérlet · {quality.repairSucceeded} elfogadva · {quality.repairFailed}{" "}
+              sikertelen · {repairRate}%
             </span>
           </div>
           <div className="admin-metric-card">
@@ -134,15 +138,15 @@ export default async function AdminSystemPage(): Promise<ReactNode> {
         <div className="admin-metric-grid">
           <div className="admin-metric-card">
             <strong>Primary</strong>
-            <span>${primary.costUsd.toFixed(4)}</span>
+            <span>${primaryCost.costUsd.toFixed(4)}</span>
           </div>
           <div className="admin-metric-card">
             <strong>Repair</strong>
-            <span>${repair.costUsd.toFixed(4)}</span>
+            <span>${repairCost.costUsd.toFixed(4)}</span>
           </div>
           <div className="admin-metric-card">
             <strong>Fallback</strong>
-            <span>${fallback.costUsd.toFixed(4)}</span>
+            <span>${fallbackCost.costUsd.toFixed(4)}</span>
           </div>
           <div className="admin-metric-card">
             <strong>Összesen</strong>

@@ -41,6 +41,8 @@ export class StoryVersionRepository {
     flagged: number;
     hard: number;
     language: number;
+    repairSucceeded: number;
+    repairFailed: number;
     reasons: Array<{ code: string; count: number }>;
   }> {
     const [row] = await this.db.execute<{
@@ -48,12 +50,16 @@ export class StoryVersionRepository {
       flagged: number | string;
       hard: number | string;
       language: number | string;
+      repair_succeeded: number | string;
+      repair_failed: number | string;
     }>(sql`
       SELECT
         count(*) AS checked,
         count(*) FILTER (WHERE jsonb_array_length(coalesce(quality_issues, '[]'::jsonb)) > 0) AS flagged,
         count(*) FILTER (WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(quality_issues, '[]'::jsonb)) issue WHERE issue->>'kind' = 'hard')) AS hard,
-        count(*) FILTER (WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(quality_issues, '[]'::jsonb)) issue WHERE issue->>'kind' = 'language')) AS language
+        count(*) FILTER (WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(quality_issues, '[]'::jsonb)) issue WHERE issue->>'kind' = 'language')) AS language,
+        count(*) FILTER (WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(quality_issues, '[]'::jsonb)) issue WHERE issue->>'repaired' = 'true')) AS repair_succeeded,
+        count(*) FILTER (WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(quality_issues, '[]'::jsonb)) issue WHERE issue->>'repairStatus' = 'failed')) AS repair_failed
       FROM ${storyVersions}
       WHERE prompt_version = 'tabloid-hu@2' AND created_at >= ${since.toISOString()}::timestamptz
     `);
@@ -69,6 +75,8 @@ export class StoryVersionRepository {
       flagged: Number(row?.flagged ?? 0),
       hard: Number(row?.hard ?? 0),
       language: Number(row?.language ?? 0),
+      repairSucceeded: Number(row?.repair_succeeded ?? 0),
+      repairFailed: Number(row?.repair_failed ?? 0),
       reasons: reasonRows.map((reason) => ({ code: reason.code, count: Number(reason.count) })),
     };
   }
