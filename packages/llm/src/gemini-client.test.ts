@@ -77,9 +77,19 @@ describe("GeminiLlmClient", () => {
       expect(headers.has("x-goog-api-key")).toBe(false);
       expect(JSON.parse(String(init?.body))).toMatchObject({
         model: "google/gemini-3.5-flash",
-        input: { contents: [{ role: "user", parts: [{ text: "hello" }] }] },
+        input: {
+          systemInstruction: { parts: [{ text: "system prompt" }] },
+          contents: [{ role: "user", parts: [{ text: "hello" }] }],
+        },
       });
-      return jsonResponse({ candidates: [{ content: { parts: [{ text: "válasz" }] } }] });
+      return jsonResponse({
+        result: {
+          candidates: [{ content: { parts: [{ text: "válasz" }] } }],
+          usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 4 },
+        },
+        success: true,
+        errors: [],
+      });
     });
     const client = new GeminiLlmClient({
       model: "gemini-3.5-flash",
@@ -91,7 +101,41 @@ describe("GeminiLlmClient", () => {
       fetchImpl,
     });
 
-    await expect(client.completeText(textRequest)).resolves.toMatchObject({ text: "válasz" });
+    await expect(client.completeText(textRequest)).resolves.toMatchObject({
+      text: "válasz",
+      inputTokens: 12,
+      outputTokens: 4,
+    });
+  });
+
+  it("parses structured Gemini JSON from the Cloudflare v4 result envelope", async () => {
+    const client = new GeminiLlmClient({
+      model: "gemini-3.5-flash",
+      unifiedBilling: {
+        accountId: "account",
+        apiToken: "cloudflare-api-token",
+        gatewayId: "mso",
+      },
+      fetchImpl: vi.fn(async () =>
+        jsonResponse({
+          result: {
+            candidates: [{ content: { parts: [{ text: '{"ok":true}' }] }, finishReason: "STOP" }],
+            usageMetadata: { promptTokenCount: 15, candidatesTokenCount: 3 },
+          },
+          success: true,
+          errors: [],
+        }),
+      ),
+    });
+
+    await expect(
+      client.completeJson({ ...textRequest, jsonSchema: { type: "object" } }),
+    ).resolves.toEqual({
+      data: { ok: true },
+      inputTokens: 15,
+      outputTokens: 3,
+      modelLabel: "gemini-3.5-flash",
+    });
   });
 
   it("parses JSON completions, including markdown-fenced output", async () => {

@@ -101,6 +101,12 @@ interface GeminiGenerateContentResponse {
   promptFeedback?: { blockReason?: string };
 }
 
+interface CloudflareAiRunEnvelope {
+  result?: GeminiGenerateContentResponse;
+  success?: boolean;
+  errors?: Array<{ code?: number; message?: string }>;
+}
+
 function extractText(response: GeminiGenerateContentResponse): string {
   const parts = response.candidates?.[0]?.content?.parts ?? [];
   return parts.map((part) => part.text ?? "").join("");
@@ -120,6 +126,29 @@ function parseApiStatus(errorBody: string): string | null {
   } catch {
     return null;
   }
+}
+
+function unwrapCloudflareAiRunResponse(payload: unknown): GeminiGenerateContentResponse {
+  if (typeof payload !== "object" || payload === null) {
+    throw new GeminiApiError(200, "INVALID_RESPONSE", "Cloudflare AI returned an invalid response");
+  }
+
+  const envelope = payload as CloudflareAiRunEnvelope;
+  if (envelope.success === false || (envelope.errors?.length ?? 0) > 0) {
+    throw new GeminiApiError(
+      200,
+      "CLOUDFLARE_API_ERROR",
+      `Cloudflare AI returned an error envelope: ${envelope.errors?.[0]?.message ?? "unknown error"}`,
+    );
+  }
+
+  if (envelope.result) {
+    return envelope.result;
+  }
+
+  // Kept for compatibility with injected test transports and any future
+  // endpoint variant that returns the provider payload without a v4 envelope.
+  return payload as GeminiGenerateContentResponse;
 }
 
 /**
@@ -221,7 +250,7 @@ export class GeminiLlmClient implements LlmClient {
     wantsJson: boolean,
   ): Promise<GeminiGenerateContentResponse> {
     const geminiInput = {
-      system_instruction: { parts: [{ text: request.system }] },
+      systemInstruction: { parts: [{ text: request.system }] },
       contents: request.messages.map((message) => ({
         role: toGeminiRole(message.role),
         parts: [{ text: message.content }],
@@ -291,7 +320,10 @@ export class GeminiLlmClient implements LlmClient {
       );
     }
 
-    const parsed = (await httpResponse.json()) as GeminiGenerateContentResponse;
+    const payload = (await httpResponse.json()) as unknown;
+    const parsed = this.unifiedBilling
+      ? unwrapCloudflareAiRunResponse(payload)
+      : (payload as GeminiGenerateContentResponse);
     if (parsed.promptFeedback?.blockReason) {
       throw new GeminiApiError(
         0,
