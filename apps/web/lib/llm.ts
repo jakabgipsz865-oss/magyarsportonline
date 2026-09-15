@@ -63,16 +63,20 @@ export function getFactLlmClient(): LlmClient {
 export function getWriterLlmClient(): LlmClient {
   if (cachedWriterClient) return cachedWriterClient;
   if (env.LLM_PROVIDER === "none") return (cachedWriterClient = new NoLlmClient());
-  if (!env.GEMINI_API_KEY || !env.GEMINI_DAILY_REQUEST_CAP) {
-    throw new Error("Gemini Writer credentials or daily request cap are missing");
+  if (!env.CLOUDFLARE_AI_GATEWAY_TOKEN || !env.GEMINI_BASE_URL) {
+    throw new Error("Gemini Writer requires an authenticated Cloudflare AI Gateway");
+  }
+  const geminiApiKey = env.GEMINI_BILLING_MODE === "byok" ? env.GEMINI_API_KEY : undefined;
+  if (env.GEMINI_BILLING_MODE === "byok" && !geminiApiKey) {
+    throw new Error("Gemini BYOK billing requires GEMINI_API_KEY");
   }
   const repos = createRepositories();
   const metered = new ProviderFallbackLlmClient({
     inner: new GeminiLlmClient({
-      apiKey: env.GEMINI_API_KEY,
+      ...(geminiApiKey ? { apiKey: geminiApiKey } : {}),
       model: env.GEMINI_MODEL,
-      ...(env.GEMINI_BASE_URL ? { baseUrl: env.GEMINI_BASE_URL } : {}),
-      ...(env.CLOUDFLARE_AI_GATEWAY_TOKEN ? { gatewayToken: env.CLOUDFLARE_AI_GATEWAY_TOKEN } : {}),
+      baseUrl: env.GEMINI_BASE_URL,
+      gatewayToken: env.CLOUDFLARE_AI_GATEWAY_TOKEN,
     }),
     fallback: new NoLlmClient(),
     providerName: "gemini",

@@ -105,9 +105,9 @@ jobs:
         env:
           PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
         run: |
-          BASE="${PRODUCTION_URL:-https://magyarsportonline-web.vercel.app}"
+          BASE="${PRODUCTION_URL:-https://magyarsportonline.hu}"
           echo "Target: $BASE"
-          # Megvárjuk, míg a most pusholt commit Vercel production deploya kifut
+          # Megvárjuk, míg a most pusholt Cloudflare production deploy kifut
           # (a V1-et az /rss.xml megléte jelzi) — max ~6 perc.
           deployed=no
           for i in $(seq 1 24); do

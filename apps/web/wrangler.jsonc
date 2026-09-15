@@ -31,6 +31,7 @@
     "CLOUDFLARE_ACCOUNT_ID": "7a225d650d7e05daba6355e5526a8fb9",
     "CLOUDFLARE_AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
     "GEMINI_MODEL": "gemini-3.5-flash",
+    "GEMINI_BILLING_MODE": "unified",
     "GEMINI_FREE_ONLY": "false",
     "GEMINI_DAILY_REQUEST_CAP": "450",
     "GEMINI_MONTHLY_BUDGET_USD": "5",

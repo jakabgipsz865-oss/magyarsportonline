@@ -56,6 +56,7 @@ export const env = createEnv({
 
     GEMINI_API_KEY: z.string().min(1).optional(),
     GEMINI_MODEL: z.string().min(1).default("gemini-3.5-flash"),
+    GEMINI_BILLING_MODE: z.enum(["byok", "unified"]).default("byok"),
     GEMINI_FREE_ONLY: z
       .enum(["true", "false"])
       .default("false")

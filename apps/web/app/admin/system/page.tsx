@@ -64,6 +64,11 @@ export default async function AdminSystemPage(): Promise<ReactNode> {
           <div className="admin-metric-card">
             <strong>Hungarian Writer</strong>
             <span>Gemini · {env.GEMINI_MODEL}</span>
+            <span>
+              {env.GEMINI_BILLING_MODE === "unified"
+                ? "Cloudflare Unified Billing"
+                : "Google API-kulcs (BYOK)"}
+            </span>
             <span>Siker: {rate(writer?.completed ?? 0, writer?.failed ?? 0)}</span>
           </div>
           <div className="admin-metric-card">

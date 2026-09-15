@@ -56,6 +56,7 @@ async function status() {
     databaseHost: databaseUrl?.hostname ?? "hyperdrive",
     databaseName: databaseUrl?.pathname.slice(1) ?? null,
     model: tabloid.TABLOID_MODEL,
+    billingMode: env.GEMINI_BILLING_MODE,
     freeOnly: env.GEMINI_FREE_ONLY,
     dailyCap: env.GEMINI_DAILY_REQUEST_CAP,
     monthlyBudgetUsd: env.GEMINI_MONTHLY_BUDGET_USD,

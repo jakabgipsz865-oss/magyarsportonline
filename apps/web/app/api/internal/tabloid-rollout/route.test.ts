@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   env: {
     CRON_SECRET: "test-only",
     TABLOID_AUTO_PUBLISH: false,
+    GEMINI_BILLING_MODE: "unified",
     GEMINI_FREE_ONLY: false,
     GEMINI_DAILY_REQUEST_CAP: 450,
     GEMINI_MONTHLY_BUDGET_USD: 5,
@@ -134,6 +135,7 @@ describe("rollout status", () => {
 
     expect(await response.json()).toEqual(
       expect.objectContaining({
+        billingMode: "unified",
         freeOnly: false,
         dailyCap: 450,
         monthlyBudgetUsd: 5,

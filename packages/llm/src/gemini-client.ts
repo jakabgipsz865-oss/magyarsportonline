@@ -13,7 +13,8 @@ const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 
 export interface GeminiLlmClientOptions {
-  apiKey: string;
+  /** Google API key for BYOK. Omit when Cloudflare Unified Billing supplies provider credentials. */
+  apiKey?: string;
   /** Alapértelmezés: DEFAULT_GEMINI_MODEL. Üres string esetén is az alapértelmezésre esik vissza. */
   model?: string;
   baseUrl?: string;
@@ -125,7 +126,7 @@ function parseApiStatus(errorBody: string): string | null {
  * számára a `StoryVersion.generated_by_model` helyes kitöltéséhez.
  */
 export class GeminiLlmClient implements LlmClient {
-  private readonly apiKey: string;
+  private readonly apiKey: string | undefined;
   private readonly model: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
@@ -237,7 +238,7 @@ export class GeminiLlmClient implements LlmClient {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-goog-api-key": this.apiKey,
+          ...(this.apiKey ? { "x-goog-api-key": this.apiKey } : {}),
           ...(this.gatewayToken ? { "cf-aig-authorization": `Bearer ${this.gatewayToken}` } : {}),
         },
         body: JSON.stringify(body),

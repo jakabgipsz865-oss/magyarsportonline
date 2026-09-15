@@ -68,6 +68,23 @@ describe("GeminiLlmClient", () => {
     await expect(client.completeText(textRequest)).resolves.toMatchObject({ text: "válasz" });
   });
 
+  it("uses Cloudflare Unified Billing without sending a Google API key", async () => {
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      expect(headers.get("cf-aig-authorization")).toBe("Bearer gateway-key");
+      expect(headers.has("x-goog-api-key")).toBe(false);
+      return jsonResponse({ candidates: [{ content: { parts: [{ text: "válasz" }] } }] });
+    });
+    const client = new GeminiLlmClient({
+      model: "gemini-3.5-flash",
+      baseUrl: "https://gateway.ai.cloudflare.com/v1/account/mso/google-ai-studio/v1",
+      gatewayToken: "gateway-key",
+      fetchImpl,
+    });
+
+    await expect(client.completeText(textRequest)).resolves.toMatchObject({ text: "válasz" });
+  });
+
   it("parses JSON completions, including markdown-fenced output", async () => {
     const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as { generationConfig: Record<string, unknown> };
