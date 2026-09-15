@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "magyarsportonline-facebook-publisher",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-12",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "workers_dev": false,
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "3a2967f028b449f7ade610395f6ccfbe",
+    },
+  ],
+  "vars": {
+    "META_GRAPH_API_VERSION": "v26.0",
+  },
+  "queues": {
+    "consumers": [
+      {
+        "queue": "mso-facebook-publish",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "retry_delay": 60,
+        "dead_letter_queue": "mso-facebook-publish-dlq",
+        "max_concurrency": 1,
+      },
+    ],
+  },
+  "observability": {
+    "enabled": true,
+  },
+}

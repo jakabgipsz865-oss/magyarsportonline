@@ -14,6 +14,12 @@ interface CloudflareEnv {
   CLOUDFLARE_AI_GATEWAY_ID: string;
   CLOUDFLARE_AI_GATEWAY_TOKEN: string;
   FORCE_REVIEW_MODE: "true" | "false";
+  FACEBOOK_AUTO_PUBLISH?: "true" | "false";
+  FACEBOOK_AUTO_PUBLISH_START_AT: string;
+  META_GRAPH_API_VERSION: string;
+  FACEBOOK_QUEUE?: {
+    send(message: unknown): Promise<unknown>;
+  };
   HYPERDRIVE?: {
     connectionString: string;
   };

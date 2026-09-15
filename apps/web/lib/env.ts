@@ -76,6 +76,16 @@ export const env = createEnv({
     // JSON-LD, RSS). Vercel-en alapértelmezésként a production URL.
     SITE_URL: z.string().url().default("https://magyarsportonline.hu"),
 
+    FACEBOOK_AUTO_PUBLISH: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    FACEBOOK_AUTO_PUBLISH_START_AT: z.coerce.date().default(new Date("2026-09-15T20:30:00.000Z")),
+    META_GRAPH_API_VERSION: z
+      .string()
+      .regex(/^v\d+\.\d+$/)
+      .default("v26.0"),
+
     // Content Quality & Reliability Hardening sprint operational kill switch
     // (packages/agents/publish-gate/rule.ts, roadmap Fázis 9 "soft launch"
     // FORCE_REVIEW_MODE-ja, most bevezetve): amíg "true" (az alapértelmezés,
@@ -97,7 +107,8 @@ export const env = createEnv({
     INNGEST_SIGNING_KEY: z.string().min(1).optional(),
 
     // Fázis 11+ (Social Media Agent)
-    META_GRAPH_API_TOKEN: z.string().min(1).optional(),
+    FACEBOOK_PAGE_ID: z.string().min(1).optional(),
+    FACEBOOK_PAGE_ACCESS_TOKEN: z.string().min(1).optional(),
     X_API_BEARER_TOKEN: z.string().min(1).optional(),
 
     // Fázis 10+ (Admin Review UI hitelesítés)

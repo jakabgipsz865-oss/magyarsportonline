@@ -1,10 +1,10 @@
-import { pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { socialPlatformEnum, socialPostStatusEnum } from "./enums";
 import { storyVersions } from "./story-versions";
 import { stories } from "./stories";
 
 /**
- * A `status='posting'` állapot és a `(storyVersionId, platform)` unique
+ * A `status='posting'` állapot és a `(storyId, platform)` unique
  * constraint együtt adják a külső, nem-idempotens API-hívás elleni védelmet
  * (docs/architecture/09-architecture-review.md §9, 02-agents.md §2.8): a
  * sor a tényleges Facebook/X hívás ELŐTT jön létre, így egy retry a hívás
@@ -23,13 +23,22 @@ export const socialPosts = pgTable(
     platform: socialPlatformEnum("platform").notNull(),
     externalPostId: text("external_post_id"),
     postText: text("post_text").notNull(),
+    canonicalUrl: text("canonical_url"),
     status: socialPostStatusEnum("status").notNull().default("queued"),
+    errorCode: text("error_code"),
+    lastError: text("last_error"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    enqueuedAt: timestamp("enqueued_at", { withTimezone: true }),
+    lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
     postedAt: timestamp("posted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     unique("social_posts_story_version_id_platform_unique").on(
       table.storyVersionId,
       table.platform,
     ),
+    unique("social_posts_story_id_platform_unique").on(table.storyId, table.platform),
   ],
 );

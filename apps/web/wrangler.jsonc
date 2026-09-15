@@ -39,6 +39,16 @@
     "CLOUDFLARE_AI_GATEWAY_ID": "magyarsportonline",
     "TABLOID_AUTO_PUBLISH": "true",
     "FORCE_REVIEW_MODE": "true",
+    "FACEBOOK_AUTO_PUBLISH_START_AT": "2026-09-15T20:30:00.000Z",
+    "META_GRAPH_API_VERSION": "v26.0",
+  },
+  "queues": {
+    "producers": [
+      {
+        "binding": "FACEBOOK_QUEUE",
+        "queue": "mso-facebook-publish",
+      },
+    ],
   },
   "observability": {
     "enabled": true,

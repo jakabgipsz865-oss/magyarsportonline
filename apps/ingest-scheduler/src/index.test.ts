@@ -19,6 +19,7 @@ describe("scheduler branch isolation", () => {
     ).rejects.toBeInstanceOf(AggregateError);
     expect(calls.some((url) => url.includes("dispatch-ingest"))).toBe(true);
     expect(calls.some((url) => url.includes("jobs/process"))).toBe(true);
+    expect(calls.some((url) => url.includes("facebook/enqueue-pending"))).toBe(true);
   });
 
   it("starts ingest even when queue processing fails", async () => {
@@ -34,6 +35,6 @@ describe("scheduler branch isolation", () => {
     await expect(
       runCron({ APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" }),
     ).rejects.toBeInstanceOf(AggregateError);
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(3);
   });
 });

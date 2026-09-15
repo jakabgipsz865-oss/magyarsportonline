@@ -14,14 +14,16 @@ export default async function AdminSystemPage(): Promise<ReactNode> {
   const now = new Date();
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const [sources, queue, lastPublication, quality, usage24h, usageMonth] = await Promise.all([
-    repos.sourceRepository.listAll(),
-    repos.pipelineJobRepository.getStatusCounts(),
-    repos.storyRepository.getLastPublicationAt(),
-    repos.storyVersionRepository.getTabloidQualityMetricsSince(since),
-    repos.llmUsageRepository.getMonthlyRoleMetrics(since),
-    repos.llmUsageRepository.getMonthlyRoleMetrics(monthStart),
-  ]);
+  const [sources, queue, lastPublication, quality, usage24h, usageMonth, facebook] =
+    await Promise.all([
+      repos.sourceRepository.listAll(),
+      repos.pipelineJobRepository.getStatusCounts(),
+      repos.storyRepository.getLastPublicationAt(),
+      repos.storyVersionRepository.getTabloidQualityMetricsSince(since),
+      repos.llmUsageRepository.getMonthlyRoleMetrics(since),
+      repos.llmUsageRepository.getMonthlyRoleMetrics(monthStart),
+      repos.socialPostRepository.getFacebookMetricsSince(since),
+    ]);
   const lastIngest =
     sources
       .filter((source) => source.lastFetchStatus === "ok" && source.lastFetchedAt)
@@ -152,6 +154,35 @@ export default async function AdminSystemPage(): Promise<ReactNode> {
             <strong>Összesen</strong>
             <span>${totalCost.toFixed(4)} / $10 külső plafon</span>
             <span>App-oldali tartalék: ${env.GEMINI_MONTHLY_BUDGET_USD.toFixed(2)}</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="admin-dashboard__section">
+        <h2>Facebook</h2>
+        <div className="admin-metric-grid">
+          <div className="admin-metric-card">
+            <strong>Facebook auto publish</strong>
+            <span>{env.FACEBOOK_AUTO_PUBLISH ? "ON" : "OFF"}</span>
+            <span>Meta Graph API {env.META_GRAPH_API_VERSION}</span>
+          </div>
+          <div className="admin-metric-card">
+            <strong>Queue</strong>
+            <span>
+              queued {facebook.queued} · posting {facebook.posting}
+            </span>
+            <span>
+              posted 24h {facebook.posted24h} · failed 24h {facebook.failed24h}
+            </span>
+          </div>
+          <div className="admin-metric-card">
+            <strong>Utolsó Facebook-poszt</strong>
+            <span>{iso(facebook.lastPostedAt)}</span>
+            <span>External ID: {facebook.lastExternalPostId ?? "—"}</span>
+          </div>
+          <div className="admin-metric-card">
+            <strong>Utolsó Facebook-hiba</strong>
+            <span>{facebook.lastErrorCode ?? "—"}</span>
           </div>
         </div>
       </section>

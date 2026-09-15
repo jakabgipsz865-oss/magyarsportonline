@@ -3,6 +3,7 @@ import type { EditorialCorrectionCategory, EditorialCorrectionInput } from "@mag
 import { createEventEnvelope } from "@magyarsportonline/events";
 import { createRepositories, type Repositories } from "./db";
 import { getLogger } from "./logger";
+import { enqueueFacebookPublicationSafely } from "./facebook-publication";
 
 export type ReviewDecisionResult =
   | { ok: true }
@@ -84,6 +85,18 @@ export async function approveReviewItem(
       payload: { story_id: item.storyId, story_version_id: item.storyVersionId },
     },
   );
+
+  if (story.slug) {
+    await enqueueFacebookPublicationSafely({
+      storyId: item.storyId,
+      storyVersionId: item.storyVersionId,
+      slug: story.slug,
+      titleHu: version.titleHu,
+      leadHu: version.leadHu,
+      publishedAt,
+      status: "published",
+    });
+  }
 
   getLogger().info({ itemId, storyId: item.storyId }, "review queue item approved and published");
   return { ok: true };

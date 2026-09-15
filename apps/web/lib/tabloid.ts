@@ -13,6 +13,7 @@ import { createRepositories, type Repositories } from "./db";
 import { env } from "./env";
 import { getWriterLlmClient, getWriterRepairLlmClient } from "./llm";
 import { getLogger } from "./logger";
+import { enqueueFacebookPublicationSafely } from "./facebook-publication";
 import registry from "./tabloid-sources.json";
 
 export function mergeInlineImages(
@@ -361,8 +362,9 @@ export async function publishTabloid(
     const slug = story.slug ?? `${seo.slugify(version.titleHu)}-${story.id.slice(0, 8)}`;
     if (!story.slug && !(await repos.storyRepository.trySetSlug(story.id, slug)))
       throw new Error("Tabloid slug collision");
+    const publishedAt = story.publishedAt ?? new Date();
     await repos.storyVersionRepository.markPublished(version.id);
-    await repos.storyRepository.publish(story.id, version.id, story.publishedAt ?? new Date());
+    await repos.storyRepository.publish(story.id, version.id, publishedAt);
     await readModelProjector.handleStoryPublished(
       {
         storyRepository: repos.storyRepository,
@@ -378,6 +380,15 @@ export async function publishTabloid(
         payload: { story_id: story.id, story_version_id: version.id },
       },
     );
+    await enqueueFacebookPublicationSafely({
+      storyId: story.id,
+      storyVersionId: version.id,
+      slug,
+      titleHu: version.titleHu,
+      leadHu: version.leadHu,
+      publishedAt,
+      status: "published",
+    });
     revalidatePath("/");
     revalidatePath(`/hir/${slug}`);
     return {

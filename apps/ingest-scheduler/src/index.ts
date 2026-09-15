@@ -45,6 +45,11 @@ export async function runCron(env: Env): Promise<void> {
       controller.signal,
     ),
     post(endpoint(env.APP_ORIGIN, "/api/internal/jobs/process"), "jobs/process", env),
+    post(
+      endpoint(env.APP_ORIGIN, "/api/internal/facebook/enqueue-pending"),
+      "facebook/enqueue-pending",
+      env,
+    ),
   ]);
   clearTimeout(timeout);
   const failures = results.filter((result) => result.status === "rejected");

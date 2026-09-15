@@ -13,6 +13,7 @@ export * from "./pipeline-job-repository";
 export * from "./raw-article-repository";
 export * from "./review-queue-repository";
 export * from "./source-repository";
+export * from "./social-post-repository";
 export * from "./story-read-model-repository";
 export * from "./story-credibility-history-repository";
 export * from "./story-match-repository";

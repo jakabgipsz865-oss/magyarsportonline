@@ -14,10 +14,14 @@ const mocks = vi.hoisted(() => ({
   fetchFullArticle: vi.fn(),
   fetchImages: vi.fn(),
   fetchRss: vi.fn(),
+  enqueueFacebook: vi.fn(),
 }));
 vi.mock("./env", () => ({ env: mocks.env }));
 vi.mock("./tabloid-sources.json", () => ({ default: [{ id: "source-0" }, { id: "source-1" }] }));
 vi.mock("./db", () => ({ createRepositories: vi.fn() }));
+vi.mock("./facebook-publication", () => ({
+  enqueueFacebookPublicationSafely: mocks.enqueueFacebook,
+}));
 vi.mock("./logger", () => ({ getLogger: () => ({ info: vi.fn() }) }));
 vi.mock("./llm", () => ({
   getWriterLlmClient: () => mocks.llm,
@@ -152,6 +156,7 @@ describe("tabloid publication", () => {
     mocks.project.mockResolvedValue(undefined);
     mocks.fetchImages.mockResolvedValue(null);
     mocks.fetchFullArticle.mockResolvedValue(null);
+    mocks.enqueueFacebook.mockResolvedValue(undefined);
   });
   it("pauses ingest and publication before any repository or writer access", async () => {
     mocks.env.TABLOID_AUTO_PUBLISH = false;
@@ -483,6 +488,20 @@ describe("tabloid publication", () => {
     await publishTabloid("two", repos);
     expect(stories.size).toBe(2);
     expect(mocks.write).toHaveBeenCalledTimes(2);
+  });
+  it("enqueues Facebook only after a Story was successfully published", async () => {
+    const { repos } = fixtures();
+    await publishTabloid("one", repos);
+    expect(repos.storyRepository.publish).toHaveBeenCalledOnce();
+    expect(mocks.project).toHaveBeenCalledOnce();
+    expect(mocks.enqueueFacebook).toHaveBeenCalledOnce();
+    expect(mocks.enqueueFacebook).toHaveBeenCalledWith(
+      expect.objectContaining({
+        storyVersionId: expect.any(String),
+        slug: expect.stringMatching(/^magyar-hir-/),
+        status: "published",
+      }),
+    );
   });
   it("upgrades a legacy queued RSS fragment before the writer can publish it", async () => {
     const { repos, raws } = fixtures();

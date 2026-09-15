@@ -6,6 +6,7 @@ const logger = vi.hoisted(() => ({
   warn: vi.fn(),
   info: vi.fn(),
 }));
+const enqueueFacebook = vi.hoisted(() => vi.fn());
 
 vi.mock("./db", () => ({
   createRepositories: vi.fn(),
@@ -13,6 +14,9 @@ vi.mock("./db", () => ({
 
 vi.mock("./logger", () => ({
   getLogger: () => logger,
+}));
+vi.mock("./facebook-publication", () => ({
+  enqueueFacebookPublicationSafely: enqueueFacebook,
 }));
 
 import {
