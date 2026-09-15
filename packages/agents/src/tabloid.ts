@@ -144,7 +144,7 @@ export function assessTabloidQuality(input: {
       flags.push({ kind: "hard", code: "forbidden_terminology", field, detail: forbidden });
     if (
       /\p{Ll}{3,}\p{Lu}/u.test(text) ||
-      /\b([\p{L}]{2,})\s+\1\b/iu.test(text) ||
+      /(?<!\p{L})([\p{L}]{2,})\s+\1(?!\p{L})/iu.test(text) ||
       /\b\p{L}{28,}\b/u.test(text)
     )
       flags.push({ kind: "language", code: "malformed_hungarian", field });

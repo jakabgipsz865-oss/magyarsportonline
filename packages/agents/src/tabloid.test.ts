@@ -239,6 +239,20 @@ describe("one-call Hungarian writer", () => {
     expect(flags.some((flag) => flag.code === "malformed_hungarian")).toBe(false);
   });
 
+  it("uses Unicode word boundaries for repeated-word detection", () => {
+    const flags = assessTabloidQuality({
+      sourceContent: "A team suffered elimination and then won four matches.",
+      output: {
+        title_hu: "Fordulat a csapatnál",
+        lead_hu: "A kiesés és a négy győzelem is szóba került.",
+        body_hu:
+          "A kupakiesés és a bajnokságban aratott négy győzelem egyaránt fontos része volt az értékelésnek.",
+        language_warnings: [],
+      },
+    });
+    expect(flags.some((flag) => flag.code === "malformed_hungarian")).toBe(false);
+  });
+
   it("repairs only flagged fields once and rejects number changes", async () => {
     const llm = client({ title_hu: "Kane 3 gólt szerzett" });
     const output = {
