@@ -102,7 +102,7 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
 
     try {
       const event = parseEvent(job.event);
-      await dispatchJobToHandler(event, repos, emitter);
+      await dispatchJobToHandler(event, repos, emitter, job.id);
       await repos.pipelineJobRepository.complete(job.id);
       succeeded += 1;
     } catch (error) {

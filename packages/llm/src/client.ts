@@ -32,11 +32,21 @@ export interface LlmUsage {
   fallbackReason?: string | undefined;
 }
 
+export type LlmUsageRole = "primary" | "targeted_repair" | "technical_fallback" | "unspecified";
+
+export interface LlmUsageContext {
+  role: LlmUsageRole;
+  rawArticleId?: string;
+  storyId?: string;
+  jobId?: string;
+}
+
 export interface TextCompletionRequest {
   model: string;
   system: string;
   messages: LlmMessage[];
   maxTokens: number;
+  usageContext?: LlmUsageContext;
 }
 
 export interface TextCompletionResult extends LlmUsage {
@@ -52,6 +62,7 @@ export interface JsonCompletionRequest {
   thinkingLevel?: "minimal" | "low" | "medium" | "high";
   /** Raw JSON Schema (not a Zod schema) — see structured-outputs limitations: no min/maxLength, `additionalProperties: false` required on every object. */
   jsonSchema: Record<string, unknown>;
+  usageContext?: LlmUsageContext;
 }
 
 export interface JsonCompletionResult extends LlmUsage {

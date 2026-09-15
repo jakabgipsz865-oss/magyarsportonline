@@ -190,6 +190,13 @@
       "when": 1789279483229,
       "tag": "0026_tricky_golden_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1789500010073,
+      "tag": "0027_cold_stranger",
+      "breakpoints": true
     }
   ]
 }

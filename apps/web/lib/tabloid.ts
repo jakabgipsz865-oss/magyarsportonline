@@ -11,7 +11,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { createRepositories, type Repositories } from "./db";
 import { env } from "./env";
-import { getWriterLlmClient } from "./llm";
+import { getWriterLlmClient, getWriterRepairLlmClient } from "./llm";
 import { getLogger } from "./logger";
 import registry from "./tabloid-sources.json";
 
@@ -19,6 +19,19 @@ export function mergeInlineImages(
   ...groups: Array<SourceInlineImage[] | undefined>
 ): SourceInlineImage[] {
   return deduplicateSourceImages(groups.flatMap((group) => group ?? [])).slice(0, 8);
+}
+
+function hasUnresolvedTabloidIssues(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.some(
+      (item) =>
+        typeof item === "object" &&
+        item !== null &&
+        "code" in item &&
+        (item as { repaired?: boolean }).repaired !== true,
+    )
+  );
 }
 
 /** Rebuild the public row after source-image metadata changes, without an LLM call. */
@@ -83,7 +96,7 @@ async function fetchCompleteTabloidArticle(
 export async function publishTabloid(
   rawId: string,
   repos: Repositories = createRepositories(),
-  options: { retryFailedWriter?: boolean; forceRewrite?: boolean } = {},
+  options: { retryFailedWriter?: boolean; forceRewrite?: boolean; jobId?: string } = {},
 ) {
   if (!env.TABLOID_AUTO_PUBLISH) return { paused: true, llmCalls: 0 };
   return repos.rawArticleRepository.withTabloidLock(rawId, async () => {
@@ -156,37 +169,170 @@ export async function publishTabloid(
     if (!version || options.forceRewrite) {
       if (options.retryFailedWriter || options.forceRewrite)
         await repos.rawArticleRepository.releaseTabloidQuotaDeferral(raw.id);
-      if (!(await repos.rawArticleRepository.claimTabloidWriter(raw.id)))
-        throw new Error("Tabloid writer already attempted; manual inspection required");
-      const result = await tabloid
-        .writeTabloid(getWriterLlmClient(), {
+      if (!(await repos.rawArticleRepository.claimTabloidWriter(raw.id))) {
+        version = await repos.storyVersionRepository.getLatest(story.id);
+        if (!version) throw new Error("Tabloid writer already attempted; no reusable draft exists");
+      }
+      if (!version || options.forceRewrite) {
+        const knowledge = await repos.editorialKnowledgeRepository.findRelevant({
+          sport: "football",
+          sourceLanguage: raw.language,
+          targetLanguage: "hu",
+          contexts: ["headline", "lead", "body", "tabloid"],
+          contextText: `${raw.titleOriginal}\n${raw.bodyOriginal}`,
+        });
+        const writerInput = {
           language: raw.language,
           title: raw.titleOriginal,
           content: raw.bodyOriginal,
           sourceName: source.name,
           sourceUrl: raw.sourceUrl,
           publishedAt: raw.publishedAtSource?.toISOString() ?? null,
-        })
-        .catch(async (error: unknown) => {
-          if (isDailyLlmQuotaError(error) || isGeminiDailyQuotaError(error))
-            await repos.rawArticleRepository.releaseTabloidQuotaDeferral(raw.id);
-          throw error;
+          editorialKnowledge: knowledge,
+          usageContext: {
+            role: "primary" as const,
+            rawArticleId: raw.id,
+            storyId: story.id,
+            ...(options.jobId ? { jobId: options.jobId } : {}),
+          },
+        };
+        let result: Awaited<ReturnType<typeof tabloid.writeTabloid>>;
+        let technicalFallback = false;
+        try {
+          result = await tabloid.writeTabloid(getWriterLlmClient(), writerInput);
+        } catch (error) {
+          if (error instanceof tabloid.TabloidTechnicalError) {
+            technicalFallback = true;
+            result = await tabloid.writeTabloid(getWriterRepairLlmClient(), {
+              ...writerInput,
+              usageContext: {
+                ...writerInput.usageContext,
+                role: "technical_fallback",
+              },
+            });
+          } else {
+            if (isDailyLlmQuotaError(error) || isGeminiDailyQuotaError(error))
+              await repos.rawArticleRepository.releaseTabloidQuotaDeferral(raw.id);
+            throw error;
+          }
+        }
+        const forbiddenTerms = knowledge.flatMap((item) => item.avoid_hu);
+        const initialFlags = tabloid.assessTabloidQuality({
+          sourceContent: raw.bodyOriginal,
+          output: result,
+          forbiddenTerms,
         });
-      version = await repos.storyVersionRepository.createNextVersion(story.id, {
-        titleHu: result.title_hu,
-        leadHu: result.lead_hu,
-        bodyHu: result.body_hu,
-        changeSummaryHu: version
-          ? "A forrás részletesebb feldolgozása és a forrásképek beágyazása."
-          : null,
-        generatedByModel: result.generatedByModel,
-        isAiGenerated: true,
-        promptVersion: tabloid.TABLOID_PROMPT,
-        // Legacy columns retained for schema compatibility, never used as gates.
-        factConsistencyScore: 0,
-        selfCheckFallback: false,
-      });
+        let finalResult = result;
+        let repairStatus: "not_needed" | "success" | "failed" = "not_needed";
+        let primaryDraftVersionId: string | null = null;
+        if (initialFlags.length > 0 && !technicalFallback) {
+          version = await repos.storyVersionRepository.createNextVersion(story.id, {
+            titleHu: result.title_hu,
+            leadHu: result.lead_hu,
+            bodyHu: result.body_hu,
+            changeSummaryHu: "Flash-Lite draft; célzott nyelvi javítás szükséges.",
+            generatedByModel: result.generatedByModel,
+            isAiGenerated: true,
+            promptVersion: tabloid.TABLOID_PROMPT,
+            factConsistencyScore: 0,
+            selfCheckFallback: false,
+            qualityIssues: initialFlags.map((flag) => ({
+              ...flag,
+              repaired: false,
+              repairStatus: "pending",
+            })),
+          });
+          primaryDraftVersionId = version.id;
+          try {
+            finalResult = await tabloid.repairTabloid(
+              getWriterRepairLlmClient(),
+              result,
+              initialFlags,
+              { ...writerInput.usageContext, role: "targeted_repair" },
+            );
+            repairStatus = "success";
+          } catch (error) {
+            repairStatus = "failed";
+            await repos.storyVersionRepository.updateDraftContent(primaryDraftVersionId, {
+              titleHu: result.title_hu,
+              leadHu: result.lead_hu,
+              bodyHu: result.body_hu,
+              editorialRewriteApplied: false,
+              qualityIssues: initialFlags.map((flag) => ({
+                ...flag,
+                repaired: false,
+                repairStatus: "failed",
+              })),
+            });
+            getLogger().error(
+              { rawArticleId: raw.id, storyId: story.id, error },
+              "Targeted Writer repair failed",
+            );
+            throw error;
+          }
+        }
+        const finalFlags = tabloid.assessTabloidQuality({
+          sourceContent: raw.bodyOriginal,
+          output: finalResult,
+          forbiddenTerms,
+        });
+        if (finalFlags.length > 0) {
+          if (primaryDraftVersionId)
+            await repos.storyVersionRepository.updateDraftContent(primaryDraftVersionId, {
+              titleHu: finalResult.title_hu,
+              leadHu: finalResult.lead_hu,
+              bodyHu: finalResult.body_hu,
+              editorialRewriteApplied: false,
+              qualityIssues: finalFlags.map((flag) => ({
+                ...flag,
+                repaired: false,
+                repairStatus: "failed",
+              })),
+            });
+          throw new Error(
+            `Tabloid quality gate failed: ${finalFlags.map((flag) => flag.code).join(",")}`,
+          );
+        }
+        const qualityIssues = [
+          ...initialFlags.map((flag) => ({ ...flag, repaired: repairStatus === "success" })),
+          ...(technicalFallback
+            ? [{ kind: "hard", code: "technical_schema_failure", field: "body", repaired: true }]
+            : []),
+        ];
+        result = finalResult;
+        const versionInput = {
+          titleHu: result.title_hu,
+          leadHu: result.lead_hu,
+          bodyHu: result.body_hu,
+          changeSummaryHu: version
+            ? "A forrás részletesebb feldolgozása és a forrásképek beágyazása."
+            : null,
+          generatedByModel: technicalFallback
+            ? tabloid.TABLOID_REPAIR_MODEL
+            : result.generatedByModel,
+          isAiGenerated: true,
+          promptVersion: tabloid.TABLOID_PROMPT,
+          factConsistencyScore: 0,
+          selfCheckFallback: false,
+          qualityIssues,
+        };
+        if (primaryDraftVersionId) {
+          await repos.storyVersionRepository.updateDraftContent(primaryDraftVersionId, {
+            titleHu: result.title_hu,
+            leadHu: result.lead_hu,
+            bodyHu: result.body_hu,
+            editorialRewriteApplied: false,
+            qualityIssues,
+          });
+          version = await repos.storyVersionRepository.getById(primaryDraftVersionId);
+        } else {
+          version = await repos.storyVersionRepository.createNextVersion(story.id, versionInput);
+        }
+      }
+      if (!version) throw new Error("Tabloid draft missing after Writer processing");
     }
+    if (hasUnresolvedTabloidIssues(version.qualityIssues))
+      throw new Error("Tabloid draft has unresolved quality flags; automatic AI retry is blocked");
     const slug = story.slug ?? `${seo.slugify(version.titleHu)}-${story.id.slice(0, 8)}`;
     if (!story.slug && !(await repos.storyRepository.trySetSlug(story.id, slug)))
       throw new Error("Tabloid slug collision");

@@ -35,6 +35,30 @@ describe("PipelineJobRepository.findActiveDeferral", () => {
   });
 });
 
+describe("PipelineJobRepository stale recovery telemetry", () => {
+  it("reports stale jobs and the latest successful processing time", async () => {
+    const execute = vi.fn(async () => [
+      {
+        pending: "3",
+        in_progress: "2",
+        completed: "10",
+        dead_letter: "1",
+        stale: "1",
+        last_completed_at: "2026-09-15T10:00:00.000Z",
+      },
+    ]);
+    const repository = new PipelineJobRepository({ execute } as never);
+    await expect(repository.getStatusCounts()).resolves.toEqual({
+      pending: 3,
+      inProgress: 2,
+      completed: 10,
+      deadLetter: 1,
+      stale: 1,
+      lastCompletedAt: new Date("2026-09-15T10:00:00.000Z"),
+    });
+  });
+});
+
 describe("PipelineJobRepository dead-letter recovery", () => {
   it("normalizes grouped diagnostics without exposing event payloads", async () => {
     const execute = vi.fn(async () => [

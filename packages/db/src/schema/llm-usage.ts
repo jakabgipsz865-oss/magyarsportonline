@@ -19,5 +19,11 @@ export const llmUsage = pgTable("llm_usage", {
   inputTokens: integer("input_tokens").notNull(),
   outputTokens: integer("output_tokens").notNull(),
   costUsd: numeric("cost_usd", { precision: 10, scale: 6 }).notNull(),
+  role: text("role").notNull().default("unspecified"),
+  status: text("status").notNull().default("success"),
+  errorCode: text("error_code"),
+  rawArticleId: uuid("raw_article_id"),
+  storyId: uuid("story_id"),
+  jobId: uuid("job_id"),
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
 });

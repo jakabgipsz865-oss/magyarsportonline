@@ -55,14 +55,14 @@ export const env = createEnv({
       .transform((value) => value === "true"),
 
     GEMINI_API_KEY: z.string().min(1).optional(),
-    GEMINI_MODEL: z.string().min(1).default("gemini-3.5-flash"),
+    GEMINI_MODEL: z.string().min(1).default("gemini-3.5-flash-lite"),
     GEMINI_BILLING_MODE: z.enum(["byok", "unified"]).default("byok"),
     GEMINI_FREE_ONLY: z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
     GEMINI_DAILY_REQUEST_CAP: z.coerce.number().int().positive().max(450).default(450),
-    GEMINI_MONTHLY_BUDGET_USD: z.coerce.number().positive().max(5).default(5),
+    GEMINI_MONTHLY_BUDGET_USD: z.coerce.number().positive().max(10).default(9.5),
     GEMINI_BASE_URL: z.string().url().optional(),
     CLOUDFLARE_AI_GATEWAY_ID: z.string().min(1).default("magyarsportonline"),
     CLOUDFLARE_AI_GATEWAY_TOKEN: z.string().min(1).optional(),

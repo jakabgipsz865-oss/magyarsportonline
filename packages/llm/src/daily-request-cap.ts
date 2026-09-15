@@ -17,8 +17,22 @@ export class DailyLlmRequestCapError extends Error {
 }
 
 export interface DailyRequestUsageReader {
-  reserveRequest(provider: string, model: string, since: Date, cap: number): Promise<string | null>;
-  finalizeRequest(reservationId: string, inputTokens: number, outputTokens: number): Promise<void>;
+  reserveRequest(
+    provider: string,
+    model: string,
+    since: Date,
+    cap: number,
+    context?: { role: string; rawArticleId?: string; storyId?: string; jobId?: string },
+  ): Promise<string | null>;
+  finalizeRequest(
+    reservationId: string,
+    inputTokens: number,
+    outputTokens: number,
+    costUsd?: number,
+    status?: string,
+    errorCode?: string | null,
+  ): Promise<void>;
+  failRequest?(reservationId: string, errorCode: string): Promise<void>;
   releaseRequest(reservationId: string): Promise<void>;
 }
 
@@ -85,6 +99,11 @@ export class DailyRequestCappedLlmClient implements LlmClient {
     private readonly cap: number,
     private readonly usage: DailyRequestUsageReader,
     private readonly shouldReleaseReservation: (error: unknown) => boolean = () => false,
+    private readonly estimateCostUsd: (
+      model: string,
+      inputTokens: number,
+      outputTokens: number,
+    ) => number = () => 0,
   ) {}
 
   get modelLabel(): string | undefined {
@@ -92,7 +111,7 @@ export class DailyRequestCappedLlmClient implements LlmClient {
   }
 
   async completeText(request: TextCompletionRequest): Promise<TextCompletionResult> {
-    const reservationId = await this.reserve();
+    const reservationId = await this.reserve(request);
     try {
       const result = await this.inner.completeText(request);
       await this.finalize(reservationId, result.inputTokens, result.outputTokens);
@@ -104,7 +123,7 @@ export class DailyRequestCappedLlmClient implements LlmClient {
   }
 
   async completeJson(request: JsonCompletionRequest): Promise<JsonCompletionResult> {
-    const reservationId = await this.reserve();
+    const reservationId = await this.reserve(request);
     try {
       const result = await this.inner.completeJson(request);
       await this.finalize(reservationId, result.inputTokens, result.outputTokens);
@@ -115,12 +134,13 @@ export class DailyRequestCappedLlmClient implements LlmClient {
     }
   }
 
-  private async reserve(): Promise<string> {
+  private async reserve(request: TextCompletionRequest | JsonCompletionRequest): Promise<string> {
     const reservationId = await this.usage.reserveRequest(
       this.provider,
       this.inner.modelLabel ?? "unknown",
       geminiQuotaDayStart(),
       this.cap,
+      request.usageContext,
     );
     if (!reservationId) {
       throw new DailyLlmRequestCapError(this.provider, this.cap);
@@ -134,7 +154,12 @@ export class DailyRequestCappedLlmClient implements LlmClient {
     outputTokens: number,
   ): Promise<void> {
     try {
-      await this.usage.finalizeRequest(reservationId, inputTokens, outputTokens);
+      await this.usage.finalizeRequest(
+        reservationId,
+        inputTokens,
+        outputTokens,
+        this.estimateCostUsd(this.inner.modelLabel ?? "unknown", inputTokens, outputTokens),
+      );
     } catch {
       // The reservation already counts toward the hard cap. A metrics update
       // failure must not replay a successful paid/quota-consuming request.
@@ -156,7 +181,17 @@ export class DailyRequestCappedLlmClient implements LlmClient {
       );
       return;
     }
-    if (!this.shouldReleaseReservation(error)) return;
+    if (!this.shouldReleaseReservation(error)) {
+      try {
+        await this.usage.failRequest?.(
+          reservationId,
+          error instanceof Error ? error.name : "provider_error",
+        );
+      } catch {
+        // The reservation remains counted even if failure telemetry cannot be updated.
+      }
+      return;
+    }
     try {
       await this.usage.releaseRequest(reservationId);
     } catch {

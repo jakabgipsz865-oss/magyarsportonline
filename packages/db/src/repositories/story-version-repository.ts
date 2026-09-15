@@ -36,6 +36,43 @@ export interface LatestVersionSummary {
 export class StoryVersionRepository {
   constructor(private readonly db: Database) {}
 
+  async getTabloidQualityMetricsSince(since: Date): Promise<{
+    checked: number;
+    flagged: number;
+    hard: number;
+    language: number;
+    reasons: Array<{ code: string; count: number }>;
+  }> {
+    const [row] = await this.db.execute<{
+      checked: number | string;
+      flagged: number | string;
+      hard: number | string;
+      language: number | string;
+    }>(sql`
+      SELECT
+        count(*) AS checked,
+        count(*) FILTER (WHERE jsonb_array_length(coalesce(quality_issues, '[]'::jsonb)) > 0) AS flagged,
+        count(*) FILTER (WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(quality_issues, '[]'::jsonb)) issue WHERE issue->>'kind' = 'hard')) AS hard,
+        count(*) FILTER (WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(quality_issues, '[]'::jsonb)) issue WHERE issue->>'kind' = 'language')) AS language
+      FROM ${storyVersions}
+      WHERE prompt_version = 'tabloid-hu@2' AND created_at >= ${since.toISOString()}::timestamptz
+    `);
+    const reasonRows = await this.db.execute<{ code: string; count: number | string }>(sql`
+      SELECT issue->>'code' AS code, count(*) AS count
+      FROM ${storyVersions}, jsonb_array_elements(coalesce(quality_issues, '[]'::jsonb)) issue
+      WHERE prompt_version = 'tabloid-hu@2' AND created_at >= ${since.toISOString()}::timestamptz
+      GROUP BY issue->>'code'
+      ORDER BY count(*) DESC, issue->>'code'
+    `);
+    return {
+      checked: Number(row?.checked ?? 0),
+      flagged: Number(row?.flagged ?? 0),
+      hard: Number(row?.hard ?? 0),
+      language: Number(row?.language ?? 0),
+      reasons: reasonRows.map((reason) => ({ code: reason.code, count: Number(reason.count) })),
+    };
+  }
+
   /**
    * Assigns `version_number` inside a transaction that locks the parent
    * `stories` row with `SELECT ... FOR UPDATE` (docs/architecture/01-data-model.md

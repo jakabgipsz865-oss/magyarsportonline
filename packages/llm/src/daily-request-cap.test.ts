@@ -28,7 +28,13 @@ describe("DailyRequestCappedLlmClient", () => {
 
     await expect(client.completeText(request)).rejects.toBeInstanceOf(DailyLlmRequestCapError);
     expect(inner.textRequests).toHaveLength(0);
-    expect(reserveRequest).toHaveBeenCalledWith("gemini", "unknown", expect.any(Date), 20);
+    expect(reserveRequest).toHaveBeenCalledWith(
+      "gemini",
+      "unknown",
+      expect.any(Date),
+      20,
+      undefined,
+    );
     expect(finalizeRequest).not.toHaveBeenCalled();
   });
 
@@ -44,7 +50,34 @@ describe("DailyRequestCappedLlmClient", () => {
 
     await expect(client.completeText(request)).resolves.toMatchObject({ text: "ok" });
     expect(inner.textRequests).toHaveLength(1);
-    expect(finalizeRequest).toHaveBeenCalledWith("reservation-id", 1, 1);
+    expect(finalizeRequest).toHaveBeenCalledWith("reservation-id", 1, 1, 0);
+  });
+
+  it("records role correlation and estimated monthly cost on the reservation", async () => {
+    const inner = new FakeLlmClient();
+    inner.queueText({ text: "ok", inputTokens: 100, outputTokens: 20 });
+    const reserveRequest = vi.fn(async () => "reservation-id");
+    const finalizeRequest = vi.fn(async () => undefined);
+    const client = new DailyRequestCappedLlmClient(
+      inner,
+      "gemini",
+      450,
+      { reserveRequest, finalizeRequest, releaseRequest: async () => undefined },
+      () => false,
+      () => 0.0042,
+    );
+    const usageContext = { role: "primary" as const, rawArticleId: "raw-1", storyId: "story-1" };
+
+    await client.completeText({ ...request, usageContext });
+
+    expect(reserveRequest).toHaveBeenCalledWith(
+      "gemini",
+      "unknown",
+      expect.any(Date),
+      450,
+      usageContext,
+    );
+    expect(finalizeRequest).toHaveBeenCalledWith("reservation-id", 100, 20, 0.0042);
   });
 
   it("releases only a failure proven not to consume provider quota", async () => {
@@ -111,7 +144,7 @@ describe("DailyRequestCappedLlmClient", () => {
     await expect(client.completeJson({ ...request, jsonSchema: { type: "object" } })).rejects.toBe(
       failure,
     );
-    expect(finalizeRequest).toHaveBeenCalledWith("reservation-id", 120, 2048);
+    expect(finalizeRequest).toHaveBeenCalledWith("reservation-id", 120, 2048, 0);
     expect(releaseRequest).not.toHaveBeenCalled();
   });
 

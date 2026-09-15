@@ -18,6 +18,12 @@ export class LlmUsageRepository {
     inputTokens: number;
     outputTokens: number;
     costUsd: number;
+    role?: string;
+    status?: string;
+    errorCode?: string | null;
+    rawArticleId?: string;
+    storyId?: string;
+    jobId?: string;
     occurredAt?: Date;
   }): Promise<LlmUsageRow> {
     const [row] = await this.db
@@ -29,6 +35,12 @@ export class LlmUsageRepository {
         outputTokens: input.outputTokens,
         // `numeric` oszlop stringet vár — fix 6 tizedes, a séma skálájával egyezően.
         costUsd: input.costUsd.toFixed(6),
+        role: input.role ?? "unspecified",
+        status: input.status ?? "success",
+        errorCode: input.errorCode ?? null,
+        rawArticleId: input.rawArticleId,
+        storyId: input.storyId,
+        jobId: input.jobId,
         ...(input.occurredAt ? { occurredAt: input.occurredAt } : {}),
       })
       .returning();
@@ -65,6 +77,7 @@ export class LlmUsageRepository {
     model: string,
     since: Date,
     cap: number,
+    context?: { role: string; rawArticleId?: string; storyId?: string; jobId?: string },
   ): Promise<string | null> {
     return this.db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`mso-llm-cap:${provider}`}))`);
@@ -75,7 +88,17 @@ export class LlmUsageRepository {
       if ((count?.total ?? 0) >= cap) return null;
       const [reservation] = await tx
         .insert(llmUsage)
-        .values({ provider, model, inputTokens: 0, outputTokens: 0, costUsd: "0.000000" })
+        .values({
+          provider,
+          model,
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: "0.000000",
+          role: context?.role ?? "unspecified",
+          rawArticleId: context?.rawArticleId,
+          storyId: context?.storyId,
+          jobId: context?.jobId,
+        })
         .returning({ id: llmUsage.id });
       return reservation?.id ?? null;
     });
@@ -85,11 +108,44 @@ export class LlmUsageRepository {
     reservationId: string,
     inputTokens: number,
     outputTokens: number,
+    costUsd = 0,
+    status = "success",
+    errorCode: string | null = null,
   ): Promise<void> {
     await this.db
       .update(llmUsage)
-      .set({ inputTokens, outputTokens })
+      .set({ inputTokens, outputTokens, costUsd: costUsd.toFixed(6), status, errorCode })
       .where(eq(llmUsage.id, reservationId));
+  }
+
+  async failRequest(reservationId: string, errorCode: string): Promise<void> {
+    await this.db
+      .update(llmUsage)
+      .set({ status: "failed", errorCode })
+      .where(eq(llmUsage.id, reservationId));
+  }
+
+  async getMonthlyRoleMetrics(
+    since: Date,
+  ): Promise<Array<{ role: string; status: string; calls: number; costUsd: number }>> {
+    const rows = await this.db.execute<{
+      role: string;
+      status: string;
+      calls: number | string;
+      cost_usd: number | string;
+    }>(sql`
+      SELECT role, status, count(*) AS calls, coalesce(sum(cost_usd), 0) AS cost_usd
+      FROM ${llmUsage}
+      WHERE provider = 'gemini' AND occurred_at >= ${since.toISOString()}::timestamptz
+      GROUP BY role, status
+      ORDER BY role, status
+    `);
+    return rows.map((row) => ({
+      role: row.role,
+      status: row.status,
+      calls: Number(row.calls),
+      costUsd: Number(row.cost_usd),
+    }));
   }
 
   async releaseRequest(reservationId: string): Promise<void> {

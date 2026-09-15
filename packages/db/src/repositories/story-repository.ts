@@ -59,6 +59,13 @@ export class StoryRepository {
     return rows.map((row) => ({ status: row.status, count: Number(row.count) }));
   }
 
+  async getLastPublicationAt(): Promise<Date | null> {
+    const [row] = await this.db.execute<{ published_at: Date | string | null }>(sql`
+      SELECT max(published_at) AS published_at FROM ${stories} WHERE status = 'published'
+    `);
+    return row?.published_at ? new Date(row.published_at) : null;
+  }
+
   /**
    * Archives a Story as a proven false-positive merge (2026-07-29,
    * docs/open-decisions.md #14) — never deleted (keeps the audit trail),

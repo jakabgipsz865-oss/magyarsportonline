@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { isFootballTabloid, paragraphizeBody, writeTabloid } from "./tabloid";
+import {
+  assessTabloidQuality,
+  isFootballTabloid,
+  paragraphizeBody,
+  repairTabloid,
+  writeTabloid,
+} from "./tabloid";
 import type { LlmClient } from "@magyarsportonline/llm";
 
 describe("all-football feed filter", () => {
@@ -148,7 +154,7 @@ describe("one-call Hungarian writer", () => {
     expect((await writeTabloid(llm, input)).body_hu).toContain("családjáról");
     expect(llm.completeJson).toHaveBeenCalledTimes(1);
     expect(llm.completeJson).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "gemini-3.5-flash", thinkingLevel: "minimal" }),
+      expect.objectContaining({ model: "gemini-3.5-flash-lite", thinkingLevel: "minimal" }),
     );
     expect(llm.completeText).not.toHaveBeenCalled();
   });
@@ -182,18 +188,69 @@ describe("one-call Hungarian writer", () => {
     });
     await expect(writeTabloid(llm, input)).rejects.toThrow("untranslated");
   });
-  it("rejects a short draft for a detailed source article", async () => {
+  it("hard-flags a short draft for a detailed source article", async () => {
     const llm = client({
       title_hu: "Részletes történet",
       lead_hu: "A történet röviden.",
       body_hu: "Ez csak egy rövid bekezdés.",
     });
+    const sourceContent = "Detailed source sentence. ".repeat(60);
+    const output = await writeTabloid(llm, {
+      ...input,
+      content: sourceContent,
+    });
+    expect(assessTabloidQuality({ sourceContent, output })).toContainEqual(
+      expect.objectContaining({ kind: "hard", code: "incomplete_coverage" }),
+    );
+  });
+
+  it("separates hard and language flags without another AI call", () => {
+    const flags = assessTabloidQuality({
+      sourceContent: "Harry Kane scored 2 goals.",
+      output: {
+        title_hu: "Harry Kane nagy nagy napja",
+        lead_hu: "A csatár 3 gólt szerzett.",
+        body_hu:
+          "Ugyanaz a hosszabb mondat szerepel itt.\n\nUgyanaz a hosszabb mondat szerepel itt.",
+        language_warnings: ["A cím bizonytalan."],
+      },
+      forbiddenTerms: ["nagy nagy"],
+    });
+    expect(flags.some((flag) => flag.kind === "hard" && flag.code === "number_integrity")).toBe(
+      true,
+    );
+    expect(flags.some((flag) => flag.kind === "hard" && flag.code === "repetition")).toBe(true);
+    expect(
+      flags.some((flag) => flag.kind === "language" && flag.code === "writer_language_warning"),
+    ).toBe(true);
+  });
+
+  it("repairs only flagged fields once and rejects number changes", async () => {
+    const llm = client({ title_hu: "Kane 3 gólt szerzett" });
+    const output = {
+      title_hu: "Kane 2 gólt szerzett",
+      lead_hu: "A csatár remekelt.",
+      body_hu: "A Bayern játékosa kétszer talált be.",
+      language_warnings: [],
+      generatedByModel: "gemini-3.5-flash-lite",
+    };
     await expect(
-      writeTabloid(llm, {
-        ...input,
-        content: "Detailed source sentence. ".repeat(60),
+      repairTabloid(
+        llm,
+        output,
+        [{ kind: "language", code: "malformed_hungarian", field: "title" }],
+        {
+          role: "targeted_repair",
+        },
+      ),
+    ).rejects.toThrow("changed numbers");
+    expect(llm.completeJson).toHaveBeenCalledOnce();
+    expect(llm.completeJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "gemini-3.5-flash",
+        usageContext: { role: "targeted_repair" },
       }),
-    ).rejects.toThrow("incomplete coverage");
+    );
   });
   it("deterministically splits a long one-block draft into readable paragraphs", () => {
     expect(

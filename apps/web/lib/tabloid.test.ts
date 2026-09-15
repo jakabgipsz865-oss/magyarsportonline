@@ -3,6 +3,9 @@ import type { Repositories } from "./db";
 
 const mocks = vi.hoisted(() => ({
   write: vi.fn(),
+  repair: vi.fn(),
+  assess: vi.fn(),
+  TechnicalError: class extends Error {},
   project: vi.fn(),
   revalidate: vi.fn(),
   llm: {},
@@ -16,13 +19,20 @@ vi.mock("./env", () => ({ env: mocks.env }));
 vi.mock("./tabloid-sources.json", () => ({ default: [{ id: "source-0" }, { id: "source-1" }] }));
 vi.mock("./db", () => ({ createRepositories: vi.fn() }));
 vi.mock("./logger", () => ({ getLogger: () => ({ info: vi.fn() }) }));
-vi.mock("./llm", () => ({ getWriterLlmClient: () => mocks.llm }));
+vi.mock("./llm", () => ({
+  getWriterLlmClient: () => mocks.llm,
+  getWriterRepairLlmClient: () => mocks.llm,
+}));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
 vi.mock("@magyarsportonline/agents", () => ({
   tabloid: {
     writeTabloid: mocks.write,
+    repairTabloid: mocks.repair,
+    assessTabloidQuality: mocks.assess,
+    TabloidTechnicalError: mocks.TechnicalError,
     isFootballTabloid: mocks.accepted,
-    TABLOID_MODEL: "gemini-3.5-flash",
+    TABLOID_MODEL: "gemini-3.5-flash-lite",
+    TABLOID_REPAIR_MODEL: "gemini-3.5-flash",
     TABLOID_PROMPT: "tabloid-hu@2",
   },
   seo: { slugify: () => "magyar-hir" },
@@ -92,6 +102,7 @@ function fixtures() {
         fetchConfig: { tabloid: true, footballFeed: true, url: "https://example.com/feed" },
       }),
     },
+    editorialKnowledgeRepository: { findRelevant: vi.fn(async () => []) },
     storyRepository: {
       createOrMatchByFingerprint: async (key: string) => {
         if (!stories.has(key)) stories.set(key, { id: key, slug: null, publishedAt: null });
@@ -104,10 +115,18 @@ function fixtures() {
     storySourceRepository: { link: vi.fn() },
     storyVersionRepository: {
       getLatest: async (id: string) => versions.get(id) ?? null,
+      getById: async (versionId: string) =>
+        [...versions.values()].find((item) => item["id"] === versionId) ?? null,
       createNextVersion: async (id: string, input: Record<string, unknown>) => {
         const version = { ...input, id: `version-${id}` };
         versions.set(id, version);
         return version;
+      },
+      updateDraftContent: async (versionId: string, input: Record<string, unknown>) => {
+        const version = [...versions.values()].find((item) => item["id"] === versionId);
+        if (!version) return false;
+        Object.assign(version, input);
+        return true;
       },
       markPublished: vi.fn(),
     },
@@ -125,7 +144,11 @@ describe("tabloid publication", () => {
       title_hu: "Magyar hír",
       lead_hu: "Személyes történet.",
       body_hu: "A játékos a családjáról beszélt.",
+      language_warnings: [],
+      generatedByModel: "gemini-3.5-flash-lite",
     });
+    mocks.repair.mockImplementation(async (_llm, output) => output);
+    mocks.assess.mockReturnValue([]);
     mocks.project.mockResolvedValue(undefined);
     mocks.fetchImages.mockResolvedValue(null);
     mocks.fetchFullArticle.mockResolvedValue(null);
@@ -495,6 +518,60 @@ describe("tabloid publication", () => {
     await publishTabloid("one", repos);
     expect(mocks.write).toHaveBeenCalledTimes(1);
     expect(mocks.project).toHaveBeenCalledTimes(2);
+  });
+  it("re-reads a concurrently persisted draft when the writer marker is already claimed", async () => {
+    const { repos, versions } = fixtures();
+    await publishTabloid("one", repos);
+    const persisted = [...versions.values()][0];
+    repos.storyVersionRepository.getLatest = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(persisted) as unknown as typeof repos.storyVersionRepository.getLatest;
+    repos.rawArticleRepository.claimTabloidWriter = vi.fn(async () => false);
+    mocks.write.mockClear();
+
+    await publishTabloid("one", repos);
+
+    expect(mocks.write).not.toHaveBeenCalled();
+  });
+  it("does not repair a clean primary output", async () => {
+    const { repos } = fixtures();
+    await publishTabloid("one", repos);
+    expect(mocks.write).toHaveBeenCalledOnce();
+    expect(mocks.repair).not.toHaveBeenCalled();
+  });
+  it("runs at most one targeted repair and stores reason codes", async () => {
+    const { repos, versions } = fixtures();
+    mocks.assess
+      .mockReturnValueOnce([{ kind: "language", code: "malformed_hungarian", field: "title" }])
+      .mockReturnValueOnce([]);
+    await publishTabloid("one", repos);
+    expect(mocks.write).toHaveBeenCalledOnce();
+    expect(mocks.repair).toHaveBeenCalledOnce();
+    expect([...versions.values()][0]?.["qualityIssues"]).toEqual([
+      expect.objectContaining({ code: "malformed_hungarian", repaired: true }),
+    ]);
+  });
+  it("uses one full Flash fallback only for a technical primary failure", async () => {
+    const { repos } = fixtures();
+    mocks.write.mockRejectedValueOnce(new mocks.TechnicalError("schema")).mockResolvedValueOnce({
+      title_hu: "Magyar hír",
+      lead_hu: "Személyes történet.",
+      body_hu: "A játékos a családjáról beszélt.",
+      language_warnings: [],
+      generatedByModel: "gemini-3.5-flash",
+    });
+    await publishTabloid("one", repos);
+    expect(mocks.write).toHaveBeenCalledTimes(2);
+    expect(mocks.write.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ usageContext: expect.objectContaining({ role: "primary" }) }),
+    );
+    expect(mocks.write.mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({
+        usageContext: expect.objectContaining({ role: "technical_fallback" }),
+      }),
+    );
+    expect(mocks.repair).not.toHaveBeenCalled();
   });
   it("creates a new Gemini version when an operator explicitly requests a rewrite", async () => {
     const { repos } = fixtures();

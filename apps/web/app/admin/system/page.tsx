@@ -1,48 +1,53 @@
 import type { ReactNode } from "react";
-import { geminiQuotaDayStart, MODEL_TIERS } from "@magyarsportonline/llm";
 import { createRepositories } from "../../../lib/db";
 import { env } from "../../../lib/env";
-import { getPremierLeaguePanel } from "../../../lib/premier-league-fixtures";
 import { AdminHeader } from "../_components/admin-header";
 
 export const dynamic = "force-dynamic";
 
-function rate(ok: number, failed: number): string {
-  const total = ok + failed;
-  return total ? `${Math.round((ok / total) * 100)}% (${ok}/${total})` : "nincs adat";
+function iso(value: Date | null | undefined): string {
+  return value?.toISOString() ?? "—";
 }
 
 export default async function AdminSystemPage(): Promise<ReactNode> {
   const repos = createRepositories();
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const [
-    sources,
-    content,
-    agents,
-    queue,
-    storyStatuses,
-    usage,
-    geminiCalls,
-    extractionFailure,
-    aiDeferral,
-    reviewBlockers,
-    fixtures,
-  ] = await Promise.all([
+  const now = new Date();
+  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const [sources, queue, lastPublication, quality, usage] = await Promise.all([
     repos.sourceRepository.listAll(),
-    repos.rawArticleRepository.getContentHealth(),
-    repos.agentRunRepository.getRecentHealth(since),
     repos.pipelineJobRepository.getStatusCounts(),
-    repos.storyRepository.getStatusCounts(since),
-    repos.llmUsageRepository.listRecent(1_000),
-    repos.llmUsageRepository.countSince("gemini", geminiQuotaDayStart()),
-    repos.agentRunRepository.getLatestFailure("fact-verification"),
-    repos.pipelineJobRepository.findActiveDeferral("[daily_ai_quota]"),
-    repos.reviewQueueRepository.countPendingByReasonSince(since),
-    getPremierLeaguePanel(),
+    repos.storyRepository.getLastPublicationAt(),
+    repos.storyVersionRepository.getTabloidQualityMetricsSince(since),
+    repos.llmUsageRepository.getMonthlyRoleMetrics(monthStart),
   ]);
-  const recentUsage = usage.filter((row) => row.occurredAt >= since);
-  const writer = agents.find((agent) => agent.agentName === "hungarian-writer");
-  const extraction = agents.find((agent) => agent.agentName === "fact-verification");
+  const lastIngest =
+    sources
+      .filter((source) => source.lastFetchStatus === "ok" && source.lastFetchedAt)
+      .map((source) => source.lastFetchedAt!)
+      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+  const lastCron =
+    sources
+      .map((source) => source.lastFetchedAt)
+      .filter((value): value is Date => value instanceof Date)
+      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+  const metric = (role: string, status?: string) =>
+    usage
+      .filter((row) => row.role === role && (!status || row.status === status))
+      .reduce(
+        (total, row) => ({ calls: total.calls + row.calls, costUsd: total.costUsd + row.costUsd }),
+        { calls: 0, costUsd: 0 },
+      );
+  const primary = metric("primary");
+  const primarySuccess = metric("primary", "success");
+  const primaryFailed = metric("primary", "failed");
+  const repair = metric("targeted_repair");
+  const repairSuccess = metric("targeted_repair", "success");
+  const repairFailed = metric("targeted_repair", "failed");
+  const fallback = metric("technical_fallback");
+  const totalCost = usage.reduce((sum, row) => sum + row.costUsd, 0);
+  const flagRate = quality.checked ? Math.round((quality.flagged / quality.checked) * 100) : 0;
+  const repairRate = quality.checked ? Math.round((repair.calls / quality.checked) * 100) : 0;
 
   return (
     <main className="admin-page">
@@ -50,49 +55,99 @@ export default async function AdminSystemPage(): Promise<ReactNode> {
       <section className="admin-dashboard__intro">
         <p className="admin-eyebrow">Rendszer</p>
         <h1>Production pipeline állapot</h1>
-        <p>Valós adatbázis- és providerhasználat az elmúlt 24 órából. Titkok nem jelennek meg.</p>
+        <p>Az aktív RSS → tabloid Writer → quality/repair → publish útvonal állapota.</p>
       </section>
 
       <section className="admin-dashboard__section">
-        <h2>AI szerepek és kvóta</h2>
+        <h2>Pipeline · utolsó 24 óra</h2>
         <div className="admin-metric-grid">
           <div className="admin-metric-card">
-            <strong>Fact Extraction</strong>
-            <span>Cloudflare · {MODEL_TIERS.extraction}</span>
-            <span>Siker: {rate(extraction?.completed ?? 0, extraction?.failed ?? 0)}</span>
+            <strong>Utolsó cron</strong>
+            <span>{iso(lastCron)}</span>
+            <span>* * * * * · percenként</span>
           </div>
           <div className="admin-metric-card">
-            <strong>Hungarian Writer</strong>
+            <strong>Utolsó sikeres RSS ingest</strong>
+            <span>{iso(lastIngest)}</span>
+          </div>
+          <div className="admin-metric-card">
+            <strong>Utolsó sikeres queue process</strong>
+            <span>{iso(queue.lastCompletedAt)}</span>
+          </div>
+          <div className="admin-metric-card">
+            <strong>Utolsó publikálás</strong>
+            <span>{iso(lastPublication)}</span>
+          </div>
+          <div className="admin-metric-card">
+            <strong>Queue</strong>
+            <span>
+              pending {queue.pending} · in_progress {queue.inProgress}
+            </span>
+            <span>
+              stale {queue.stale} · dead-letter {queue.deadLetter}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section className="admin-dashboard__section">
+        <h2>Writer és quality</h2>
+        <div className="admin-metric-grid">
+          <div className="admin-metric-card">
+            <strong>Primary Writer</strong>
             <span>Gemini · {env.GEMINI_MODEL}</span>
             <span>
-              {env.GEMINI_BILLING_MODE === "unified"
-                ? "Cloudflare Unified Billing"
-                : "Google API-kulcs (BYOK)"}
-            </span>
-            <span>Siker: {rate(writer?.completed ?? 0, writer?.failed ?? 0)}</span>
-          </div>
-          <div className="admin-metric-card">
-            <strong>Self-check</strong>
-            <span>Cloudflare · {MODEL_TIERS.selfCheck}</span>
-            <span>Writer-futásonként külön ellenőrzés</span>
-          </div>
-          <div className="admin-metric-card">
-            <strong>Gemini költségkeret</strong>
-            <span>
-              {geminiCalls} / {env.GEMINI_DAILY_REQUEST_CAP} hívás ma
-            </span>
-            <span>
-              {env.GEMINI_FREE_ONLY
-                ? "Csak ingyenes kvóta"
-                : `Cloudflare havi limit: $${env.GEMINI_MONTHLY_BUDGET_USD}`}
+              {primary.calls} hívás · {primarySuccess.calls} siker · {primaryFailed.calls} technikai
+              hiba
             </span>
           </div>
           <div className="admin-metric-card">
-            <strong>AI defer</strong>
+            <strong>Quality</strong>
             <span>
-              {aiDeferral ? `aktív ${aiDeferral.toISOString()}-ig` : "nincs aktív kvótahalasztás"}
+              {quality.checked} ellenőrzött · {quality.flagged} flaggelt
             </span>
-            <span>Gemini-kvótánál Workers AI tartalékmodell</span>
+            <span>
+              HARD {quality.hard} · LANGUAGE {quality.language} · {flagRate}%
+            </span>
+            <span>
+              {quality.reasons.map((reason) => `${reason.code}: ${reason.count}`).join(" · ") ||
+                "nincs flag reason"}
+            </span>
+          </div>
+          <div className="admin-metric-card">
+            <strong>Targeted repair</strong>
+            <span>Gemini · gemini-3.5-flash</span>
+            <span>
+              {repair.calls} kísérlet · {repairSuccess.calls} siker · {repairFailed.calls} hiba ·{" "}
+              {repairRate}%
+            </span>
+          </div>
+          <div className="admin-metric-card">
+            <strong>Technical fallback</strong>
+            <span>{fallback.calls} teljes Flash Writer-hívás</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="admin-dashboard__section">
+        <h2>Aktuális havi AI-költség</h2>
+        <div className="admin-metric-grid">
+          <div className="admin-metric-card">
+            <strong>Primary</strong>
+            <span>${primary.costUsd.toFixed(4)}</span>
+          </div>
+          <div className="admin-metric-card">
+            <strong>Repair</strong>
+            <span>${repair.costUsd.toFixed(4)}</span>
+          </div>
+          <div className="admin-metric-card">
+            <strong>Fallback</strong>
+            <span>${fallback.costUsd.toFixed(4)}</span>
+          </div>
+          <div className="admin-metric-card">
+            <strong>Összesen</strong>
+            <span>${totalCost.toFixed(4)} / $10 külső plafon</span>
+            <span>App-oldali tartalék: ${env.GEMINI_MONTHLY_BUDGET_USD.toFixed(2)}</span>
           </div>
         </div>
       </section>
@@ -107,7 +162,6 @@ export default async function AdminSystemPage(): Promise<ReactNode> {
                 <th>Aktív</th>
                 <th>Utolsó fetch</th>
                 <th>Státusz</th>
-                <th>Watermark</th>
               </tr>
             </thead>
             <tbody>
@@ -115,91 +169,12 @@ export default async function AdminSystemPage(): Promise<ReactNode> {
                 <tr key={source.id}>
                   <td>{source.name}</td>
                   <td>{source.isActive ? "igen" : "nem"}</td>
-                  <td>{source.lastFetchedAt?.toISOString() ?? "—"}</td>
+                  <td>{iso(source.lastFetchedAt)}</td>
                   <td>{source.lastFetchStatus ?? "—"}</td>
-                  <td>{source.ingestWatermarkAt?.toISOString() ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      </section>
-
-      <section className="admin-dashboard__section">
-        <h2>Article Fetcher és pipeline</h2>
-        <div className="admin-metric-grid">
-          <div className="admin-metric-card">
-            <strong>Full article</strong>
-            <span>
-              {content.fullArticle} / {content.total}
-            </span>
-            <span>RSS fallback: {content.rssSnippet}</span>
-          </div>
-          <div className="admin-metric-card">
-            <strong>Átlagos source body</strong>
-            <span>{content.averageBodyLength} karakter</span>
-          </div>
-          <div className="admin-metric-card">
-            <strong>Legutóbbi extraction hiba</strong>
-            <span>{extractionFailure?.errorMessage ?? "nincs rögzített hiba"}</span>
-            <span>{extractionFailure?.occurredAt.toISOString() ?? "—"}</span>
-          </div>
-          <div className="admin-metric-card">
-            <strong>Queue</strong>
-            <span>
-              pending {queue.pending} · running {queue.inProgress}
-            </span>
-            <span>dead-letter {queue.deadLetter}</span>
-          </div>
-          <div className="admin-metric-card">
-            <strong>LLM-hívás / writer run</strong>
-            <span>
-              {writer?.completed
-                ? (recentUsage.length / writer.completed).toFixed(1)
-                : "nincs adat"}
-            </span>
-            <span>24 órás közelítés</span>
-          </div>
-        </div>
-        <p>
-          Story státuszok (24 óra):{" "}
-          {storyStatuses.map((item) => `${item.status}: ${item.count}`).join(" · ") ||
-            "nincs Story"}
-        </p>
-        <p>
-          Blokkolók (24 óra):{" "}
-          {reviewBlockers.map((item) => `${item.reason}: ${item.count}`).join(" · ") || "nincs"}
-        </p>
-      </section>
-
-      <section className="admin-dashboard__section">
-        <h2>API-Football raw contract</h2>
-        <div className="admin-metric-grid">
-          <div className="admin-metric-card">
-            <strong>Állapot</strong>
-            <span>{fixtures.state}</span>
-            <span>{fixtures.error ?? "errors: {}"}</span>
-          </div>
-          <div className="admin-metric-card">
-            <strong>Premier League</strong>
-            <span>
-              league {fixtures.diagnostics.leagueId} · season {fixtures.diagnostics.season ?? "—"}
-            </span>
-            <span>
-              {fixtures.diagnostics.from ?? "—"} → {fixtures.diagnostics.to ?? "—"}
-            </span>
-          </div>
-          <div className="admin-metric-card">
-            <strong>Válasz</strong>
-            <span>
-              results {fixtures.diagnostics.results ?? "—"} · response{" "}
-              {fixtures.diagnostics.responseLength}
-            </span>
-            <span>
-              paging {fixtures.diagnostics.paging?.current ?? "—"}/
-              {fixtures.diagnostics.paging?.total ?? "—"}
-            </span>
-          </div>
         </div>
       </section>
     </main>

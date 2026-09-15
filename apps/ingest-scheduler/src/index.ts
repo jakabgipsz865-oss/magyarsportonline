@@ -1,6 +1,6 @@
 const TIMEOUT_MS = 50_000;
 
-interface Env {
+export interface Env {
   APP_ORIGIN: string;
   CRON_SECRET: string;
 }
@@ -22,7 +22,7 @@ async function post(url: string, label: string, env: Env, signal?: AbortSignal):
     const response = await fetch(url, {
       method: "POST",
       headers: { authorization: `Bearer ${env.CRON_SECRET}` },
-      signal,
+      ...(signal ? { signal } : {}),
     });
     if (!response.ok) throw new Error(`${label} returned HTTP ${response.status}`);
     console.log(`${label} completed`, { status: response.status });
@@ -34,7 +34,7 @@ async function post(url: string, label: string, env: Env, signal?: AbortSignal):
   }
 }
 
-async function runCron(env: Env): Promise<void> {
+export async function runCron(env: Env): Promise<void> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
   const results = await Promise.allSettled([

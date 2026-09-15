@@ -84,9 +84,10 @@ export async function dispatchJobToHandler(
   event: SportsNewsEvent,
   repos: Repositories,
   _emitter: { emit(event: unknown): Promise<void> },
+  jobId?: string,
 ): Promise<void> {
   if (event.type === "source/article.ingested") {
-    await publishTabloid(event.payload.raw_article_id, repos);
+    await publishTabloid(event.payload.raw_article_id, repos, { ...(jobId ? { jobId } : {}) });
   }
   // Historical fact/merge/rewrite events never re-enter the publication path.
 }

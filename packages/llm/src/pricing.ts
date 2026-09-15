@@ -60,6 +60,28 @@ export function estimateCloudflareCostUsd(
   );
 }
 
+/** Cloudflare Unified Billing Gemini list prices, before Cloudflare's 5% fee. */
+export const GEMINI_MODEL_PRICING: Record<string, ModelPricing> = {
+  "gemini-3.5-flash-lite": { inputUsdPerMTok: 0.3, outputUsdPerMTok: 2.5 },
+  "google/gemini-3.5-flash-lite": { inputUsdPerMTok: 0.3, outputUsdPerMTok: 2.5 },
+  "gemini-3.5-flash": { inputUsdPerMTok: 1.5, outputUsdPerMTok: 9 },
+  "google/gemini-3.5-flash": { inputUsdPerMTok: 1.5, outputUsdPerMTok: 9 },
+};
+
+export function estimateGeminiCostUsd(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+): number {
+  const pricing = GEMINI_MODEL_PRICING[model] ?? GEMINI_MODEL_PRICING["gemini-3.5-flash"]!;
+  // Unified Billing adds 5%; retaining it here keeps the app ledger conservative.
+  return (
+    ((inputTokens * pricing.inputUsdPerMTok + outputTokens * pricing.outputUsdPerMTok) /
+      1_000_000) *
+    1.05
+  );
+}
+
 /**
  * Cloudflare Workers AI's own list price for Neurons (the compute-unit its
  * dashboard and free daily allocation — 10,000/day — are denominated in):

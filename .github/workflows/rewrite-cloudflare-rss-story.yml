@@ -43,7 +43,7 @@ jobs:
           test "$curl_status" = "0"
           test "$code" = "200"
           test "$(jq -r '.published' /tmp/response.json)" = "true"
-          test "$(jq -r '.model' /tmp/response.json)" = "gemini-3.5-flash"
+          test "$(jq -r '.model' /tmp/response.json)" = "gemini-3.5-flash-lite"
         env:
           APP_ORIGIN: https://magyarsportonline-web.footballinvestmentkft.workers.dev
           CRON_SECRET: ${{ secrets.CRON_SECRET }}

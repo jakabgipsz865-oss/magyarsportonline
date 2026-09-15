@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
     GEMINI_BILLING_MODE: "unified",
     GEMINI_FREE_ONLY: false,
     GEMINI_DAILY_REQUEST_CAP: 450,
-    GEMINI_MONTHLY_BUDGET_USD: 5,
+    GEMINI_MONTHLY_BUDGET_USD: 9.5,
   },
   pause: vi.fn(),
   register: vi.fn(),
@@ -48,7 +48,7 @@ vi.mock("@magyarsportonline/agents", () => ({
     },
   },
   tabloid: {
-    TABLOID_MODEL: "gemini-3.5-flash",
+    TABLOID_MODEL: "gemini-3.5-flash-lite",
     TABLOID_PROMPT: "tabloid-hu@2",
     isFootballTabloid: vi.fn(() => true),
   },
@@ -138,7 +138,7 @@ describe("rollout status", () => {
         billingMode: "unified",
         freeOnly: false,
         dailyCap: 450,
-        monthlyBudgetUsd: 5,
+        monthlyBudgetUsd: 9.5,
       }),
     );
   });
@@ -219,7 +219,7 @@ describe("failed article recovery", () => {
   it("requires an already-linked article from the configured registry", async () => {
     mocks.env.TABLOID_AUTO_PUBLISH = true;
     mocks.getRaw.mockResolvedValue({ id: "raw", sourceId, storyId: "story" });
-    mocks.writer.mockResolvedValue({ published: true, model: "gemini-3.5-flash" });
+    mocks.writer.mockResolvedValue({ published: true, model: "gemini-3.5-flash-lite" });
 
     const response = await POST(
       request({ action: "retry-article", rawArticleId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }),
@@ -276,7 +276,7 @@ describe("failed article recovery", () => {
       publishedAtSource: new Date("2026-09-12T10:00:00.000Z"),
     });
     mocks.fetchMedia.mockResolvedValue({ primary: null, inlineImages: [] });
-    mocks.writer.mockResolvedValue({ published: true, model: "gemini-3.5-flash" });
+    mocks.writer.mockResolvedValue({ published: true, model: "gemini-3.5-flash-lite" });
 
     const response = await POST(request({ action: "rewrite-story", slug: "public-story" }));
 

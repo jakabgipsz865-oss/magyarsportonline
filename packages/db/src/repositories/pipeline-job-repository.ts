@@ -8,6 +8,8 @@ export interface PipelineQueueStatusCounts {
   inProgress: number;
   completed: number;
   deadLetter: number;
+  stale: number;
+  lastCompletedAt: Date | null;
 }
 
 export interface DeadLetterSummary {
@@ -84,12 +86,16 @@ export class PipelineJobRepository {
       in_progress: number | string;
       completed: number | string;
       dead_letter: number | string;
+      stale: number | string;
+      last_completed_at: Date | string | null;
     }>(sql`
       SELECT
         count(*) FILTER (WHERE status = 'pending') AS pending,
         count(*) FILTER (WHERE status = 'in_progress') AS in_progress,
         count(*) FILTER (WHERE status = 'completed') AS completed,
         count(*) FILTER (WHERE status = 'dead_letter') AS dead_letter
+        ,count(*) FILTER (WHERE status = 'in_progress' AND locked_at < now() - interval '10 minutes') AS stale
+        ,max(updated_at) FILTER (WHERE status = 'completed') AS last_completed_at
       FROM ${pipelineJobs}
     `);
     const row = rows[0];
@@ -98,6 +104,8 @@ export class PipelineJobRepository {
       inProgress: Number(row?.in_progress ?? 0),
       completed: Number(row?.completed ?? 0),
       deadLetter: Number(row?.dead_letter ?? 0),
+      stale: Number(row?.stale ?? 0),
+      lastCompletedAt: row?.last_completed_at ? new Date(row.last_completed_at) : null,
     };
   }
 

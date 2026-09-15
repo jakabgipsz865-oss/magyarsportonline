@@ -23,6 +23,18 @@ importers:
 
   apps/ingest-scheduler:
     devDependencies:
+      '@magyarsportonline/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@types/node':
+        specifier: 22.10.5
+        version: 22.10.5
+      typescript:
+        specifier: 5.7.3
+        version: 5.7.3
+      vitest:
+        specifier: 2.1.8
+        version: 2.1.8(@types/node@22.10.5)(supports-color@10.2.2)(terser@5.16.9)
       wrangler:
         specifier: 4.127.1
         version: 4.127.1
