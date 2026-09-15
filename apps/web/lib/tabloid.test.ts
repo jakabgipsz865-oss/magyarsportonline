@@ -539,6 +539,9 @@ describe("tabloid publication", () => {
     await publishTabloid("one", repos);
     expect(mocks.write).toHaveBeenCalledOnce();
     expect(mocks.repair).not.toHaveBeenCalled();
+    expect(mocks.assess).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceContent: "Same story\nA player's personal story" }),
+    );
   });
   it("runs at most one targeted repair and stores reason codes", async () => {
     const { repos, versions } = fixtures();
@@ -550,6 +553,24 @@ describe("tabloid publication", () => {
     expect(mocks.repair).toHaveBeenCalledOnce();
     expect([...versions.values()][0]?.["qualityIssues"]).toEqual([
       expect.objectContaining({ code: "malformed_hungarian", repaired: true }),
+    ]);
+  });
+  it("does not spend a repair call on an unrepairable hard flag", async () => {
+    const { repos, versions } = fixtures();
+    mocks.assess.mockReturnValueOnce([
+      { kind: "hard", code: "number_integrity", field: "body", detail: "99" },
+    ]);
+
+    await expect(publishTabloid("one", repos)).rejects.toThrow("number_integrity");
+
+    expect(mocks.write).toHaveBeenCalledOnce();
+    expect(mocks.repair).not.toHaveBeenCalled();
+    expect([...versions.values()][0]?.["qualityIssues"]).toEqual([
+      expect.objectContaining({
+        code: "number_integrity",
+        repaired: false,
+        repairStatus: "not_applicable",
+      }),
     ]);
   });
   it("uses one full Flash fallback only for a technical primary failure", async () => {

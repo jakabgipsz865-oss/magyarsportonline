@@ -34,6 +34,14 @@ function hasUnresolvedTabloidIssues(value: unknown): boolean {
   );
 }
 
+const REPAIRABLE_TABLOID_FLAGS = new Set([
+  "foreign_language",
+  "forbidden_terminology",
+  "repetition",
+  "malformed_hungarian",
+  "writer_language_warning",
+]);
+
 /** Rebuild the public row after source-image metadata changes, without an LLM call. */
 export async function refreshPublishedTabloidProjection(
   storyId: string,
@@ -217,8 +225,9 @@ export async function publishTabloid(
           }
         }
         const forbiddenTerms = knowledge.flatMap((item) => item.avoid_hu);
+        const sourceContent = `${raw.titleOriginal}\n${raw.bodyOriginal}`;
         const initialFlags = tabloid.assessTabloidQuality({
-          sourceContent: raw.bodyOriginal,
+          sourceContent,
           output: result,
           forbiddenTerms,
         });
@@ -243,6 +252,22 @@ export async function publishTabloid(
             })),
           });
           primaryDraftVersionId = version.id;
+          if (initialFlags.some((flag) => !REPAIRABLE_TABLOID_FLAGS.has(flag.code))) {
+            await repos.storyVersionRepository.updateDraftContent(primaryDraftVersionId, {
+              titleHu: result.title_hu,
+              leadHu: result.lead_hu,
+              bodyHu: result.body_hu,
+              editorialRewriteApplied: false,
+              qualityIssues: initialFlags.map((flag) => ({
+                ...flag,
+                repaired: false,
+                repairStatus: "not_applicable",
+              })),
+            });
+            throw new Error(
+              `Tabloid quality gate failed: ${initialFlags.map((flag) => flag.code).join(",")}`,
+            );
+          }
           try {
             finalResult = await tabloid.repairTabloid(
               getWriterRepairLlmClient(),
@@ -272,7 +297,7 @@ export async function publishTabloid(
           }
         }
         const finalFlags = tabloid.assessTabloidQuality({
-          sourceContent: raw.bodyOriginal,
+          sourceContent,
           output: finalResult,
           forbiddenTerms,
         });

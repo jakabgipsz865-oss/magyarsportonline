@@ -225,6 +225,20 @@ describe("one-call Hungarian writer", () => {
     ).toBe(true);
   });
 
+  it("does not treat normal mixed-case brand names as malformed Hungarian", () => {
+    const flags = assessTabloidQuality({
+      sourceContent: "The player shared an iPhone video with LaLiga officials.",
+      output: {
+        title_hu: "iPhone-videót mutatott a LaLiga játékosa",
+        lead_hu: "A futballista megmutatta a felvételt.",
+        body_hu:
+          "A játékos az iPhone készülékével készült videót a LaLiga illetékeseinek is megmutatta.",
+        language_warnings: [],
+      },
+    });
+    expect(flags.some((flag) => flag.code === "malformed_hungarian")).toBe(false);
+  });
+
   it("repairs only flagged fields once and rejects number changes", async () => {
     const llm = client({ title_hu: "Kane 3 gólt szerzett" });
     const output = {

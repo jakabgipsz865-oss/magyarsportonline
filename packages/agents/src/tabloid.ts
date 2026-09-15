@@ -143,7 +143,7 @@ export function assessTabloidQuality(input: {
     if (forbidden)
       flags.push({ kind: "hard", code: "forbidden_terminology", field, detail: forbidden });
     if (
-      /\p{Ll}\p{Lu}/u.test(text) ||
+      /\p{Ll}{3,}\p{Lu}/u.test(text) ||
       /\b([\p{L}]{2,})\s+\1\b/iu.test(text) ||
       /\b\p{L}{28,}\b/u.test(text)
     )
