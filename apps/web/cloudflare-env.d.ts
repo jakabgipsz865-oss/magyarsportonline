@@ -11,6 +11,7 @@ interface CloudflareEnv {
   GEMINI_DAILY_REQUEST_CAP: string;
   GEMINI_MONTHLY_BUDGET_USD: string;
   GEMINI_BASE_URL: string;
+  CLOUDFLARE_AI_GATEWAY_ID: string;
   CLOUDFLARE_AI_GATEWAY_TOKEN: string;
   FORCE_REVIEW_MODE: "true" | "false";
   HYPERDRIVE?: {

@@ -68,17 +68,26 @@ describe("GeminiLlmClient", () => {
     await expect(client.completeText(textRequest)).resolves.toMatchObject({ text: "válasz" });
   });
 
-  it("uses Cloudflare Unified Billing without sending a Google API key", async () => {
-    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+  it("uses Cloudflare Unified Billing through the REST API without a Google API key", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe("https://api.cloudflare.com/client/v4/accounts/account/ai/run");
       const headers = new Headers(init?.headers);
-      expect(headers.get("cf-aig-authorization")).toBe("Bearer gateway-key");
+      expect(headers.get("authorization")).toBe("Bearer cloudflare-api-token");
+      expect(headers.get("cf-aig-gateway-id")).toBe("mso");
       expect(headers.has("x-goog-api-key")).toBe(false);
+      expect(JSON.parse(String(init?.body))).toMatchObject({
+        model: "google/gemini-3.5-flash",
+        input: { contents: [{ role: "user", parts: [{ text: "hello" }] }] },
+      });
       return jsonResponse({ candidates: [{ content: { parts: [{ text: "válasz" }] } }] });
     });
     const client = new GeminiLlmClient({
       model: "gemini-3.5-flash",
-      baseUrl: "https://gateway.ai.cloudflare.com/v1/account/mso/google-ai-studio/v1",
-      gatewayToken: "gateway-key",
+      unifiedBilling: {
+        accountId: "account",
+        apiToken: "cloudflare-api-token",
+        gatewayId: "mso",
+      },
       fetchImpl,
     });
 

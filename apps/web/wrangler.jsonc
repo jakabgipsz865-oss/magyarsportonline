@@ -36,6 +36,7 @@
     "GEMINI_DAILY_REQUEST_CAP": "450",
     "GEMINI_MONTHLY_BUDGET_USD": "5",
     "GEMINI_BASE_URL": "https://gateway.ai.cloudflare.com/v1/7a225d650d7e05daba6355e5526a8fb9/magyarsportonline/google-ai-studio/v1",
+    "CLOUDFLARE_AI_GATEWAY_ID": "magyarsportonline",
     "TABLOID_AUTO_PUBLISH": "true",
     "FORCE_REVIEW_MODE": "true",
   },

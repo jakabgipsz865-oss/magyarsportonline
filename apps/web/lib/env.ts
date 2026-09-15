@@ -64,6 +64,7 @@ export const env = createEnv({
     GEMINI_DAILY_REQUEST_CAP: z.coerce.number().int().positive().max(450).default(450),
     GEMINI_MONTHLY_BUDGET_USD: z.coerce.number().positive().max(5).default(5),
     GEMINI_BASE_URL: z.string().url().optional(),
+    CLOUDFLARE_AI_GATEWAY_ID: z.string().min(1).default("magyarsportonline"),
     CLOUDFLARE_AI_GATEWAY_TOKEN: z.string().min(1).optional(),
 
     // Admin/review felület (/admin/review) HTTP Basic auth jelszava.

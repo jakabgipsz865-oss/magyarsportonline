@@ -20,6 +20,12 @@ export interface GeminiLlmClientOptions {
   baseUrl?: string;
   /** Optional Cloudflare AI Gateway authentication token. */
   gatewayToken?: string;
+  /** Cloudflare REST API transport for provider-key-free Unified Billing. */
+  unifiedBilling?: {
+    accountId: string;
+    apiToken: string;
+    gatewayId: string;
+  };
   /** Tesztelhetőség: injektálható fetch. */
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
@@ -132,14 +138,19 @@ export class GeminiLlmClient implements LlmClient {
   private readonly fetchImpl: typeof fetch;
   private readonly timeoutMs: number;
   private readonly gatewayToken: string | undefined;
+  private readonly unifiedBilling: GeminiLlmClientOptions["unifiedBilling"];
 
   constructor(options: GeminiLlmClientOptions) {
+    if (!options.apiKey && !options.unifiedBilling) {
+      throw new Error("Gemini requires either a Google API key or Cloudflare Unified Billing");
+    }
     this.apiKey = options.apiKey;
     this.model = options.model?.trim() || DEFAULT_GEMINI_MODEL;
     this.baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.timeoutMs = options.timeoutMs ?? 60_000;
     this.gatewayToken = options.gatewayToken;
+    this.unifiedBilling = options.unifiedBilling;
   }
 
   get modelLabel(): string {
@@ -209,8 +220,7 @@ export class GeminiLlmClient implements LlmClient {
     request: TextCompletionRequest | JsonCompletionRequest,
     wantsJson: boolean,
   ): Promise<GeminiGenerateContentResponse> {
-    const url = `${this.baseUrl}/models/${encodeURIComponent(this.model)}:generateContent`;
-    const body = {
+    const geminiInput = {
       system_instruction: { parts: [{ text: request.system }] },
       contents: request.messages.map((message) => ({
         role: toGeminiRole(message.role),
@@ -229,6 +239,12 @@ export class GeminiLlmClient implements LlmClient {
           : {}),
       },
     };
+    const url = this.unifiedBilling
+      ? `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(this.unifiedBilling.accountId)}/ai/run`
+      : `${this.baseUrl}/models/${encodeURIComponent(this.model)}:generateContent`;
+    const body = this.unifiedBilling
+      ? { model: `google/${this.model}`, input: geminiInput }
+      : geminiInput;
 
     let httpResponse: Response;
     const controller = new AbortController();
@@ -238,8 +254,17 @@ export class GeminiLlmClient implements LlmClient {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          ...(this.apiKey ? { "x-goog-api-key": this.apiKey } : {}),
-          ...(this.gatewayToken ? { "cf-aig-authorization": `Bearer ${this.gatewayToken}` } : {}),
+          ...(this.unifiedBilling
+            ? {
+                authorization: `Bearer ${this.unifiedBilling.apiToken}`,
+                "cf-aig-gateway-id": this.unifiedBilling.gatewayId,
+              }
+            : {
+                ...(this.apiKey ? { "x-goog-api-key": this.apiKey } : {}),
+                ...(this.gatewayToken
+                  ? { "cf-aig-authorization": `Bearer ${this.gatewayToken}` }
+                  : {}),
+              }),
         },
         body: JSON.stringify(body),
         signal: controller.signal,

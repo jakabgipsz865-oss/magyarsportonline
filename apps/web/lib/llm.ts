@@ -63,21 +63,38 @@ export function getFactLlmClient(): LlmClient {
 export function getWriterLlmClient(): LlmClient {
   if (cachedWriterClient) return cachedWriterClient;
   if (env.LLM_PROVIDER === "none") return (cachedWriterClient = new NoLlmClient());
-  if (!env.CLOUDFLARE_AI_GATEWAY_TOKEN || !env.GEMINI_BASE_URL) {
-    throw new Error("Gemini Writer requires an authenticated Cloudflare AI Gateway");
-  }
   const geminiApiKey = env.GEMINI_BILLING_MODE === "byok" ? env.GEMINI_API_KEY : undefined;
-  if (env.GEMINI_BILLING_MODE === "byok" && !geminiApiKey) {
-    throw new Error("Gemini BYOK billing requires GEMINI_API_KEY");
+  if (
+    env.GEMINI_BILLING_MODE === "byok" &&
+    (!geminiApiKey || !env.CLOUDFLARE_AI_GATEWAY_TOKEN || !env.GEMINI_BASE_URL)
+  ) {
+    throw new Error("Gemini BYOK billing requires Google and Cloudflare Gateway credentials");
   }
+  if (
+    env.GEMINI_BILLING_MODE === "unified" &&
+    (!env.CLOUDFLARE_ACCOUNT_ID || !env.WORKERS_AI_API_TOKEN)
+  ) {
+    throw new Error("Gemini Unified Billing requires Cloudflare account credentials");
+  }
+  const geminiClient =
+    env.GEMINI_BILLING_MODE === "unified"
+      ? new GeminiLlmClient({
+          model: env.GEMINI_MODEL,
+          unifiedBilling: {
+            accountId: env.CLOUDFLARE_ACCOUNT_ID!,
+            apiToken: env.WORKERS_AI_API_TOKEN!,
+            gatewayId: env.CLOUDFLARE_AI_GATEWAY_ID,
+          },
+        })
+      : new GeminiLlmClient({
+          apiKey: geminiApiKey!,
+          model: env.GEMINI_MODEL,
+          baseUrl: env.GEMINI_BASE_URL!,
+          gatewayToken: env.CLOUDFLARE_AI_GATEWAY_TOKEN!,
+        });
   const repos = createRepositories();
   const metered = new ProviderFallbackLlmClient({
-    inner: new GeminiLlmClient({
-      ...(geminiApiKey ? { apiKey: geminiApiKey } : {}),
-      model: env.GEMINI_MODEL,
-      baseUrl: env.GEMINI_BASE_URL,
-      gatewayToken: env.CLOUDFLARE_AI_GATEWAY_TOKEN,
-    }),
+    inner: geminiClient,
     fallback: new NoLlmClient(),
     providerName: "gemini",
     describeError: describeGeminiError,
