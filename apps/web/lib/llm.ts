@@ -80,13 +80,13 @@ export function getWriterLlmClient(): LlmClient {
     logger: getLogger(),
     failClosed: true,
   });
-  // Preserve Gemini's stronger Hungarian output while its free 20-request
-  // allocation is available, then continue on the configured Workers AI
-  // model. Both real providers fail closed on invalid output.
+  // Gemini is routed through Cloudflare AI Gateway, where a provider-scoped
+  // monthly spend limit enforces the paid budget. Keep this daily cap as a
+  // second, application-side guard against runaway request volume.
   const cappedGemini = new DailyRequestCappedLlmClient(
     metered,
     "gemini",
-    Math.min(20, env.GEMINI_DAILY_REQUEST_CAP),
+    env.GEMINI_DAILY_REQUEST_CAP,
     repos.llmUsageRepository,
     isGeminiDefinitelyUnmeteredError,
   );

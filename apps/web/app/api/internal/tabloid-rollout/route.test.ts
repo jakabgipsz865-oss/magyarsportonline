@@ -2,7 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 const sourceId = "5416c5b2-fc48-4994-ac0f-fcc966b9cb83";
 const mocks = vi.hoisted(() => ({
-  env: { CRON_SECRET: "test-only", TABLOID_AUTO_PUBLISH: false },
+  env: {
+    CRON_SECRET: "test-only",
+    TABLOID_AUTO_PUBLISH: false,
+    GEMINI_FREE_ONLY: false,
+    GEMINI_DAILY_REQUEST_CAP: 450,
+    GEMINI_MONTHLY_BUDGET_USD: 5,
+  },
   pause: vi.fn(),
   register: vi.fn(),
   listAll: vi.fn(),
@@ -119,6 +125,22 @@ beforeEach(() => {
   mocks.refreshProjection.mockResolvedValue({ imagesRefreshed: true, llmCalls: 0 });
 });
 describe("rollout status", () => {
+  it("reports the paid Gemini safeguards", async () => {
+    const response = await GET(
+      new NextRequest("https://example.test/api/internal/tabloid-rollout", {
+        headers: { authorization: "Bearer test-only" },
+      }),
+    );
+
+    expect(await response.json()).toEqual(
+      expect.objectContaining({
+        freeOnly: false,
+        dailyCap: 450,
+        monthlyBudgetUsd: 5,
+      }),
+    );
+  });
+
   it("reports every enabled source even immediately after it was fetched", async () => {
     mocks.listAll.mockResolvedValue([
       { id: sourceId, name: "Daily Mail Football", isActive: true },

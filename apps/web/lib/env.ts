@@ -56,8 +56,12 @@ export const env = createEnv({
 
     GEMINI_API_KEY: z.string().min(1).optional(),
     GEMINI_MODEL: z.string().min(1).default("gemini-3.5-flash"),
-    GEMINI_FREE_ONLY: z.literal("true").default("true"),
+    GEMINI_FREE_ONLY: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
     GEMINI_DAILY_REQUEST_CAP: z.coerce.number().int().positive().max(450).default(450),
+    GEMINI_MONTHLY_BUDGET_USD: z.coerce.number().positive().max(5).default(5),
     GEMINI_BASE_URL: z.string().url().optional(),
     CLOUDFLARE_AI_GATEWAY_TOKEN: z.string().min(1).optional(),
 

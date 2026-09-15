@@ -58,6 +58,7 @@ async function status() {
     model: tabloid.TABLOID_MODEL,
     freeOnly: env.GEMINI_FREE_ONLY,
     dailyCap: env.GEMINI_DAILY_REQUEST_CAP,
+    monthlyBudgetUsd: env.GEMINI_MONTHLY_BUDGET_USD,
     activeSources: (await repos.sourceRepository.listAll())
       .filter((source) => source.isActive)
       .map((source) => ({

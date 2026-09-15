@@ -72,18 +72,22 @@ export default async function AdminSystemPage(): Promise<ReactNode> {
             <span>Writer-futásonként külön ellenőrzés</span>
           </div>
           <div className="admin-metric-card">
-            <strong>Gemini napi hard cap</strong>
+            <strong>Gemini költségkeret</strong>
             <span>
-              {geminiCalls} / {env.GEMINI_DAILY_REQUEST_CAP ?? "nincs konfigurálva"}
+              {geminiCalls} / {env.GEMINI_DAILY_REQUEST_CAP} hívás ma
             </span>
-            <span>Free-only: {env.GEMINI_FREE_ONLY}</span>
+            <span>
+              {env.GEMINI_FREE_ONLY
+                ? "Csak ingyenes kvóta"
+                : `Cloudflare havi limit: $${env.GEMINI_MONTHLY_BUDGET_USD}`}
+            </span>
           </div>
           <div className="admin-metric-card">
             <strong>AI defer</strong>
             <span>
               {aiDeferral ? `aktív ${aiDeferral.toISOString()}-ig` : "nincs aktív kvótahalasztás"}
             </span>
-            <span>Paid fallback: OFF</span>
+            <span>Gemini-kvótánál Workers AI tartalékmodell</span>
           </div>
         </div>
       </section>
