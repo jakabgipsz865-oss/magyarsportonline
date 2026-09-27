@@ -41,6 +41,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     alternates: { canonical: `/hir/${story.slug}` },
     openGraph: {
       type: "article",
+      siteName: "MSO24",
       title: story.title,
       description: story.metaDescription ?? story.lead,
       url: `/hir/${story.slug}`,

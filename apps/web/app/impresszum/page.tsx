@@ -14,7 +14,7 @@ export default function ImpresszumPage(): ReactNode {
         <h1>Impresszum</h1>
         <dl className="legal-details">
           <dt>Weboldal</dt>
-          <dd>MagyarSportOnline — mso24.hu</dd>
+          <dd>MSO24 — mso24.hu</dd>
           <dt>Üzemeltető és a tartalomért felelős személy</dt>
           <dd>Lovas Zoltán magánszemély</dd>
           <dt>Kapcsolat</dt>
@@ -25,7 +25,7 @@ export default function ImpresszumPage(): ReactNode {
 
         <h2>Az oldal működése</h2>
         <p>
-          A MagyarSportOnline magánszemélyként működtetett, nem üzletszerű, bevételt nem termelő
+          Az MSO24 magánszemélyként működtetett, nem üzletszerű, bevételt nem termelő
           hobbioldal. Az oldalon nincs hirdetés, előfizetés vagy értékesítés.
         </p>
         <p>

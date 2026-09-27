@@ -19,7 +19,7 @@ export default function PrivacyPage(): ReactNode {
           <dd>Lovas Zoltán</dd>
           <dt>Kapcsolat</dt>
           <dd>
-            <a href="mailto:lovas.zoltan1986@gmail.com">lovas.zoltan1986@gmail.com</a>
+            <a href="mailto:hello@mso24.hu">hello@mso24.hu</a>
           </dd>
         </dl>
 

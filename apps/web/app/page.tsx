@@ -12,7 +12,7 @@ import { toStorySummaryView, type StorySummaryView } from "../lib/story-view";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   alternates: { canonical: "/" },
-  openGraph: { url: "/" },
+  openGraph: { url: "/", siteName: "MSO24" },
 };
 
 const HOMEPAGE_STORY_LIMIT = 24;

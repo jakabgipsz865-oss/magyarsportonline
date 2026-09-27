@@ -36,7 +36,7 @@ export async function GET(): Promise<Response> {
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<rss version="2.0">',
     "  <channel>",
-    "    <title>MagyarSportOnline — mso24.hu</title>",
+    "    <title>MSO24</title>",
     `    <link>${escapeXml(env.SITE_URL)}</link>`,
     "    <description>AI-támogatott, Story-alapú sporthírek</description>",
     "    <language>hu</language>",
