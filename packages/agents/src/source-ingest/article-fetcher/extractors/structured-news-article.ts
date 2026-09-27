@@ -101,31 +101,45 @@ function toFetchedArticle(candidate: JsonObject): FetchedArticle | null {
   };
 }
 
-function semanticArticle(html: string): FetchedArticle | null {
+function semanticArticle(html: string, url: string, headlineHint: string | null): FetchedArticle | null {
   const $ = cheerio.load(html);
-  $("script,style,noscript,nav,header,footer,aside,form,svg").remove();
-  const roots = $("article, main").toArray();
-  const bodies = roots.map((root) => {
-    const paragraphs: string[] = [];
-    const seen = new Set<string>();
-    $(root)
-      .find("p")
-      .each((_, element) => {
-        const text = textOrNull($(element).text());
-        if (!text || text.length < 40 || seen.has(text)) return;
-        seen.add(text);
-        paragraphs.push(text);
-      });
-    return { root: $(root), body: paragraphs.join("\n\n") };
-  });
-  const selected = bodies.sort((a, b) => b.body.length - a.body.length)[0];
-  if (!selected) return null;
-  const bodyOriginal = selected.body;
-  const titleOriginal =
-    textOrNull(selected.root.find("h1").first().text()) ??
+  const titleOriginal = headlineHint ??
     textOrNull($("h1").first().text()) ??
     textOrNull($('meta[property="og:title"]').attr("content"));
-  if (!titleOriginal || titleOriginal.length < 10 || bodyOriginal.length < 300) return null;
+  $("script,style,noscript,nav,footer,aside,form,svg,.related,[class*=recommend],[class*=comment]").remove();
+  const paragraphs = (elements: ReturnType<typeof $>) => {
+    const seen = new Set<string>();
+    const parts: string[] = [];
+    elements.each((_, element) => {
+      const text = textOrNull($(element).text());
+      if (!text || text.length < 40 || seen.has(text)) return;
+      seen.add(text);
+      parts.push(text);
+    });
+    return parts.join("\n\n");
+  };
+  const hostname = new URL(url).hostname.toLowerCase();
+  let bodyOriginal: string;
+  if (hostname === "dailymail.com" || hostname.endsWith(".dailymail.com") || hostname === "dailymail.co.uk" || hostname.endsWith(".dailymail.co.uk")) {
+    const root = $('[itemprop="articleBody"]').first();
+    bodyOriginal = paragraphs(root.find("p"));
+  } else if (hostname === "krone.at" || hostname.endsWith(".krone.at")) {
+    bodyOriginal = paragraphs($(".box.c_tinymce_lead p, .box.c_tinymce p"));
+  } else {
+    const roots = $("article").length ? $("article").toArray() : $("main").toArray();
+    const titleKey = (titleOriginal ?? "").toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    const candidates = roots.map((root) => {
+      const node = $(root);
+      const heading = (textOrNull(node.find("h1").first().text()) ?? "")
+        .toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+      const body = paragraphs(node.find("p"));
+      const score = (heading && (heading === titleKey || titleKey.includes(heading) || heading.includes(titleKey)) ? 100 : 0)
+        + (heading ? 20 : 0) + (node.is("article") ? 10 : 0);
+      return { body, score };
+    }).filter((candidate) => candidate.body.length >= 300);
+    bodyOriginal = candidates.sort((a, b) => b.score - a.score)[0]?.body ?? "";
+  }
+  if (!titleOriginal || titleOriginal.length < 10 || bodyOriginal.length < 300 || bodyOriginal.split(/\s+/).length < 40) return null;
   const rawDate =
     $('meta[property="article:published_time"]').attr("content") ??
     $("time[datetime]").first().attr("datetime");
@@ -154,15 +168,12 @@ export const structuredNewsArticleExtractor: ArticleExtractor = {
           // Egy hibás JSON-LD blokk nem teszi használhatatlanná a többit.
         }
       });
-      const semantic = semanticArticle(html);
-      return (
-        [
-          ...candidates
-            .map(toFetchedArticle)
-            .filter((article): article is FetchedArticle => article !== null),
-          ...(semantic ? [semantic] : []),
-        ].sort((left, right) => right.bodyOriginal.length - left.bodyOriginal.length)[0] ?? null
-      );
+      const headlineHint = candidates.map((candidate) => cleanText(candidate["headline"]))
+        .find((headline): headline is string => Boolean(headline && headline.length >= 10)) ?? null;
+      const semantic = semanticArticle(html, url, headlineHint);
+      if (semantic) return semantic;
+      return candidates.map(toFetchedArticle)
+        .find((article): article is FetchedArticle => article !== null) ?? null;
     } catch {
       return null;
     }

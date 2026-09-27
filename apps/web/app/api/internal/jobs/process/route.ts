@@ -1,6 +1,7 @@
 import { parseEvent } from "@magyarsportonline/events";
 import {
   isCloudflareDailyNeuronQuotaError,
+  GeminiApiError,
   isDailyLlmQuotaError,
   isGeminiDailyQuotaError,
   delayUntilNextGeminiQuotaReset,
@@ -12,6 +13,7 @@ import { env } from "../../../../../lib/env";
 import { getLogger } from "../../../../../lib/logger";
 import { buildQueueingEmitter, dispatchJobToHandler } from "../../../../../lib/pipeline";
 import { TabloidWriterBusyError } from "../../../../../lib/tabloid";
+import { timedPipelineStage } from "../../../../../lib/pipeline-timing";
 
 /**
  * The worker half of the async pipeline sprint (2026-07-29,
@@ -51,6 +53,15 @@ function backoffFor(attempts: number): number {
   return Math.min(BASE_BACKOFF_MS * 2 ** Math.max(0, attempts - 1), MAX_BACKOFF_MS);
 }
 
+function retryAfterFromError(error: unknown): number {
+  let current = error;
+  for (let depth = 0; depth < 3; depth++) {
+    if (current instanceof GeminiApiError) return current.retryAfterMs ?? 0;
+    current = current instanceof Error ? current.cause : null;
+  }
+  return 0;
+}
+
 async function handleProcess(request: NextRequest): Promise<NextResponse> {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
@@ -64,8 +75,8 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
   const emitter = buildQueueingEmitter(repos.pipelineJobRepository);
   const logger = getLogger();
   const deadline = Date.now() + BUDGET_MS;
-  const activeQuotaDeferral = await repos.pipelineJobRepository.findActiveDeferral(
-    CLOUDFLARE_DAILY_QUOTA_ERROR_PREFIX,
+  const activeQuotaDeferral = await timedPipelineStage("quota_deferral_lookup", {}, () =>
+    repos.pipelineJobRepository.findActiveDeferral(CLOUDFLARE_DAILY_QUOTA_ERROR_PREFIX),
   );
   if (activeQuotaDeferral) {
     const queue = await repos.pipelineJobRepository.getStatusCounts();
@@ -95,22 +106,31 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
   }> = [];
 
   while (Date.now() < deadline) {
-    const [job] = await repos.pipelineJobRepository.claimBatch(1, STALE_LOCK_MS);
+    const [job] = await timedPipelineStage("job_claim", {}, () =>
+      repos.pipelineJobRepository.claimBatch(1, STALE_LOCK_MS),
+    );
     if (!job) {
       break;
     }
     processed += 1;
+    const owner = job.claimOwner;
+    if (!owner) throw new Error(`Claimed job ${job.id} has no owner`);
 
     try {
       const event = parseEvent(job.event);
-      await dispatchJobToHandler(event, repos, emitter, job.id);
-      await repos.pipelineJobRepository.complete(job.id);
+      await timedPipelineStage("job_dispatch", { jobId: job.id, attempt: job.attempts, leaseOwner: owner }, () =>
+        dispatchJobToHandler(event, repos, emitter, job.id, owner),
+      );
+      if (!(await timedPipelineStage("job_complete", { jobId: job.id, attempt: job.attempts, leaseOwner: owner }, () =>
+        repos.pipelineJobRepository.complete(job.id, owner))))
+        throw new Error("Job claim expired before completion");
       succeeded += 1;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (error instanceof TabloidWriterBusyError) {
         await repos.pipelineJobRepository.deferWithoutAttempt(
           job.id,
+          owner,
           `[writer_lease_active] ${message}`,
           error.retryAfterMs,
         );
@@ -130,6 +150,7 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
         quotaRetryAt = new Date(now.getTime() + delayMs).toISOString();
         await repos.pipelineJobRepository.deferWithoutAttempt(
           job.id,
+          owner,
           `${isGeminiQuota ? GEMINI_DAILY_QUOTA_ERROR_PREFIX : CLOUDFLARE_DAILY_QUOTA_ERROR_PREFIX} ${message}`,
           delayMs,
         );
@@ -141,7 +162,9 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
         break;
       }
       const exhausted = job.attempts >= job.maxAttempts;
-      await repos.pipelineJobRepository.fail(job.id, message, backoffFor(job.attempts));
+      const backoffMs = Math.min(MAX_BACKOFF_MS, Math.max(backoffFor(job.attempts), retryAfterFromError(error)));
+      if (!(await repos.pipelineJobRepository.fail(job.id, owner, message, backoffMs)))
+        continue;
       if (exhausted) {
         deadLettered += 1;
       } else {

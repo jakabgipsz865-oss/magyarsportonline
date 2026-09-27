@@ -19,6 +19,7 @@ interface FacebookPublisherEnv {
   FACEBOOK_PAGE_ID?: string;
   FACEBOOK_PAGE_ACCESS_TOKEN?: string;
   META_GRAPH_API_VERSION: string;
+  PUBLIC_SITE_ORIGIN?: string;
 }
 
 interface Logger {
@@ -73,6 +74,7 @@ function classifyGraphError(response: Response, error: GraphError | undefined): 
     return "facebook_permission_denied";
   if (error?.is_transient || (error?.code && TEMPORARY_CODES.has(error.code)))
     return "facebook_temporary_error";
+  if (response.status >= 500) return "facebook_temporary_error";
   return "facebook_invalid_response";
 }
 
@@ -80,13 +82,26 @@ function graphErrorMessage(error: GraphError | undefined, status: number): strin
   return (error?.message ?? `Meta Graph API returned HTTP ${status}`).slice(0, 500);
 }
 
-function validPost(post: SocialPost, message: FacebookQueueMessage): boolean {
+function validArticleUrl(value: string, siteOrigin: string): boolean {
+  try {
+    const url = new URL(value);
+    const allowed = new URL(siteOrigin);
+    return url.protocol === "https:" && allowed.protocol === "https:" &&
+      url.origin === allowed.origin && !url.username && !url.password &&
+      !url.search && !url.hash && /^\/hir\/[^/]+$/u.test(url.pathname) &&
+      !/%(?:2f|5c)/iu.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function validPost(post: SocialPost, message: FacebookQueueMessage, siteOrigin: string): boolean {
   return (
     post.platform === "facebook" &&
     post.storyId === message.storyId &&
     post.storyVersionId === message.storyVersionId &&
     post.canonicalUrl === message.canonicalUrl &&
-    post.canonicalUrl.startsWith("https://magyarsportonline.hu/hir/")
+    validArticleUrl(post.canonicalUrl, siteOrigin)
   );
 }
 
@@ -105,7 +120,7 @@ export async function processFacebookMessage(
   }
   const queued = message.body;
   const post = await deps.repository.getById(queued.socialPostId);
-  if (!post || !validPost(post, queued)) {
+  if (!post || !validPost(post, queued, env.PUBLIC_SITE_ORIGIN ?? "https://mso24.hu")) {
     if (post)
       await deps.repository.markFailed(
         post.id,
@@ -197,7 +212,9 @@ export async function processFacebookMessage(
     return;
   }
 
-  const reasonCode = classifyGraphError(response, body.error);
+  const reasonCode = response.ok
+    ? "facebook_network_ambiguous"
+    : classifyGraphError(response, body.error);
   await deps.repository.markFailed(
     claimed.id,
     reasonCode,

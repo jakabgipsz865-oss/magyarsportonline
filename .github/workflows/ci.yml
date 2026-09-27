@@ -105,7 +105,7 @@ jobs:
         env:
           PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
         run: |
-          BASE="${PRODUCTION_URL:-https://magyarsportonline.hu}"
+          BASE="${PRODUCTION_URL:-https://mso24.hu}"
           echo "Target: $BASE"
           # Megvárjuk, míg a most pusholt Cloudflare production deploy kifut
           # (a V1-et az /rss.xml megléte jelzi) — max ~6 perc.

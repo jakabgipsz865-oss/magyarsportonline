@@ -14,12 +14,12 @@ export default function ImpresszumPage(): ReactNode {
         <h1>Impresszum</h1>
         <dl className="legal-details">
           <dt>Weboldal</dt>
-          <dd>MagyarSportOnline — magyarsportonline.hu</dd>
+          <dd>MagyarSportOnline — mso24.hu</dd>
           <dt>Üzemeltető és a tartalomért felelős személy</dt>
           <dd>Lovas Zoltán magánszemély</dd>
           <dt>Kapcsolat</dt>
           <dd>
-            <a href="mailto:lovas.zoltan1986@gmail.com">lovas.zoltan1986@gmail.com</a>
+            <a href="mailto:hello@mso24.hu">hello@mso24.hu</a>
           </dd>
         </dl>
 

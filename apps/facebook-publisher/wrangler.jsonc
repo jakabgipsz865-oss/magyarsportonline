@@ -13,6 +13,7 @@
   ],
   "vars": {
     "META_GRAPH_API_VERSION": "v26.0",
+    "PUBLIC_SITE_ORIGIN": "https://mso24.hu",
   },
   "queues": {
     "consumers": [

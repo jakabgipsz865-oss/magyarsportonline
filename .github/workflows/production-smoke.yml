@@ -24,7 +24,7 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -u
-          BASE="${PRODUCTION_URL:-https://magyarsportonline.hu}"
+          BASE="${PRODUCTION_URL:-https://mso24.hu}"
           echo "Target: $BASE"
           FAILURES=0
 

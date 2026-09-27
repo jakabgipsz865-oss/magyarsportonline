@@ -39,6 +39,7 @@ export class GeminiApiError extends Error {
     message: string,
     public readonly meteredUsage: { inputTokens: number; outputTokens: number } | null = null,
     public readonly finishReason: string | null = null,
+    public readonly retryAfterMs: number | null = null,
   ) {
     super(message);
     this.name = "GeminiApiError";
@@ -48,9 +49,10 @@ export class GeminiApiError extends Error {
 /** Stable error category for durable retry/defer decisions and diagnostics. */
 export function describeGeminiError(error: unknown): string {
   if (error instanceof GeminiApiError) {
-    if (error.status === 429 || error.apiStatus === "RESOURCE_EXHAUSTED") {
-      return "quota_exceeded";
-    }
+    if (error.apiStatus === "CLOUDFLARE_GATEWAY_RATE_LIMIT") return "gateway_rate_limited";
+    if (isGeminiDailyQuotaError(error)) return "daily_quota_exceeded";
+    if (error.status === 429 || error.apiStatus === "RESOURCE_EXHAUSTED") return "rate_limited";
+    if (error.apiStatus === "CLOUDFLARE_API_ERROR") return "gateway_error";
     if (error.status === 403 || error.apiStatus === "PERMISSION_DENIED") {
       return "forbidden";
     }
@@ -74,8 +76,50 @@ export function describeGeminiError(error: unknown): string {
 export function isGeminiDailyQuotaError(error: unknown): boolean {
   return (
     error instanceof GeminiApiError &&
-    (error.status === 429 || error.apiStatus === "RESOURCE_EXHAUSTED")
+    error.apiStatus !== "CLOUDFLARE_GATEWAY_RATE_LIMIT" &&
+    (error.status === 429 || error.apiStatus === "RESOURCE_EXHAUSTED") &&
+    /(?:requests? per day|per-day|daily (?:quota|limit)|\bRPD\b|quota.*\/day)/iu.test(error.message)
   );
+}
+
+function retryAfterMs(value: string | null): number | null {
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(Math.ceil(seconds * 1000), 30 * 60_000);
+  const date = Date.parse(value);
+  return Number.isFinite(date) ? Math.min(Math.max(0, date - Date.now()), 30 * 60_000) : null;
+}
+
+async function timedGeminiPhase<T>(
+  phase: "request_headers" | "response_body",
+  request: TextCompletionRequest | JsonCompletionRequest,
+  model: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const startedAt = Date.now();
+  const context = {
+    event: "gemini_phase",
+    phase,
+    model,
+    jobId: request.usageContext?.jobId,
+    rawArticleId: request.usageContext?.rawArticleId,
+    storyId: request.usageContext?.storyId,
+    role: request.usageContext?.role,
+  };
+  console.info(JSON.stringify({ ...context, status: "started" }));
+  try {
+    const result = await run();
+    console.info(JSON.stringify({ ...context, status: "completed", durationMs: Date.now() - startedAt }));
+    return result;
+  } catch (error) {
+    console.error(JSON.stringify({
+      ...context,
+      status: "failed",
+      durationMs: Date.now() - startedAt,
+      errorName: error instanceof Error ? error.name : "unknown",
+    }));
+    throw error;
+  }
 }
 
 /** A model-not-found response is rejected before generation and consumes no RPD request. */
@@ -121,7 +165,12 @@ function stripMarkdownFence(text: string): string {
 
 function parseApiStatus(errorBody: string): string | null {
   try {
-    const parsed = JSON.parse(errorBody) as { error?: { status?: string } };
+    const parsed = JSON.parse(errorBody) as {
+      error?: { status?: string };
+      errors?: Array<{ code?: number }>;
+    };
+    if (parsed.errors?.some((entry) => entry.code === 2018))
+      return "CLOUDFLARE_GATEWAY_RATE_LIMIT";
     return parsed.error?.status ?? null;
   } catch {
     return null;
@@ -280,7 +329,7 @@ export class GeminiLlmClient implements LlmClient {
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       try {
-        httpResponse = await this.fetchImpl(url, {
+        httpResponse = await timedGeminiPhase("request_headers", request, this.model, () => this.fetchImpl(url, {
           method: "POST",
           headers: {
             "content-type": "application/json",
@@ -298,7 +347,7 @@ export class GeminiLlmClient implements LlmClient {
           },
           body: JSON.stringify(body),
           signal: controller.signal,
-        });
+        }));
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") {
           throw new GeminiApiError(
@@ -315,15 +364,27 @@ export class GeminiLlmClient implements LlmClient {
       }
 
       if (!httpResponse.ok) {
-        const errorBody = await httpResponse.text().catch(() => "");
+        let errorBody: string;
+        try {
+          errorBody = await timedGeminiPhase("response_body", request, this.model, () => httpResponse.text());
+        } catch (error) {
+          if (controller.signal.aborted)
+            throw new GeminiApiError(0, "TIMEOUT", `Gemini API timed out after ${this.timeoutMs}ms`);
+          throw error;
+        }
+        if (controller.signal.aborted)
+          throw new GeminiApiError(0, "TIMEOUT", `Gemini API timed out after ${this.timeoutMs}ms`);
         throw new GeminiApiError(
           httpResponse.status,
           parseApiStatus(errorBody),
           `Gemini API error ${httpResponse.status}: ${errorBody.slice(0, 500)}`,
+          null,
+          null,
+          retryAfterMs(httpResponse.headers.get("retry-after")),
         );
       }
 
-      const payload = (await httpResponse.json()) as unknown;
+      const payload = (await timedGeminiPhase("response_body", request, this.model, () => httpResponse.json())) as unknown;
       const parsed = this.unifiedBilling
         ? unwrapCloudflareAiRunResponse(payload)
         : (payload as GeminiGenerateContentResponse);

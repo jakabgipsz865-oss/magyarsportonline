@@ -74,7 +74,7 @@ export const env = createEnv({
 
     // A publikus site kanonikus origin-je (SEO: canonical URL, sitemap,
     // JSON-LD, RSS). Vercel-en alapértelmezésként a production URL.
-    SITE_URL: z.string().url().default("https://magyarsportonline.hu"),
+    SITE_URL: z.string().url().default("https://mso24.hu"),
 
     FACEBOOK_AUTO_PUBLISH: z
       .enum(["true", "false"])

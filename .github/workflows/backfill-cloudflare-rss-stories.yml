@@ -64,7 +64,7 @@ jobs:
           jq -s '.' /tmp/results.ndjson | tee /tmp/results.json
           test "$(jq -s '[.[] | select(.httpStatus != 200 or .curlStatus != 0 or .response.published? != true)] | length' /tmp/results.ndjson)" = "0"
         env:
-          PUBLIC_ORIGIN: https://magyarsportonline.hu
+          PUBLIC_ORIGIN: https://mso24.hu
           WORKER_ORIGIN: https://magyarsportonline-web.footballinvestmentkft.workers.dev
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           PAGE: ${{ inputs.page || '1' }}

@@ -46,6 +46,8 @@ export const pipelineJobs = pgTable(
      * feldolgozása közben, nem csak akkor, ha a handler maga dob hibát.
      */
     lockedAt: timestamp("locked_at", { withTimezone: true }),
+    claimOwner: text("claim_owner"),
+    claimVersion: integer("claim_version").notNull().default(0),
     lastError: text("last_error"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

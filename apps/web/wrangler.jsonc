@@ -17,6 +17,10 @@
   ],
   "routes": [
     {
+      "pattern": "mso24.hu",
+      "custom_domain": true,
+    },
+    {
       "pattern": "magyarsportonline.hu",
       "custom_domain": true,
     },
@@ -26,7 +30,7 @@
     },
   ],
   "vars": {
-    "SITE_URL": "https://magyarsportonline.hu",
+    "SITE_URL": "https://mso24.hu",
     "LLM_PROVIDER": "cloudflare",
     "CLOUDFLARE_ACCOUNT_ID": "7a225d650d7e05daba6355e5526a8fb9",
     "CLOUDFLARE_AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",

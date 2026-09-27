@@ -6,7 +6,7 @@ vi.mock("./env", () => ({
   env: {
     FACEBOOK_AUTO_PUBLISH: false,
     FACEBOOK_AUTO_PUBLISH_START_AT: new Date("2026-09-15T20:30:00.000Z"),
-    SITE_URL: "https://magyarsportonline.hu",
+    SITE_URL: "https://mso24.hu",
   },
 }));
 
@@ -16,12 +16,14 @@ import {
   enqueueFacebookPublicationSafely,
 } from "./facebook-publication";
 
-function setup(options: { enabled?: boolean; created?: boolean } = {}) {
+function setup(options: { enabled?: boolean; created?: boolean; status?: string; enqueuedAt?: Date | null } = {}) {
   const post = {
     id: "social-1",
     storyId: "story-1",
     storyVersionId: "version-1",
-    canonicalUrl: "https://magyarsportonline.hu/hir/uj-hir",
+    canonicalUrl: "https://mso24.hu/hir/uj-hir",
+    status: options.status ?? "queued",
+    enqueuedAt: options.enqueuedAt ?? null,
   };
   const createFacebookQueued = vi.fn(async () => ({
     post,
@@ -32,7 +34,7 @@ function setup(options: { enabled?: boolean; created?: boolean } = {}) {
   const deps = {
     enabled: options.enabled ?? true,
     activationStart: new Date("2026-09-15T20:30:00.000Z"),
-    siteUrl: "https://magyarsportonline.hu",
+    siteUrl: "https://mso24.hu",
     socialPostRepository: {
       createFacebookQueued,
       markEnqueued,
@@ -61,15 +63,15 @@ describe("Facebook publication hook", () => {
     expect(fixture.createFacebookQueued).toHaveBeenCalledWith({
       storyId: "story-1",
       storyVersionId: "version-1",
-      canonicalUrl: "https://magyarsportonline.hu/hir/uj-hir",
+      canonicalUrl: "https://mso24.hu/hir/uj-hir",
       postText:
-        "⚽ Új magyar futballhír\n\nEz a már elkészült magyar lead.\n\n👇 Részletek:\nhttps://magyarsportonline.hu/hir/uj-hir",
+        "⚽ Új magyar futballhír\n\nEz a már elkészült magyar lead.\n\n👇 Részletek:\nhttps://mso24.hu/hir/uj-hir",
     });
     expect(fixture.send).toHaveBeenCalledWith({
       socialPostId: "social-1",
       storyId: "story-1",
       storyVersionId: "version-1",
-      canonicalUrl: "https://magyarsportonline.hu/hir/uj-hir",
+      canonicalUrl: "https://mso24.hu/hir/uj-hir",
     });
     expect(fixture.markEnqueued).toHaveBeenCalledWith("social-1");
   });
@@ -95,7 +97,7 @@ describe("Facebook publication hook", () => {
   });
 
   it("does not enqueue a second post for the same Story or a later StoryVersion", async () => {
-    const fixture = setup({ created: false });
+    const fixture = setup({ created: false, status: "posted" });
     fixture.input.storyVersionId = "version-2";
     await expect(enqueueFacebookPublication(fixture.input, fixture.deps)).resolves.toBe(
       "duplicate",
@@ -107,12 +109,19 @@ describe("Facebook publication hook", () => {
     );
   });
 
+  it("sends a transactionally saved intent after a Worker restart", async () => {
+    const fixture = setup({ created: false });
+    await expect(enqueueFacebookPublication(fixture.input, fixture.deps)).resolves.toBe("enqueued");
+    expect(fixture.send).toHaveBeenCalledOnce();
+    expect(fixture.markEnqueued).toHaveBeenCalledWith("social-1");
+  });
+
   it("shortens a long lead without generating a new sentence", () => {
     const lead = `${"magyar ".repeat(100)}vége`;
     const text = buildFacebookPostText({
       titleHu: "Cím",
       leadHu: lead,
-      canonicalUrl: "https://magyarsportonline.hu/hir/cim",
+      canonicalUrl: "https://mso24.hu/hir/cim",
     });
     expect(text.length).toBeLessThan(580);
     expect(text).toContain("…\n\n👇 Részletek:");

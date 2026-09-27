@@ -188,7 +188,7 @@ describe("one-call Hungarian writer", () => {
     });
     await expect(writeTabloid(llm, input)).rejects.toThrow("untranslated");
   });
-  it("hard-flags a short draft for a detailed source article", async () => {
+  it("does not reject a concise summary solely for its length", async () => {
     const llm = client({
       title_hu: "Részletes történet",
       lead_hu: "A történet röviden.",
@@ -199,9 +199,35 @@ describe("one-call Hungarian writer", () => {
       ...input,
       content: sourceContent,
     });
-    expect(assessTabloidQuality({ sourceContent, output })).toContainEqual(
-      expect.objectContaining({ kind: "hard", code: "incomplete_coverage" }),
-    );
+    expect(assessTabloidQuality({ sourceContent, output }).some((flag) => flag.code === "incomplete_coverage")).toBe(false);
+  });
+
+  it.each([
+    ["Bayern won 3-0.", "A Bayern 3–0-ra nyert.", false],
+    ["Bayern won 3-0.", "A Bayern 0–3-ra nyert.", true],
+    ["Bayern played 3 matches and conceded 0 goals.", "A Bayern 3–0-ra nyert.", true],
+    ["Arsenal beat Chelsea 3-0.", "A Chelsea 3–0-ra verte az Arsenalt.", true],
+    ["Arsenal beat Chelsea 3-0.", "Az Arsenal 3–0-ra verte a Chelsea-t.", false],
+    ["The fee was 1.5 million euros.", "A díj 1,5 millió euró volt.", false],
+    ["The fee was 1.5 million euros.", "A díj 1,5 millió dollár volt.", true],
+    ["The fee was 1,500,000 euros.", "A díj 1,5 millió euró volt.", false],
+    ["The match was on 2026-09-27.", "A meccs 2026.09.27-én volt.", false],
+    ["The match was on 2026-09-27.", "A meccs 2026.09.28-án volt.", true],
+    ["Kickoff is at 18:30.", "A kezdés 18.30-kor lesz.", false],
+    ["Kickoff is at 18:30.", "A kezdés 19.30-kor lesz.", true],
+    ["Ronaldo scored 2 and Messi scored 3.", "Ronaldo 3, Messi 2 gólt szerzett.", true],
+  ])("checks numeric meaning: %s => %s", (sourceContent, body_hu, rejected) => {
+    const flags = assessTabloidQuality({
+      sourceContent,
+      output: { title_hu: "Sporthír", lead_hu: "Részletek.", body_hu },
+    });
+    expect(flags.some((flag) => flag.code === "number_integrity")).toBe(rejected);
+  });
+
+  it("matches forbidden expressions at word boundaries", () => {
+    const output = { title_hu: "Keresztüljutott", lead_hu: "A keresztül vezető úton ment.", body_hu: "A játékos keresztülhaladt a pályán." };
+    const flags = assessTabloidQuality({ sourceContent: "The player went through the field.", output, forbiddenTerms: ["kereszt"] });
+    expect(flags.some((flag) => flag.code === "forbidden_terminology")).toBe(false);
   });
 
   it("separates hard and language flags without another AI call", () => {

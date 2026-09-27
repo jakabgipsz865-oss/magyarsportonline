@@ -1,4 +1,4 @@
-import { jsonb, pgTable, text, timestamp, uuid, vector, uniqueIndex } from "drizzle-orm/pg-core";
+import { integer, jsonb, pgTable, text, timestamp, uuid, vector, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { SourceInlineImage } from "@magyarsportonline/shared";
 import { ingestStatusEnum } from "./enums";
@@ -31,6 +31,18 @@ export const rawArticles = pgTable(
     // Provenance is explicit so an RSS description cannot be mistaken for a
     // successfully fetched full source article at publication time.
     contentOrigin: text("content_origin").notNull().default("rss_snippet"),
+    // Immutable RSS receipt. Legacy rows intentionally keep first_seen_at NULL:
+    // their actual observation time cannot be reconstructed from ingested_at.
+    rssTitle: text("rss_title"),
+    rssDescription: text("rss_description"),
+    rssGuid: text("rss_guid"),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }),
+    processingStatus: text("processing_status"),
+    decisionReason: text("decision_reason"),
+    processingAttempts: integer("processing_attempts").notNull().default(0),
+    processingAvailableAt: timestamp("processing_available_at", { withTimezone: true }),
+    processingOwner: text("processing_owner"),
+    processingLockedAt: timestamp("processing_locked_at", { withTimezone: true }),
     authorOriginal: text("author_original"),
     // RSS media:thumbnail/enclosure image, if the source provided one — frontend
     // hero/thumbnail display (Real Sports Portal UX sprint). Never re-hosted,
@@ -55,5 +67,6 @@ export const rawArticles = pgTable(
       table.sourceId,
       sql`(${table.extractedEntities}->>'rssGuid')`,
     ),
+    index("raw_articles_processing_due_idx").on(table.processingStatus, table.processingAvailableAt),
   ],
 );

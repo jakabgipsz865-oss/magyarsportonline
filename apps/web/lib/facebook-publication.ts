@@ -31,6 +31,8 @@ interface FacebookPostRecord {
   storyId: string;
   storyVersionId: string;
   canonicalUrl: string | null;
+  status: string;
+  enqueuedAt: Date | null;
 }
 
 interface FacebookSocialPostStore {
@@ -80,7 +82,9 @@ function defaultDeps(): FacebookPublicationDeps {
     activationStart: env.FACEBOOK_AUTO_PUBLISH_START_AT,
     siteUrl: env.SITE_URL,
     socialPostRepository: createRepositories().socialPostRepository,
-    queue: queueBinding(),
+    // Resolve the queue only after the durable social_posts intent is saved.
+    // A temporarily missing binding must remain recoverable by enqueue-pending.
+    queue: { send: (message) => queueBinding().send(message) },
   };
 }
 
@@ -103,7 +107,7 @@ export async function enqueueFacebookPublication(
       canonicalUrl,
     }),
   });
-  if (!result.created) {
+  if (!result.created && (result.post.status !== "queued" || result.post.enqueuedAt)) {
     getLogger().info(
       { reasonCode: "facebook_duplicate_skipped", storyId: input.storyId },
       "facebook publication duplicate skipped",
@@ -113,9 +117,9 @@ export async function enqueueFacebookPublication(
 
   await deps.queue.send({
     socialPostId: result.post.id,
-    storyId: input.storyId,
-    storyVersionId: input.storyVersionId,
-    canonicalUrl,
+    storyId: result.post.storyId,
+    storyVersionId: result.post.storyVersionId,
+    canonicalUrl: result.post.canonicalUrl ?? canonicalUrl,
   });
   await deps.socialPostRepository.markEnqueued(result.post.id);
   return "enqueued";
