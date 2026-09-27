@@ -11,6 +11,7 @@ import { delayUntilNextCloudflareQuotaReset } from "../../../../../lib/cloudflar
 import { env } from "../../../../../lib/env";
 import { getLogger } from "../../../../../lib/logger";
 import { buildQueueingEmitter, dispatchJobToHandler } from "../../../../../lib/pipeline";
+import { TabloidWriterBusyError } from "../../../../../lib/tabloid";
 
 /**
  * The worker half of the async pipeline sprint (2026-07-29,
@@ -107,6 +108,15 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
       succeeded += 1;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      if (error instanceof TabloidWriterBusyError) {
+        await repos.pipelineJobRepository.deferWithoutAttempt(
+          job.id,
+          `[writer_lease_active] ${message}`,
+          error.retryAfterMs,
+        );
+        logger.info({ jobId: job.id }, "Writer lease active; job deferred without an attempt");
+        continue;
+      }
       if (
         isCloudflareDailyNeuronQuotaError(error) ||
         isGeminiDailyQuotaError(error) ||

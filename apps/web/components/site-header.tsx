@@ -40,7 +40,11 @@ export function SiteHeader(): ReactNode {
         </Link>
         <nav className="site-nav">
           {NAV_LINKS.map((link) => (
-            <Link key={link.href} href={link.href} data-active={isActive(pathname, link.href)}>
+            <Link
+              key={link.href}
+              href={link.href}
+              data-active={isActive(pathname ?? "/", link.href)}
+            >
               {link.label}
             </Link>
           ))}

@@ -22,7 +22,9 @@ vi.mock("./db", () => ({ createRepositories: vi.fn() }));
 vi.mock("./facebook-publication", () => ({
   enqueueFacebookPublicationSafely: mocks.enqueueFacebook,
 }));
-vi.mock("./logger", () => ({ getLogger: () => ({ info: vi.fn() }) }));
+vi.mock("./logger", () => ({
+  getLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+}));
 vi.mock("./llm", () => ({
   getWriterLlmClient: () => mocks.llm,
   getWriterRepairLlmClient: () => mocks.llm,
@@ -80,18 +82,19 @@ function fixtures() {
   );
   const versions = new Map<string, Record<string, unknown>>();
   const stories = new Map<string, { id: string; slug: string | null; publishedAt: Date | null }>();
-  const attempts = new Set();
+  const writerLeases = new Map<string, string>();
   const repos = {
     rawArticleRepository: {
-      withTabloidLock: (_: string, work: () => Promise<unknown>) => work(),
       getById: (id: string) => raws.get(id),
       linkToStory: vi.fn(),
-      claimTabloidWriter: async (id: string) => {
-        if (attempts.has(id)) return false;
-        attempts.add(id);
+      claimTabloidWriter: async (id: string, owner: string) => {
+        if (writerLeases.has(id)) return false;
+        writerLeases.set(id, owner);
         return true;
       },
-      releaseTabloidQuotaDeferral: vi.fn(async (id: string) => attempts.delete(id)),
+      releaseTabloidWriter: vi.fn(async (id: string, owner: string) => {
+        if (writerLeases.get(id) === owner) writerLeases.delete(id);
+      }),
       upgradeFromFullArticle: vi.fn(async (id: string, data: Record<string, unknown>) => {
         const raw = raws.get(id);
         if (!raw) return false;
@@ -618,7 +621,7 @@ describe("tabloid publication", () => {
     await publishTabloid("one", repos);
     await publishTabloid("one", repos, { forceRewrite: true });
     expect(mocks.write).toHaveBeenCalledTimes(2);
-    expect(repos.rawArticleRepository.releaseTabloidQuotaDeferral).toHaveBeenCalledWith("one");
+    expect(repos.rawArticleRepository.releaseTabloidWriter).toHaveBeenCalledTimes(2);
   });
   it("lets an explicit operator repair bypass the new-article topic filter", async () => {
     const { repos } = fixtures();
@@ -640,22 +643,36 @@ describe("tabloid publication", () => {
 
     expect(mocks.write).toHaveBeenCalledTimes(1);
   });
-  it("does not automatically repair or repeat failed generation", async () => {
+  it("releases the lease and retries when generation fails before a draft exists", async () => {
     const { repos } = fixtures();
     mocks.write.mockRejectedValueOnce(new Error("invalid writer output"));
     await expect(publishTabloid("one", repos)).rejects.toThrow("invalid writer");
-    await expect(publishTabloid("one", repos)).rejects.toThrow("already attempted");
-    expect(mocks.write).toHaveBeenCalledTimes(1);
-  });
-  it("retries a failed writer only when an operator explicitly requests recovery", async () => {
-    const { repos } = fixtures();
-    mocks.write.mockRejectedValueOnce(new Error("timed out"));
-    await expect(publishTabloid("one", repos)).rejects.toThrow("timed out");
-
-    await publishTabloid("one", repos, { retryFailedWriter: true });
-
-    expect(repos.rawArticleRepository.releaseTabloidQuotaDeferral).toHaveBeenCalledWith("one");
+    await publishTabloid("one", repos);
     expect(mocks.write).toHaveBeenCalledTimes(2);
+    expect(repos.rawArticleRepository.releaseTabloidWriter).toHaveBeenCalledTimes(2);
+  });
+  it("reuses a response persisted before later validation fails", async () => {
+    const { repos, versions } = fixtures();
+    mocks.assess.mockImplementationOnce(() => {
+      throw new Error("validation interrupted");
+    });
+
+    await expect(publishTabloid("one", repos)).rejects.toThrow("validation interrupted");
+    expect(versions.size).toBe(1);
+    await publishTabloid("one", repos);
+
+    expect(mocks.write).toHaveBeenCalledTimes(1);
+    expect(repos.storyRepository.publish).toHaveBeenCalledOnce();
+  });
+  it("defers a concurrent delivery while an active Writer lease has no draft", async () => {
+    const { repos } = fixtures();
+    repos.rawArticleRepository.claimTabloidWriter = vi.fn(async () => false);
+
+    await expect(publishTabloid("one", repos)).rejects.toMatchObject({
+      name: "TabloidWriterBusyError",
+      retryAfterMs: 60_000,
+    });
+    expect(mocks.write).not.toHaveBeenCalled();
   });
 });
 

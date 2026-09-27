@@ -216,6 +216,33 @@ describe("GeminiLlmClient", () => {
     await expect(client.completeText(textRequest)).rejects.toMatchObject({ status: 0 });
   });
 
+  it("keeps the timeout active while reading the response body", async () => {
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const signal = init?.signal as AbortSignal;
+      return {
+        ok: true,
+        json: () =>
+          new Promise<never>((_resolve, reject) => {
+            signal.addEventListener(
+              "abort",
+              () => {
+                const error = new Error("aborted");
+                error.name = "AbortError";
+                reject(error);
+              },
+              { once: true },
+            );
+          }),
+      } as unknown as Response;
+    });
+    const client = new GeminiLlmClient({ apiKey: "key", fetchImpl, timeoutMs: 5 });
+
+    await expect(client.completeText(textRequest)).rejects.toMatchObject({
+      status: 0,
+      apiStatus: "TIMEOUT",
+    });
+  });
+
   it("throws when the response was blocked by safety filters", async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({ promptFeedback: { blockReason: "SAFETY" } }),

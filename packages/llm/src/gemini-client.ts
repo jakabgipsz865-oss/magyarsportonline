@@ -279,58 +279,69 @@ export class GeminiLlmClient implements LlmClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      httpResponse = await this.fetchImpl(url, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          ...(this.unifiedBilling
-            ? {
-                authorization: `Bearer ${this.unifiedBilling.apiToken}`,
-                "cf-aig-gateway-id": this.unifiedBilling.gatewayId,
-              }
-            : {
-                ...(this.apiKey ? { "x-goog-api-key": this.apiKey } : {}),
-                ...(this.gatewayToken
-                  ? { "cf-aig-authorization": `Bearer ${this.gatewayToken}` }
-                  : {}),
-              }),
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
+      try {
+        httpResponse = await this.fetchImpl(url, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            ...(this.unifiedBilling
+              ? {
+                  authorization: `Bearer ${this.unifiedBilling.apiToken}`,
+                  "cf-aig-gateway-id": this.unifiedBilling.gatewayId,
+                }
+              : {
+                  ...(this.apiKey ? { "x-goog-api-key": this.apiKey } : {}),
+                  ...(this.gatewayToken
+                    ? { "cf-aig-authorization": `Bearer ${this.gatewayToken}` }
+                    : {}),
+                }),
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          throw new GeminiApiError(
+            0,
+            "TIMEOUT",
+            `Gemini API timed out after ${this.timeoutMs}ms`,
+          );
+        }
+        throw new GeminiApiError(
+          0,
+          null,
+          `Gemini API network error: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+
+      if (!httpResponse.ok) {
+        const errorBody = await httpResponse.text().catch(() => "");
+        throw new GeminiApiError(
+          httpResponse.status,
+          parseApiStatus(errorBody),
+          `Gemini API error ${httpResponse.status}: ${errorBody.slice(0, 500)}`,
+        );
+      }
+
+      const payload = (await httpResponse.json()) as unknown;
+      const parsed = this.unifiedBilling
+        ? unwrapCloudflareAiRunResponse(payload)
+        : (payload as GeminiGenerateContentResponse);
+      if (parsed.promptFeedback?.blockReason) {
+        throw new GeminiApiError(
+          0,
+          "BLOCKED",
+          `Gemini blocked the request: ${parsed.promptFeedback.blockReason}`,
+        );
+      }
+      return parsed;
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
+      if (controller.signal.aborted && !(error instanceof GeminiApiError)) {
         throw new GeminiApiError(0, "TIMEOUT", `Gemini API timed out after ${this.timeoutMs}ms`);
       }
-      throw new GeminiApiError(
-        0,
-        null,
-        `Gemini API network error: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      throw error;
     } finally {
       clearTimeout(timeout);
     }
-
-    if (!httpResponse.ok) {
-      const errorBody = await httpResponse.text().catch(() => "");
-      throw new GeminiApiError(
-        httpResponse.status,
-        parseApiStatus(errorBody),
-        `Gemini API error ${httpResponse.status}: ${errorBody.slice(0, 500)}`,
-      );
-    }
-
-    const payload = (await httpResponse.json()) as unknown;
-    const parsed = this.unifiedBilling
-      ? unwrapCloudflareAiRunResponse(payload)
-      : (payload as GeminiGenerateContentResponse);
-    if (parsed.promptFeedback?.blockReason) {
-      throw new GeminiApiError(
-        0,
-        "BLOCKED",
-        `Gemini blocked the request: ${parsed.promptFeedback.blockReason}`,
-      );
-    }
-    return parsed;
   }
 }

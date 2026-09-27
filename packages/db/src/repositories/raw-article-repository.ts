@@ -135,29 +135,56 @@ export class RawArticleRepository {
     return row ?? null;
   }
 
-  async claimTabloidWriter(id: string): Promise<boolean> {
+  /**
+   * Acquires a bounded Writer lease without holding a database connection
+   * while the external model runs. The owner check prevents one request
+   * from releasing another request's lease; the expiry lets the existing
+   * stale-job recovery resume work after a killed Worker invocation.
+   *
+   * `tabloidWriterAttempted` was the former permanent boolean marker. It is
+   * removed on a successful lease claim so rows stranded by that design are
+   * recoverable without a data migration.
+   */
+  async claimTabloidWriter(id: string, owner: string, expiresAt: Date): Promise<boolean> {
     const rows = await this.db
       .update(rawArticles)
       .set({
-        extractedEntities: sql`coalesce(${rawArticles.extractedEntities}, '{}'::jsonb) || '{"tabloidWriterAttempted":true}'::jsonb`,
+        extractedEntities: sql`
+          (coalesce(${rawArticles.extractedEntities}, '{}'::jsonb) - 'tabloidWriterAttempted')
+          || jsonb_build_object(
+            'tabloidWriterLease',
+            jsonb_build_object(
+              'owner', ${owner}::text,
+              'expiresAt', ${expiresAt.toISOString()}::text
+            )
+          )
+        `,
       })
       .where(
         and(
           eq(rawArticles.id, id),
-          sql`coalesce(${rawArticles.extractedEntities}->>'tabloidWriterAttempted', 'false') <> 'true'`,
+          sql`coalesce(
+            nullif(${rawArticles.extractedEntities}->'tabloidWriterLease'->>'expiresAt', '')::timestamptz,
+            '-infinity'::timestamptz
+          ) <= now()`,
         ),
       )
       .returning({ id: rawArticles.id });
     return rows.length > 0;
   }
 
-  async releaseTabloidQuotaDeferral(id: string): Promise<void> {
+  async releaseTabloidWriter(id: string, owner: string): Promise<void> {
     await this.db
       .update(rawArticles)
       .set({
-        extractedEntities: sql`${rawArticles.extractedEntities} - 'tabloidWriterAttempted'`,
+        extractedEntities: sql`coalesce(${rawArticles.extractedEntities}, '{}'::jsonb) - 'tabloidWriterLease' - 'tabloidWriterAttempted'`,
       })
-      .where(eq(rawArticles.id, id));
+      .where(
+        and(
+          eq(rawArticles.id, id),
+          sql`${rawArticles.extractedEntities}->'tabloidWriterLease'->>'owner' = ${owner}`,
+        ),
+      );
   }
 
   async updateInlineImages(
