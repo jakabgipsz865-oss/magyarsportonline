@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createRepositories } from "../../../../../lib/db";
+import { createPublicRepositories } from "../../../../../lib/db";
 import { allowPublicApiRequest } from "../../../../../lib/rate-limit";
 import { toStoryDetailView } from "../../../../../lib/story-view";
 
@@ -15,7 +15,7 @@ export async function GET(request: Request, context: RouteContext): Promise<Next
     return NextResponse.json({ error: "rate limit exceeded" }, { status: 429 });
   }
   const { slug } = await context.params;
-  const { storyReadModelRepository } = createRepositories();
+  const { storyReadModelRepository } = createPublicRepositories();
   const row = await storyReadModelRepository.getBySlug(slug);
   if (!row) {
     return NextResponse.json({ error: "not found" }, { status: 404 });

@@ -27,20 +27,24 @@ export function SiteHeader(): ReactNode {
         <Link
           href="/"
           className="site-header__brand"
-          aria-label="MagyarSportOnline"
+          aria-label="MSO24"
           onClick={() => setMobileOpen(false)}
         >
           <span className="site-header__mark" aria-hidden="true" />
           <span className="site-header__name site-header__name--full" aria-hidden="true">
-            Magyar<b>Sport</b>Online
+            MSO24
           </span>
           <span className="site-header__name site-header__name--short" aria-hidden="true">
-            MSO
+            MSO24
           </span>
         </Link>
         <nav className="site-nav">
           {NAV_LINKS.map((link) => (
-            <Link key={link.href} href={link.href} data-active={isActive(pathname, link.href)}>
+            <Link
+              key={link.href}
+              href={link.href}
+              data-active={isActive(pathname ?? "/", link.href)}
+            >
               {link.label}
             </Link>
           ))}

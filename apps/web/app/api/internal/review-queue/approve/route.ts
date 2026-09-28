@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { env } from "../../../../../lib/env";
 import { getLogger } from "../../../../../lib/logger";
 import { approveReviewItem } from "../../../../../lib/review";
+import { d1Binding } from "../../../../../lib/db";
+import { decideD1Review } from "../../../../../lib/d1-review";
 
 /**
  * Non-interactive equivalent of `/admin/review`'s "✅ Jóváhagyás és
@@ -35,11 +37,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const result = await approveReviewItem(itemId);
+    const d1 = d1Binding();
+    const result = d1
+      ? await decideD1Review(d1, itemId, "approve")
+      : await approveReviewItem(itemId);
     if (!result.ok) {
-      if (result.error === "publication_blocked") {
+      if (result.error === "publication_blocked" || result.error === "quality_blocked") {
         return NextResponse.json(
-          { error: result.error, blockers: result.blockers },
+          {
+            error: result.error,
+            ...(result.error === "publication_blocked" ? { blockers: result.blockers } : {}),
+          },
           { status: 422 },
         );
       }

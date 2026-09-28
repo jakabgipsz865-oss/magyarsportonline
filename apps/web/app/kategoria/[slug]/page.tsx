@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { StoryRiver } from "../../../components/story-river";
 import { SiteFooter } from "../../../components/site-footer";
-import { createRepositories } from "../../../lib/db";
+import { createPublicRepositories } from "../../../lib/db";
 import { toStorySummaryView } from "../../../lib/story-view";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const { categoryRepository } = createRepositories();
+  const { categoryRepository } = createPublicRepositories();
   const category = await categoryRepository.getBySlug(slug);
   return category ? { title: category.nameHu } : {};
 }
@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
  */
 export default async function CategoryPage({ params }: PageProps): Promise<ReactNode> {
   const { slug } = await params;
-  const { categoryRepository, storyReadModelRepository } = createRepositories();
+  const { categoryRepository, storyReadModelRepository } = createPublicRepositories();
   const category = await categoryRepository.getBySlug(slug);
   if (!category) {
     notFound();

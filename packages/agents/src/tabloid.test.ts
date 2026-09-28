@@ -188,7 +188,7 @@ describe("one-call Hungarian writer", () => {
     });
     await expect(writeTabloid(llm, input)).rejects.toThrow("untranslated");
   });
-  it("hard-flags a short draft for a detailed source article", async () => {
+  it("does not reject a concise summary solely for its length", async () => {
     const llm = client({
       title_hu: "Részletes történet",
       lead_hu: "A történet röviden.",
@@ -199,9 +199,59 @@ describe("one-call Hungarian writer", () => {
       ...input,
       content: sourceContent,
     });
-    expect(assessTabloidQuality({ sourceContent, output })).toContainEqual(
-      expect.objectContaining({ kind: "hard", code: "incomplete_coverage" }),
-    );
+    expect(
+      assessTabloidQuality({ sourceContent, output }).some(
+        (flag) => flag.code === "incomplete_coverage",
+      ),
+    ).toBe(false);
+  });
+
+  it.each([
+    ["Bayern won 3-0.", "A Bayern 3–0-ra nyert.", false],
+    ["Bayern won 3-0.", "A Bayern 0–3-ra nyert.", true],
+    ["Bayern played 3 matches and conceded 0 goals.", "A Bayern 3–0-ra nyert.", true],
+    ["Arsenal beat Chelsea 3-0.", "A Chelsea 3–0-ra verte az Arsenalt.", true],
+    ["Arsenal beat Chelsea 3-0.", "Az Arsenal 3–0-ra verte a Chelsea-t.", false],
+    ["The fee was 1.5 million euros.", "A díj 1,5 millió euró volt.", false],
+    ["The fee was 1.5 million euros.", "A díj 1,5 millió dollár volt.", true],
+    ["The fee was 1,500,000 euros.", "A díj 1,5 millió euró volt.", false],
+    ["The match was on 2026-09-27.", "A meccs 2026.09.27-én volt.", false],
+    ["The match was on 2026-09-27.", "A meccs 2026.09.28-án volt.", true],
+    ["Kickoff is at 18:30.", "A kezdés 18.30-kor lesz.", false],
+    ["Kickoff is at 18:30.", "A kezdés 19.30-kor lesz.", true],
+    ["Ronaldo scored 2 and Messi scored 3.", "Ronaldo 3, Messi 2 gólt szerzett.", true],
+    [
+      "Luca Bolay (24) is worth 500.000 Euro.",
+      "A 24 éves Luca Bolay értékét 500.000 eurónak tartják.",
+      false,
+    ],
+    [
+      "Haaland faced 114 charges. Roberto Mancini denied wrongdoing.",
+      "A 114 vád után Roberto Mancini tagadta a szabálytalanságot.",
+      false,
+    ],
+    ["The match is on October 11.", "Október 11-én lesz a mérkőzés a Premier League-ben.", false],
+    ["Haaland equalised in the 51st minute.", "Haaland az 51. percben egyenlített.", false],
+  ])("checks numeric meaning: %s => %s", (sourceContent, body_hu, rejected) => {
+    const flags = assessTabloidQuality({
+      sourceContent,
+      output: { title_hu: "Sporthír", lead_hu: "Részletek.", body_hu },
+    });
+    expect(flags.some((flag) => flag.code === "number_integrity")).toBe(rejected);
+  });
+
+  it("matches forbidden expressions at word boundaries", () => {
+    const output = {
+      title_hu: "Keresztüljutott",
+      lead_hu: "A keresztül vezető úton ment.",
+      body_hu: "A játékos keresztülhaladt a pályán.",
+    };
+    const flags = assessTabloidQuality({
+      sourceContent: "The player went through the field.",
+      output,
+      forbiddenTerms: ["kereszt"],
+    });
+    expect(flags.some((flag) => flag.code === "forbidden_terminology")).toBe(false);
   });
 
   it("separates hard and language flags without another AI call", () => {
@@ -234,6 +284,18 @@ describe("one-call Hungarian writer", () => {
         body_hu:
           "A játékos az iPhone készülékével készült videót a LaLiga illetékeseinek is megmutatta.",
         language_warnings: [],
+      },
+    });
+    expect(flags.some((flag) => flag.code === "malformed_hungarian")).toBe(false);
+  });
+
+  it("accepts a source-attributed mixed-case broadcaster name", () => {
+    const flags = assessTabloidQuality({
+      sourceContent: "He told TalkTV that the appeal was likely.",
+      output: {
+        title_hu: "Fellebbezést terveznek",
+        lead_hu: "Sajtóhír érkezett.",
+        body_hu: "A szakértő a TalkTV-nek nyilatkozott a várható fellebbezésről.",
       },
     });
     expect(flags.some((flag) => flag.code === "malformed_hungarian")).toBe(false);
@@ -279,6 +341,34 @@ describe("one-call Hungarian writer", () => {
         usageContext: { role: "targeted_repair" },
       }),
     );
+  });
+  it("sends only an identified paragraph to Flash and avoids an unscoped body rewrite", async () => {
+    const llm = client({ body_hu: "A csapat pontosan passzolt." });
+    const output = {
+      title_hu: "A csapat győzött",
+      lead_hu: "A mérkőzésen sok helyzet volt.",
+      body_hu: "Az első félidőben kevés helyzet volt.\n\nA csapat rosszul passzolt.",
+      language_warnings: [],
+      generatedByModel: "gemini-3.5-flash-lite",
+    };
+    await repairTabloid(
+      llm,
+      output,
+      [{ kind: "hard", code: "forbidden_terminology", field: "body", detail: "rosszul" }],
+      { role: "targeted_repair" },
+    );
+    expect(llm.completeJson.mock.calls[0]?.[0]?.messages[0]?.content).toContain(
+      "A csapat rosszul passzolt.",
+    );
+    expect(llm.completeJson.mock.calls[0]?.[0]?.messages[0]?.content).not.toContain(
+      "Az első félidőben",
+    );
+    await expect(
+      repairTabloid(llm, output, [{ kind: "language", code: "foreign_language", field: "body" }], {
+        role: "targeted_repair",
+      }),
+    ).rejects.toThrow("one identifiable body paragraph");
+    expect(llm.completeJson).toHaveBeenCalledOnce();
   });
   it("deterministically splits a long one-block draft into readable paragraphs", () => {
     expect(

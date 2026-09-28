@@ -1,8 +1,12 @@
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import type { Database } from "../client";
 import { pipelineJobs } from "../schema/index";
 
 export type PipelineJobRow = typeof pipelineJobs.$inferSelect;
+export interface JobClaim {
+  jobId: string;
+  owner: string;
+}
 export interface PipelineQueueStatusCounts {
   pending: number;
   inProgress: number;
@@ -16,6 +20,13 @@ export interface DeadLetterSummary {
   eventType: string;
   lastError: string | null;
   count: number;
+}
+
+export class LostJobClaimError extends Error {
+  constructor() {
+    super("Pipeline job claim no longer belongs to this execution");
+    this.name = "LostJobClaimError";
+  }
 }
 
 interface QueueEventShape {
@@ -158,6 +169,7 @@ export class PipelineJobRepository {
           attempts = 0,
           available_at = now(),
           locked_at = NULL,
+          claim_owner = NULL,
           last_error = concat('[manual_requeue] ', COALESCE(last_error, 'no previous error')),
           updated_at = now()
       WHERE id IN (SELECT id FROM selected)
@@ -172,38 +184,76 @@ export class PipelineJobRepository {
    * longer than `staleLockMs` ago — the worker that claimed them never
    * called `complete`/`fail`, most likely because the request itself was
    * killed mid-handler). A single `WITH ... FOR UPDATE SKIP LOCKED` CTE
-   * statement makes the select-then-update atomic without a separate
-   * transaction wrapper. Fresh events are claimed first so a historical
-   * retry backlog cannot block newly ingested production news indefinitely;
-   * older work remains durable and is drained whenever no fresher job is due.
+   * statement makes the select-then-update atomic. One of four time lanes
+   * chooses the oldest eligible item, including abandoned claims. The other
+   * lanes favor fresh pending news. This reserves recovery capacity while
+   * admitting new stories under a sustained backlog.
    */
-  async claimBatch(limit: number, staleLockMs: number): Promise<PipelineJobRow[]> {
-    const rows = await this.db.execute<PipelineJobRow>(sql`
-      WITH claimed AS (
-        SELECT id FROM ${pipelineJobs}
-        WHERE (status = 'pending' AND available_at <= now())
-           OR (status = 'in_progress' AND locked_at < now() - (${staleLockMs}::text || ' milliseconds')::interval)
-        ORDER BY created_at DESC, available_at
-        LIMIT ${limit}
-        FOR UPDATE SKIP LOCKED
-      )
-      UPDATE ${pipelineJobs}
-      SET status = 'in_progress',
-          locked_at = now(),
-          attempts = attempts + 1,
-          updated_at = now()
-      WHERE id IN (SELECT id FROM claimed)
-      RETURNING *
-    `);
-    return [...rows];
+  async claimBatch(
+    limit: number,
+    staleLockMs: number,
+    now = new Date(),
+  ): Promise<PipelineJobRow[]> {
+    if (limit <= 0) return [];
+    // One in four 30-second lanes claims the oldest eligible job (including
+    // stale locks); the other lanes admit fresh pending news first. The old
+    // lane must not prefer stale locks over old pending work indefinitely.
+    const recoveryLane = Math.floor(now.getTime() / 30_000) % 4 === 0;
+    const owner = crypto.randomUUID();
+    return this.db.transaction(async (tx) => {
+      const rows = await tx.execute<{ id: string }>(sql`
+        WITH selected AS (
+          SELECT id FROM ${pipelineJobs}
+          WHERE (status = 'pending' AND available_at <= now())
+             OR (status = 'in_progress' AND locked_at < now() - (${staleLockMs}::text || ' milliseconds')::interval)
+          ORDER BY
+            CASE WHEN NOT ${recoveryLane} THEN CASE WHEN status = 'pending' THEN 0 ELSE 1 END END,
+            CASE WHEN ${recoveryLane} THEN COALESCE(locked_at, created_at) END ASC,
+            CASE WHEN NOT ${recoveryLane} THEN created_at END DESC
+          LIMIT ${Math.min(limit, 20)}
+          FOR UPDATE SKIP LOCKED
+        )
+        UPDATE ${pipelineJobs}
+        SET status = 'in_progress', locked_at = now(),
+            claim_owner = ${owner}, claim_version = claim_version + 1,
+            attempts = attempts + 1, updated_at = now()
+        WHERE id IN (SELECT id FROM selected)
+        RETURNING id
+      `);
+      if (rows.length === 0) return [];
+      return tx
+        .select()
+        .from(pipelineJobs)
+        .where(
+          inArray(
+            pipelineJobs.id,
+            rows.map((row) => row.id),
+          ),
+        );
+    });
   }
 
-  async complete(jobId: string): Promise<void> {
-    await this.db.execute(sql`
-      UPDATE ${pipelineJobs}
-      SET status = 'completed', updated_at = now()
-      WHERE id = ${jobId}
+  async hasActiveClaim(jobId: string, owner: string): Promise<boolean> {
+    const rows = await this.db.execute<{ id: string }>(sql`
+      SELECT id FROM ${pipelineJobs}
+      WHERE id = ${jobId} AND status = 'in_progress' AND claim_owner = ${owner}
+      LIMIT 1
     `);
+    return rows.length > 0;
+  }
+
+  async assertActiveClaim(jobId: string, owner: string): Promise<void> {
+    if (!(await this.hasActiveClaim(jobId, owner))) throw new LostJobClaimError();
+  }
+
+  async complete(jobId: string, owner: string): Promise<boolean> {
+    const rows = await this.db.execute<{ id: string }>(sql`
+      UPDATE ${pipelineJobs}
+      SET status = 'completed', locked_at = NULL, claim_owner = NULL, updated_at = now()
+      WHERE id = ${jobId} AND status = 'in_progress' AND claim_owner = ${owner}
+      RETURNING id
+    `);
+    return rows.length > 0;
   }
 
   /**
@@ -214,15 +264,19 @@ export class PipelineJobRepository {
    * the `pipelineJobStatusEnum` doc comment). Only a job that has exhausted
    * its attempts becomes `dead_letter`, permanently.
    */
-  async fail(jobId: string, error: string, backoffMs: number): Promise<void> {
-    await this.db.execute(sql`
+  async fail(jobId: string, owner: string, error: string, backoffMs: number): Promise<boolean> {
+    const rows = await this.db.execute<{ id: string }>(sql`
       UPDATE ${pipelineJobs}
       SET status = (CASE WHEN attempts < max_attempts THEN 'pending' ELSE 'dead_letter' END)::pipeline_job_status,
           available_at = now() + (${backoffMs}::text || ' milliseconds')::interval,
           last_error = ${error},
+          locked_at = NULL,
+          claim_owner = NULL,
           updated_at = now()
-      WHERE id = ${jobId}
+      WHERE id = ${jobId} AND status = 'in_progress' AND claim_owner = ${owner}
+      RETURNING id
     `);
+    return rows.length > 0;
   }
 
   /**
@@ -231,17 +285,25 @@ export class PipelineJobRepository {
    * without consuming an attempt, and persist a recognizable error marker
    * that acts as a durable circuit breaker for later worker invocations.
    */
-  async deferWithoutAttempt(jobId: string, reason: string, delayMs: number): Promise<void> {
-    await this.db.execute(sql`
+  async deferWithoutAttempt(
+    jobId: string,
+    owner: string,
+    reason: string,
+    delayMs: number,
+  ): Promise<boolean> {
+    const rows = await this.db.execute<{ id: string }>(sql`
       UPDATE ${pipelineJobs}
       SET status = 'pending',
           attempts = GREATEST(attempts - 1, 0),
           available_at = now() + (${delayMs}::text || ' milliseconds')::interval,
           last_error = ${reason},
           locked_at = NULL,
+          claim_owner = NULL,
           updated_at = now()
-      WHERE id = ${jobId}
+      WHERE id = ${jobId} AND status = 'in_progress' AND claim_owner = ${owner}
+      RETURNING id
     `);
+    return rows.length > 0;
   }
 
   /** Returns the end of an active persisted circuit-breaker window. */

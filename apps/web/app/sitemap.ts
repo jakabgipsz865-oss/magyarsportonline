@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { createRepositories } from "../lib/db";
+import { createPublicRepositories } from "../lib/db";
 import { env } from "../lib/env";
 
 // DB-driven — minden lekéréskor a friss publikált állományból épül.
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 const MAX_SITEMAP_ENTRIES = 1000;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const { storyReadModelRepository } = createRepositories();
+  const { storyReadModelRepository } = createPublicRepositories();
   const rows = await storyReadModelRepository.listPublished({
     limit: MAX_SITEMAP_ENTRIES,
     offset: 0,

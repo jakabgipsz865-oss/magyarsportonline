@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { createRepositories } from "../../../lib/db";
+import { createRepositories, d1Binding } from "../../../lib/db";
+import { D1SystemPage } from "./d1-system-page";
 import { env } from "../../../lib/env";
 import { AdminHeader } from "../_components/admin-header";
 
@@ -10,6 +11,7 @@ function iso(value: Date | null | undefined): string {
 }
 
 export default async function AdminSystemPage(): Promise<ReactNode> {
+  if (d1Binding()) return <D1SystemPage />;
   const repos = createRepositories();
   const now = new Date();
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);

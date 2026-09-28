@@ -11,8 +11,8 @@ function setup(overrides: Partial<SocialPost> = {}) {
     storyVersionId: "version-1",
     platform: "facebook",
     externalPostId: null,
-    postText: "⚽ Cím\n\nLead\n\n👇 Részletek:\nhttps://magyarsportonline.hu/hir/cim",
-    canonicalUrl: "https://magyarsportonline.hu/hir/cim",
+    postText: "⚽ Cím\n\nLead\n\n👇 Részletek:\nhttps://mso24.hu/hir/cim",
+    canonicalUrl: "https://mso24.hu/hir/cim",
     status: "queued",
     errorCode: null,
     lastError: null,
@@ -47,6 +47,7 @@ function setup(overrides: Partial<SocialPost> = {}) {
   const fetchMock = vi.fn();
   const env = {
     FACEBOOK_AUTO_PUBLISH: "true",
+    FACEBOOK_AUTO_PUBLISH_START_AT: "2026-09-15T20:30:00.000Z",
     FACEBOOK_PAGE_ID: "110048870526768",
     FACEBOOK_PAGE_ACCESS_TOKEN: TOKEN,
     META_GRAPH_API_VERSION: "v26.0",
@@ -69,11 +70,61 @@ describe("Facebook queue consumer", () => {
     });
     const [url, init] = fixture.fetchMock.mock.calls[0]!;
     expect(url).toBe("https://graph.facebook.com/v26.0/110048870526768/feed");
-    expect(String(init.body)).toContain("link=https%3A%2F%2Fmagyarsportonline.hu%2Fhir%2Fcim");
+    expect(String(init.body)).toContain("link=https%3A%2F%2Fmso24.hu%2Fhir%2Fcim");
     expect(String(init.body)).not.toContain("example.com");
     expect(fixture.repository.markPosted).toHaveBeenCalledWith("social-1", "110048870526768_123");
     expect(fixture.ack).toHaveBeenCalledOnce();
     expect(fixture.retry).not.toHaveBeenCalled();
+  });
+
+  it("never posts a historical intent from before the activation boundary", async () => {
+    const fixture = setup({ createdAt: new Date("2026-09-15T20:29:59.000Z") });
+    await processFacebookMessage(fixture.message, fixture.env, {
+      repository: fixture.repository,
+      fetch: fixture.fetchMock,
+      logger: fixture.logger,
+    });
+    expect(fixture.repository.markFailed).toHaveBeenCalledWith(
+      "social-1",
+      "facebook_before_activation",
+      expect.any(String),
+    );
+    expect(fixture.fetchMock).not.toHaveBeenCalled();
+    expect(fixture.ack).toHaveBeenCalledOnce();
+  });
+
+  it("fails closed when the activation boundary is missing", async () => {
+    const fixture = setup();
+    delete (fixture.env as Partial<typeof fixture.env>).FACEBOOK_AUTO_PUBLISH_START_AT;
+    await processFacebookMessage(fixture.message, fixture.env, {
+      repository: fixture.repository,
+      fetch: fixture.fetchMock,
+      logger: fixture.logger,
+    });
+    expect(fixture.fetchMock).not.toHaveBeenCalled();
+    expect(fixture.retry).toHaveBeenCalledWith({ delaySeconds: 900 });
+  });
+
+  it.each([
+    "https://mso24.hu.evil.example/hir/cim",
+    "https://mso24.hu@evil.example/hir/cim",
+    "http://mso24.hu/hir/cim",
+    "https://mso24.hu/hir/cim/more",
+    "https://mso24.hu/hir/cim?redirect=elsewhere",
+  ])("rejects an invalid canonical article URL: %s", async (canonicalUrl) => {
+    const fixture = setup({ canonicalUrl });
+    fixture.message.body.canonicalUrl = canonicalUrl;
+    await processFacebookMessage(fixture.message, fixture.env, {
+      repository: fixture.repository,
+      fetch: fixture.fetchMock,
+      logger: fixture.logger,
+    });
+    expect(fixture.fetchMock).not.toHaveBeenCalled();
+    expect(fixture.repository.markFailed).toHaveBeenCalledWith(
+      "social-1",
+      "facebook_invalid_response",
+      expect.any(String),
+    );
   });
 
   it("fails closed without retry on a permission error", async () => {
@@ -136,6 +187,24 @@ describe("Facebook queue consumer", () => {
     expect(fixture.ack).toHaveBeenCalledOnce();
   });
 
+  it("retries a definite HTTP 500 as a temporary Meta failure", async () => {
+    const fixture = setup();
+    fixture.fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: { message: "Temporary error" } }), { status: 500 }),
+    );
+    await processFacebookMessage(fixture.message, fixture.env, {
+      repository: fixture.repository,
+      fetch: fixture.fetchMock,
+      logger: fixture.logger,
+    });
+    expect(fixture.repository.markFailed).toHaveBeenCalledWith(
+      "social-1",
+      "facebook_temporary_error",
+      "Temporary error",
+    );
+    expect(fixture.retry).toHaveBeenCalledOnce();
+  });
+
   it("does not blindly retry an ambiguous network failure", async () => {
     const fixture = setup();
     fixture.fetchMock.mockRejectedValue(new Error("timeout"));
@@ -151,6 +220,24 @@ describe("Facebook queue consumer", () => {
     );
     expect(fixture.retry).not.toHaveBeenCalled();
     expect(fixture.ack).toHaveBeenCalledOnce();
+    expect(JSON.stringify(fixture.logger.error.mock.calls)).toContain("Error: timeout");
+    expect(JSON.stringify(fixture.logger.error.mock.calls)).not.toContain(TOKEN);
+  });
+
+  it("keeps a successful HTTP response without a post ID in ambiguous review", async () => {
+    const fixture = setup();
+    fixture.fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
+    await processFacebookMessage(fixture.message, fixture.env, {
+      repository: fixture.repository,
+      fetch: fixture.fetchMock,
+      logger: fixture.logger,
+    });
+    expect(fixture.repository.markFailed).toHaveBeenCalledWith(
+      "social-1",
+      "facebook_network_ambiguous",
+      expect.any(String),
+    );
+    expect(fixture.retry).not.toHaveBeenCalled();
   });
 
   it("skips an already posted Story and never logs the Page token", async () => {

@@ -1,4 +1,4 @@
-import { createRepositories } from "../../lib/db";
+import { createPublicRepositories } from "../../lib/db";
 import { env } from "../../lib/env";
 import { toStorySummaryView } from "../../lib/story-view";
 import { escapeXml } from "../../lib/xml";
@@ -13,7 +13,7 @@ const FEED_ITEM_LIMIT = 50;
  * `story_read_model` projekcióból olvas.
  */
 export async function GET(): Promise<Response> {
-  const { storyReadModelRepository } = createRepositories();
+  const { storyReadModelRepository } = createPublicRepositories();
   const rows = await storyReadModelRepository.listPublished({ limit: FEED_ITEM_LIMIT, offset: 0 });
   const stories = rows.map(toStorySummaryView);
 
@@ -36,7 +36,7 @@ export async function GET(): Promise<Response> {
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<rss version="2.0">',
     "  <channel>",
-    "    <title>magyarsportonline.hu</title>",
+    "    <title>MSO24</title>",
     `    <link>${escapeXml(env.SITE_URL)}</link>`,
     "    <description>AI-támogatott, Story-alapú sporthírek</description>",
     "    <language>hu</language>",

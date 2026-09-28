@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createRepositories } from "../../../../lib/db";
+import { createRepositories, d1Binding } from "../../../../lib/db";
+import { listD1ReviewItems } from "../../../../lib/d1-review";
 import { env } from "../../../../lib/env";
 import { listTriagedReviewItems } from "../../../../lib/review-triage";
 
@@ -21,6 +22,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const d1 = d1Binding();
+  if (d1) {
+    const items = await listD1ReviewItems(d1);
+    const requested = request.nextUrl.searchParams.get("itemId");
+    const selected = requested ? items.filter((item) => item.id === requested) : items;
+    return NextResponse.json({ total: selected.length, items: selected });
   }
 
   const repos = createRepositories();

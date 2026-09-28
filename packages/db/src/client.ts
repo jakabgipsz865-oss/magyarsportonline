@@ -11,6 +11,10 @@ export interface DatabaseClientOptions {
   fetchTypes?: boolean;
   /** Whether Postgres.js should use prepared statements. */
   prepare?: boolean;
+  /** Network connect deadline in seconds. */
+  connectTimeoutSeconds?: number;
+  /** PostgreSQL statement deadline in milliseconds (server-side cancellation). */
+  statementTimeoutMs?: number;
 }
 
 /**
@@ -29,6 +33,12 @@ export function createDatabaseClient(
     ...(options.max === undefined ? {} : { max: options.max }),
     ...(options.fetchTypes === undefined ? {} : { fetch_types: options.fetchTypes }),
     ...(options.prepare === undefined ? {} : { prepare: options.prepare }),
+    connect_timeout: options.connectTimeoutSeconds ?? 8,
+    connection: {
+      statement_timeout: options.statementTimeoutMs ?? 20_000,
+      lock_timeout: 5_000,
+      idle_in_transaction_session_timeout: 30_000,
+    },
   });
   return drizzle(client, { schema });
 }

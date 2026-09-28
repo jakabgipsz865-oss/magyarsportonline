@@ -42,7 +42,7 @@ export interface RssParserLike {
 }
 
 export function createDefaultParser(): RssParserLike {
-  return new Parser({
+  const parser = new Parser({
     timeout: 8000,
     customFields: {
       item: [
@@ -50,6 +50,19 @@ export function createDefaultParser(): RssParserLike {
         ["media:content", "mediaContent", { keepArray: true }],
         ["enclosure", "enclosures", { keepArray: true }],
       ],
+    },
+  });
+  return Object.assign(parser, {
+    async parseURL(url: string) {
+      // rss-parser's parseURL uses Node's http stack, which is unreliable in
+      // Cloudflare Workers. Fetch the feed through the runtime's native fetch
+      // and retain rss-parser only for XML parsing.
+      const response = await fetch(url, {
+        headers: { Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml" },
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (!response.ok) throw new Error(`RSS HTTP ${response.status} from ${url}`);
+      return parser.parseString(await response.text());
     },
   });
 }

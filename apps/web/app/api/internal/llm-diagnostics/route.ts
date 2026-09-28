@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { env } from "../../../../lib/env";
 import { runLlmDiagnostics } from "../../../../lib/llm-diagnostics";
 import { getLogger } from "../../../../lib/logger";
+import { d1Binding } from "../../../../lib/db";
 
 /**
  * One-off diagnostic endpoint for "why did every Editorial A/B test call
@@ -20,6 +21,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  // Legacy diagnostic makes an unmetered direct Workers AI request and reads
+  // PostgreSQL. Keep it unavailable in the Cloudflare-only runtime.
+  if (d1Binding())
+    return NextResponse.json({ error: "legacy_diagnostic_unavailable_on_d1" }, { status: 410 });
 
   try {
     const diagnostics = await runLlmDiagnostics();

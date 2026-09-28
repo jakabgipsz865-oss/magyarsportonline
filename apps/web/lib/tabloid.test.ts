@@ -9,20 +9,31 @@ const mocks = vi.hoisted(() => ({
   project: vi.fn(),
   revalidate: vi.fn(),
   llm: {},
-  env: { TABLOID_AUTO_PUBLISH: true },
+  env: {
+    TABLOID_AUTO_PUBLISH: true,
+    FACEBOOK_AUTO_PUBLISH: true,
+    FACEBOOK_AUTO_PUBLISH_START_AT: new Date("2026-09-15T20:30:00Z"),
+    D1_PIPELINE_START_AT: undefined as Date | undefined,
+    SITE_URL: "https://mso24.hu",
+  },
   accepted: vi.fn((_title: string) => true),
   fetchFullArticle: vi.fn(),
   fetchImages: vi.fn(),
   fetchRss: vi.fn(),
   enqueueFacebook: vi.fn(),
+  d1Binding: vi.fn(() => undefined),
 }));
 vi.mock("./env", () => ({ env: mocks.env }));
 vi.mock("./tabloid-sources.json", () => ({ default: [{ id: "source-0" }, { id: "source-1" }] }));
-vi.mock("./db", () => ({ createRepositories: vi.fn() }));
+vi.mock("./db", () => ({ createRepositories: vi.fn(), d1Binding: mocks.d1Binding }));
 vi.mock("./facebook-publication", () => ({
+  buildFacebookPostText: ({ titleHu, canonicalUrl }: { titleHu: string; canonicalUrl: string }) =>
+    `${titleHu} ${canonicalUrl}`,
   enqueueFacebookPublicationSafely: mocks.enqueueFacebook,
 }));
-vi.mock("./logger", () => ({ getLogger: () => ({ info: vi.fn() }) }));
+vi.mock("./logger", () => ({
+  getLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+}));
 vi.mock("./llm", () => ({
   getWriterLlmClient: () => mocks.llm,
   getWriterRepairLlmClient: () => mocks.llm,
@@ -42,6 +53,7 @@ vi.mock("@magyarsportonline/agents", () => ({
   seo: { slugify: () => "magyar-hir" },
   readModelProjector: { handleStoryPublished: mocks.project },
   sourceIngest: {
+    createDefaultParser: () => ({ parseURL: mocks.fetchRss }),
     ArticleFetcher: class {
       fetch = mocks.fetchFullArticle;
       fetchWithMedia = async (...args: unknown[]) => {
@@ -50,6 +62,10 @@ vi.mock("@magyarsportonline/agents", () => ({
           mocks.fetchImages(...args),
         ]);
         return article && media ? { article, media } : null;
+      };
+      fetchWithMediaDetailed = async (...args: unknown[]) => {
+        const page = await this.fetchWithMedia(...args);
+        return { page, failure: page ? null : "extractor_empty_or_insufficient_text" };
       };
     },
     fetchArticleMedia: mocks.fetchImages,
@@ -73,25 +89,27 @@ function fixtures() {
         sourceUrl: "https://example.com/same",
         imageUrl: null,
         contentOrigin: "full_article",
-        publishedAtSource: null,
-        ingestedAt: new Date("2026-09-11T00:00:00Z"),
+        publishedAtSource: new Date(),
+        firstSeenAt: new Date(),
+        ingestedAt: new Date(),
       },
     ]),
   );
   const versions = new Map<string, Record<string, unknown>>();
   const stories = new Map<string, { id: string; slug: string | null; publishedAt: Date | null }>();
-  const attempts = new Set();
+  const writerLeases = new Map<string, string>();
   const repos = {
     rawArticleRepository: {
-      withTabloidLock: (_: string, work: () => Promise<unknown>) => work(),
       getById: (id: string) => raws.get(id),
       linkToStory: vi.fn(),
-      claimTabloidWriter: async (id: string) => {
-        if (attempts.has(id)) return false;
-        attempts.add(id);
+      claimTabloidWriter: async (id: string, owner: string) => {
+        if (writerLeases.has(id)) return false;
+        writerLeases.set(id, owner);
         return true;
       },
-      releaseTabloidQuotaDeferral: vi.fn(async (id: string) => attempts.delete(id)),
+      releaseTabloidWriter: vi.fn(async (id: string, owner: string) => {
+        if (writerLeases.get(id) === owner) writerLeases.delete(id);
+      }),
       upgradeFromFullArticle: vi.fn(async (id: string, data: Record<string, unknown>) => {
         const raw = raws.get(id);
         if (!raw) return false;
@@ -107,6 +125,7 @@ function fixtures() {
       }),
     },
     editorialKnowledgeRepository: { findRelevant: vi.fn(async () => []) },
+    reviewQueueRepository: { ensureContentQualityReview: vi.fn(async () => undefined) },
     storyRepository: {
       createOrMatchByFingerprint: async (key: string) => {
         if (!stories.has(key)) stories.set(key, { id: key, slug: null, publishedAt: null });
@@ -143,6 +162,8 @@ describe("tabloid publication", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.env.TABLOID_AUTO_PUBLISH = true;
+    mocks.env.D1_PIPELINE_START_AT = undefined;
+    mocks.d1Binding.mockReturnValue(undefined);
     mocks.accepted.mockReturnValue(true);
     mocks.write.mockResolvedValue({
       title_hu: "Magyar hír",
@@ -165,6 +186,73 @@ describe("tabloid publication", () => {
     expect(await ingestTabloid(repos)).toEqual({ paused: true, llmCalls: 0 });
     expect(mocks.write).not.toHaveBeenCalled();
     expect(mocks.project).not.toHaveBeenCalled();
+  });
+  it("records preactivation and undated D1 RSS items without queueing them", async () => {
+    mocks.d1Binding.mockReturnValue({} as never);
+    mocks.env.D1_PIPELINE_START_AT = new Date("2026-09-28T17:30:00Z");
+    mocks.fetchRss.mockResolvedValue([
+      {
+        titleOriginal: "old",
+        bodyOriginal: "football news",
+        sourceUrl: "https://publisher.test/old",
+        publishedAtSource: new Date("2026-09-28T17:29:59Z"),
+      },
+      {
+        titleOriginal: "undated",
+        bodyOriginal: "football news",
+        sourceUrl: "https://publisher.test/undated",
+        publishedAtSource: null,
+      },
+      {
+        titleOriginal: "fresh",
+        bodyOriginal: "football news",
+        sourceUrl: "https://publisher.test/fresh",
+        publishedAtSource: new Date("2026-09-28T17:30:01Z"),
+      },
+    ]);
+    const insert = vi.fn(async () => null);
+    const claim = vi.fn(async () => []);
+    const repos = {
+      pipelineJobRepository: { getStatusCounts: async () => ({ pending: 0, inProgress: 0 }) },
+      sourceRepository: {
+        listActive: async () => [
+          {
+            id: "source-0",
+            name: "Publisher",
+            language: "en",
+            fetchConfig: { tabloid: true, footballFeed: true, url: "https://publisher.test/feed" },
+          },
+        ],
+        recordFetchResult: vi.fn(),
+      },
+      rawArticleRepository: { insertTabloid: insert, claimTabloidFetchBatch: claim },
+    } as unknown as Repositories;
+    await ingestTabloid(repos);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceUrl: "https://publisher.test/old",
+        processingStatus: "historical_before_activation",
+        decisionReason: "source_published_before_activation",
+        processingAvailableAt: null,
+      }),
+      false,
+    );
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceUrl: "https://publisher.test/undated",
+        processingStatus: "review_unknown_source_date",
+        processingAvailableAt: null,
+      }),
+      false,
+    );
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceUrl: "https://publisher.test/fresh",
+        processingStatus: "awaiting_full_article",
+      }),
+      false,
+    );
+    expect(claim).toHaveBeenCalledOnce();
   });
   it("never republishes a persisted v1 draft", async () => {
     const { repos, versions } = fixtures();
@@ -230,7 +318,19 @@ describe("tabloid publication", () => {
       },
       rawArticleRepository: {
         insertTabloid: insert,
-        listUnqueuedTabloidCandidates: vi.fn(async () => []),
+        claimTabloidFetchBatch: vi.fn(async () => [
+          {
+            id: "raw",
+            sourceId: "source-0",
+            sourceUrl: "https://publisher.test/accepted",
+            titleOriginal: "accepted",
+            bodyOriginal: "personal story",
+            imageUrl: url,
+            publishedAtSource: new Date(),
+            processingOwner: "owner-1",
+            processingAttempts: 1,
+          },
+        ]),
         upgradeAndEnqueueTabloid: upgradeAndEnqueue,
       },
     } as unknown as Repositories;
@@ -254,6 +354,7 @@ describe("tabloid publication", () => {
         bodyOriginal: "Complete personal story from the source article page.",
         imageUrl: url,
       }),
+      "owner-1",
     );
     expect(mocks.fetchImages).toHaveBeenCalledOnce();
     expect(mocks.fetchImages).toHaveBeenCalledWith(
@@ -294,7 +395,20 @@ describe("tabloid publication", () => {
       },
       rawArticleRepository: {
         insertTabloid: insert,
-        listUnqueuedTabloidCandidates: vi.fn(async () => []),
+        claimTabloidFetchBatch: vi.fn(async () => [
+          {
+            id: "raw",
+            sourceId: "source-0",
+            sourceUrl: "https://publisher.test/accepted",
+            titleOriginal: "accepted",
+            bodyOriginal: "short RSS snippet",
+            imageUrl: null,
+            publishedAtSource: new Date(),
+            processingOwner: "owner-1",
+            processingAttempts: 1,
+          },
+        ]),
+        deferTabloidFetch: vi.fn(async () => true),
         upgradeAndEnqueueTabloid: vi.fn(),
       },
     } as unknown as Repositories;
@@ -306,10 +420,76 @@ describe("tabloid publication", () => {
       false,
     );
     if (!("results" in result)) throw new Error("expected ingest result");
-    expect(result.results[0]).toMatchObject({
-      ingestedCount: 0,
-      deferredWithoutFullArticle: 1,
+    expect(result).toMatchObject({ deferredWithoutFullArticle: 1 });
+  });
+  it("persists an arriving RSS item while the processing queue is saturated", async () => {
+    mocks.fetchRss.mockResolvedValue([
+      {
+        titleOriginal: "accepted",
+        bodyOriginal: "football report",
+        sourceUrl: "https://publisher.test/saturated",
+        guid: "saturated-guid",
+        publishedAtSource: new Date("2026-09-27T10:00:00Z"),
+        contentOrigin: "rss_snippet",
+      },
+    ]);
+    const receipts = new Map<string, Record<string, unknown>>();
+    const insert = vi.fn(async (data: Record<string, unknown>) => {
+      const key = String(data["sourceUrl"]);
+      if (receipts.has(key)) return null;
+      const row = { ...data, id: "raw-new", processingAttempts: 1, processingOwner: "owner-new" };
+      receipts.set(key, row);
+      return row;
     });
+    let pending = 36;
+    const claim = vi.fn(async (_ids: string[], limit: number) =>
+      limit > 0 ? [...receipts.values()] : [],
+    );
+    const upgrade = vi.fn(async () => true);
+    const repos = {
+      pipelineJobRepository: { getStatusCounts: async () => ({ pending, inProgress: 0 }) },
+      sourceRepository: {
+        listActive: async () => [
+          {
+            id: "source-0",
+            name: "Publisher",
+            language: "en",
+            ingestWatermarkAt: new Date("2026-09-27T10:01:00Z"),
+            fetchConfig: { tabloid: true, footballFeed: true, url: "https://publisher.test/feed" },
+          },
+        ],
+        recordFetchResult: vi.fn(),
+      },
+      rawArticleRepository: {
+        insertTabloid: insert,
+        claimTabloidFetchBatch: claim,
+        upgradeAndEnqueueTabloid: upgrade,
+      },
+    } as unknown as Repositories;
+
+    await ingestTabloid(repos);
+    const firstSeen = receipts.get("https://publisher.test/saturated")?.["firstSeenAt"];
+    await ingestTabloid(repos);
+    expect(receipts.size).toBe(1);
+    expect(receipts.get("https://publisher.test/saturated")?.["firstSeenAt"]).toBe(firstSeen);
+    expect(mocks.fetchFullArticle).not.toHaveBeenCalled();
+
+    pending = 0;
+    mocks.fetchFullArticle.mockResolvedValue({
+      titleOriginal: "Full report",
+      bodyOriginal: "A complete football report.",
+      publishedAtSource: new Date("2026-09-27T10:00:00Z"),
+    });
+    mocks.fetchImages.mockResolvedValue({ primary: null, inlineImages: [] });
+    const resumed = await ingestTabloid(repos);
+
+    expect(insert).toHaveBeenCalledTimes(3);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceUrl: "https://publisher.test/saturated" }),
+      false,
+    );
+    expect(upgrade).toHaveBeenCalledTimes(1);
+    expect(resumed).toMatchObject({ queuedCount: 1 });
   });
   it("does not fetch a full page again when the RSS row already exists", async () => {
     mocks.fetchRss.mockResolvedValue([
@@ -340,7 +520,7 @@ describe("tabloid publication", () => {
       },
       rawArticleRepository: {
         insertTabloid: vi.fn(async () => null),
-        listUnqueuedTabloidCandidates: vi.fn(async () => []),
+        claimTabloidFetchBatch: vi.fn(async () => []),
         upgradeAndEnqueueTabloid: vi.fn(),
       },
     } as unknown as Repositories;
@@ -350,7 +530,7 @@ describe("tabloid publication", () => {
     expect(mocks.fetchFullArticle).not.toHaveBeenCalled();
     expect(mocks.fetchImages).not.toHaveBeenCalled();
   });
-  it("ingests only dated RSS items published after the activation watermark", async () => {
+  it("records dated and undated feed items despite a newer watermark", async () => {
     const watermark = new Date("2026-09-12T19:00:00.000Z");
     mocks.fetchRss.mockResolvedValue([
       {
@@ -406,23 +586,23 @@ describe("tabloid publication", () => {
       },
       rawArticleRepository: {
         insertTabloid: insert,
-        listUnqueuedTabloidCandidates: vi.fn(async () => []),
+        claimTabloidFetchBatch: vi.fn(async () => []),
         upgradeAndEnqueueTabloid: upgradeAndEnqueue,
       },
     } as unknown as Repositories;
 
     await ingestTabloid(repos);
 
-    expect(insert).toHaveBeenCalledTimes(1);
+    expect(insert).toHaveBeenCalledTimes(3);
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ titleOriginal: "new" }), false);
-    expect(upgradeAndEnqueue).toHaveBeenCalledWith(
-      "raw",
-      expect.objectContaining({
-        bodyOriginal: "Complete personal football story from the source page.",
-      }),
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ titleOriginal: "old" }), false);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ titleOriginal: "undated" }),
+      false,
     );
+    expect(upgradeAndEnqueue).not.toHaveBeenCalled();
   });
-  it("upgrades and queues old football items rejected by the former filter", async () => {
+  it("keeps historical jobless items out of automatic publication", async () => {
     mocks.fetchRss.mockResolvedValue([]);
     mocks.fetchFullArticle.mockResolvedValue({
       titleOriginal: "Complete match report",
@@ -456,31 +636,15 @@ describe("tabloid publication", () => {
       },
       rawArticleRepository: {
         insertTabloid: vi.fn(),
-        listUnqueuedTabloidCandidates: vi.fn(async () => [
-          {
-            id: "old-raw",
-            sourceId: "source-0",
-            sourceUrl: "https://publisher.test/old-match",
-            titleOriginal: "Routine match report",
-            bodyOriginal: "RSS fragment",
-            imageUrl: null,
-            publishedAtSource: new Date("2026-09-13T08:00:00.000Z"),
-          },
-        ]),
+        claimTabloidFetchBatch: vi.fn(async () => []),
         upgradeAndEnqueueTabloid: upgradeAndEnqueue,
       },
     } as unknown as Repositories;
 
     const result = await ingestTabloid(repos);
 
-    expect(upgradeAndEnqueue).toHaveBeenCalledWith(
-      "old-raw",
-      expect.objectContaining({
-        bodyOriginal: "The complete football article from the publisher page.",
-        inlineImages: [{ url: "https://cdn.test/body.jpg" }],
-      }),
-    );
-    expect(result).toMatchObject({ backfilled: 1 });
+    expect(upgradeAndEnqueue).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ queuedCount: 0 });
   });
   it("keeps different sources separate even when content and URL are identical", async () => {
     const { repos, stories } = fixtures();
@@ -502,6 +666,40 @@ describe("tabloid publication", () => {
         status: "published",
       }),
     );
+  });
+  it("saves a fresh Facebook intent in the same transaction as job publication", async () => {
+    const { repos } = fixtures();
+    const publishVersionIfClaim = vi.fn(async () => true);
+    Object.assign(repos, {
+      pipelineJobRepository: { assertActiveClaim: vi.fn(async () => undefined) },
+      storyRepository: { ...repos.storyRepository, publishVersionIfClaim },
+    });
+    await publishTabloid("one", repos, { jobId: "job-1", jobOwner: "owner-1" });
+    expect(publishVersionIfClaim).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      expect.any(Date),
+      { jobId: "job-1", owner: "owner-1" },
+      expect.objectContaining({
+        canonicalUrl: expect.stringMatching(/^https:\/\/mso24\.hu\/hir\//),
+        postText: expect.stringContaining("https://mso24.hu/hir/"),
+      }),
+    );
+    expect(mocks.enqueueFacebook).toHaveBeenCalledOnce();
+  });
+  it("never enqueues a legacy article without a true first-seen timestamp", async () => {
+    const { repos, raws } = fixtures();
+    Object.assign(raws.get("one")!, { firstSeenAt: null });
+    await publishTabloid("one", repos);
+    expect(repos.storyRepository.publish).toHaveBeenCalledOnce();
+    expect(mocks.enqueueFacebook).not.toHaveBeenCalled();
+  });
+  it("never enqueues a newly discovered but historically dated article", async () => {
+    const { repos, raws } = fixtures();
+    Object.assign(raws.get("one")!, { publishedAtSource: new Date("2026-09-12T00:00:00Z") });
+    await publishTabloid("one", repos);
+    expect(repos.storyRepository.publish).toHaveBeenCalledOnce();
+    expect(mocks.enqueueFacebook).not.toHaveBeenCalled();
   });
   it("upgrades a legacy queued RSS fragment before the writer can publish it", async () => {
     const { repos, raws } = fixtures();
@@ -580,10 +778,22 @@ describe("tabloid publication", () => {
       { kind: "hard", code: "number_integrity", field: "body", detail: "99" },
     ]);
 
-    await expect(publishTabloid("one", repos)).rejects.toThrow("number_integrity");
+    await expect(publishTabloid("one", repos)).resolves.toMatchObject({
+      skipped: true,
+      reason: "quality-review",
+    });
+    await expect(publishTabloid("one", repos)).resolves.toMatchObject({
+      skipped: true,
+      reason: "quality-review",
+    });
 
     expect(mocks.write).toHaveBeenCalledOnce();
     expect(mocks.repair).not.toHaveBeenCalled();
+    expect(repos.reviewQueueRepository.ensureContentQualityReview).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      undefined,
+    );
     expect([...versions.values()][0]?.["qualityIssues"]).toEqual([
       expect.objectContaining({
         code: "number_integrity",
@@ -592,24 +802,13 @@ describe("tabloid publication", () => {
       }),
     ]);
   });
-  it("uses one full Flash fallback only for a technical primary failure", async () => {
+  it("never uses Flash for a technical primary failure", async () => {
     const { repos } = fixtures();
-    mocks.write.mockRejectedValueOnce(new mocks.TechnicalError("schema")).mockResolvedValueOnce({
-      title_hu: "Magyar hír",
-      lead_hu: "Személyes történet.",
-      body_hu: "A játékos a családjáról beszélt.",
-      language_warnings: [],
-      generatedByModel: "gemini-3.5-flash",
-    });
-    await publishTabloid("one", repos);
-    expect(mocks.write).toHaveBeenCalledTimes(2);
+    mocks.write.mockRejectedValueOnce(new mocks.TechnicalError("schema"));
+    await expect(publishTabloid("one", repos)).rejects.toThrow("schema");
+    expect(mocks.write).toHaveBeenCalledTimes(1);
     expect(mocks.write.mock.calls[0]?.[1]).toEqual(
       expect.objectContaining({ usageContext: expect.objectContaining({ role: "primary" }) }),
-    );
-    expect(mocks.write.mock.calls[1]?.[1]).toEqual(
-      expect.objectContaining({
-        usageContext: expect.objectContaining({ role: "technical_fallback" }),
-      }),
     );
     expect(mocks.repair).not.toHaveBeenCalled();
   });
@@ -618,7 +817,7 @@ describe("tabloid publication", () => {
     await publishTabloid("one", repos);
     await publishTabloid("one", repos, { forceRewrite: true });
     expect(mocks.write).toHaveBeenCalledTimes(2);
-    expect(repos.rawArticleRepository.releaseTabloidQuotaDeferral).toHaveBeenCalledWith("one");
+    expect(repos.rawArticleRepository.releaseTabloidWriter).toHaveBeenCalledTimes(2);
   });
   it("lets an explicit operator repair bypass the new-article topic filter", async () => {
     const { repos } = fixtures();
@@ -640,22 +839,36 @@ describe("tabloid publication", () => {
 
     expect(mocks.write).toHaveBeenCalledTimes(1);
   });
-  it("does not automatically repair or repeat failed generation", async () => {
+  it("releases the lease and retries when generation fails before a draft exists", async () => {
     const { repos } = fixtures();
     mocks.write.mockRejectedValueOnce(new Error("invalid writer output"));
     await expect(publishTabloid("one", repos)).rejects.toThrow("invalid writer");
-    await expect(publishTabloid("one", repos)).rejects.toThrow("already attempted");
-    expect(mocks.write).toHaveBeenCalledTimes(1);
-  });
-  it("retries a failed writer only when an operator explicitly requests recovery", async () => {
-    const { repos } = fixtures();
-    mocks.write.mockRejectedValueOnce(new Error("timed out"));
-    await expect(publishTabloid("one", repos)).rejects.toThrow("timed out");
-
-    await publishTabloid("one", repos, { retryFailedWriter: true });
-
-    expect(repos.rawArticleRepository.releaseTabloidQuotaDeferral).toHaveBeenCalledWith("one");
+    await publishTabloid("one", repos);
     expect(mocks.write).toHaveBeenCalledTimes(2);
+    expect(repos.rawArticleRepository.releaseTabloidWriter).toHaveBeenCalledTimes(2);
+  });
+  it("reuses a response persisted before later validation fails", async () => {
+    const { repos, versions } = fixtures();
+    mocks.assess.mockImplementationOnce(() => {
+      throw new Error("validation interrupted");
+    });
+
+    await expect(publishTabloid("one", repos)).rejects.toThrow("validation interrupted");
+    expect(versions.size).toBe(1);
+    await publishTabloid("one", repos);
+
+    expect(mocks.write).toHaveBeenCalledTimes(1);
+    expect(repos.storyRepository.publish).toHaveBeenCalledOnce();
+  });
+  it("defers a concurrent delivery while an active Writer lease has no draft", async () => {
+    const { repos } = fixtures();
+    repos.rawArticleRepository.claimTabloidWriter = vi.fn(async () => false);
+
+    await expect(publishTabloid("one", repos)).rejects.toMatchObject({
+      name: "TabloidWriterBusyError",
+      retryAfterMs: 60_000,
+    });
+    expect(mocks.write).not.toHaveBeenCalled();
   });
 });
 

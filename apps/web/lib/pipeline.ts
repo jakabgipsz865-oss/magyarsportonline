@@ -85,9 +85,13 @@ export async function dispatchJobToHandler(
   repos: Repositories,
   _emitter: { emit(event: unknown): Promise<void> },
   jobId?: string,
+  jobOwner?: string,
 ): Promise<void> {
   if (event.type === "source/article.ingested") {
-    await publishTabloid(event.payload.raw_article_id, repos, { ...(jobId ? { jobId } : {}) });
+    await publishTabloid(event.payload.raw_article_id, repos, {
+      ...(jobId ? { jobId } : {}),
+      ...(jobOwner ? { jobOwner } : {}),
+    });
   }
   // Historical fact/merge/rewrite events never re-enter the publication path.
 }

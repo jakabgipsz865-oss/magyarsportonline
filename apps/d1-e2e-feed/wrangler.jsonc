@@ -1,0 +1,8 @@
+{
+  "$schema": "../../apps/web/node_modules/wrangler/config-schema.json",
+  "name": "mso-d1-e2e-feed",
+  "account_id": "7a225d650d7e05daba6355e5526a8fb9",
+  "main": "worker.mjs",
+  "workers_dev": true,
+  "compatibility_date": "2026-09-12",
+}

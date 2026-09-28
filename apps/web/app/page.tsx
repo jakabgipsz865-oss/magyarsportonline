@@ -1,14 +1,19 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { MediaThumb } from "../components/media-thumb";
 import { SiteFooter } from "../components/site-footer";
-import { createRepositories } from "../lib/db";
+import { createPublicRepositories } from "../lib/db";
 import { toStorySummaryView, type StorySummaryView } from "../lib/story-view";
 
 // Render against Hyperdrive at request time. This keeps deployment builds
 // independent from production database credentials and avoids relying on an
 // R2 incremental cache before R2 is enabled for the Cloudflare account.
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+  openGraph: { url: "/", siteName: "MSO24" },
+};
 
 const HOMEPAGE_STORY_LIMIT = 24;
 
@@ -44,7 +49,7 @@ function NewsCard({ story }: { story: StorySummaryView }): ReactNode {
 }
 
 export default async function HomePage(): Promise<ReactNode> {
-  const { storyReadModelRepository } = createRepositories();
+  const { storyReadModelRepository } = createPublicRepositories();
   const rows = await storyReadModelRepository.listPublished({
     limit: HOMEPAGE_STORY_LIMIT,
     offset: 0,

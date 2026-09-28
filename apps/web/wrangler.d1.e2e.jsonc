@@ -1,0 +1,29 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "mso-web-d1-e2e-20260928",
+  "account_id": "7a225d650d7e05daba6355e5526a8fb9",
+  "main": ".open-next/worker.js",
+  "workers_dev": false,
+  "compatibility_date": "2026-09-12",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mso-remediation-e2e-20260928",
+      "database_id": "9fa9cb85-c8f2-49a9-aa80-a0cc47335c27",
+    },
+  ],
+  "services": [{ "binding": "E2E_FEED", "service": "mso-d1-e2e-feed" }],
+  "vars": {
+    "SITE_URL": "https://mso-web-d1-e2e-20260928.footballinvestmentkft.workers.dev",
+    "CRON_SECRET": "isolated-d1-e2e-fixture",
+    "LLM_PROVIDER": "none",
+    "TABLOID_AUTO_PUBLISH": "true",
+    "FORCE_REVIEW_MODE": "false",
+    "FACEBOOK_AUTO_PUBLISH": "false",
+    "D1_PIPELINE_START_AT": "2026-09-28T15:29:00.000Z",
+    "D1_TEST_SOURCE_ORIGIN": "https://mso-d1-e2e-feed.footballinvestmentkft.workers.dev",
+    "D1_TEST_WRITER_OUTPUT": "{\"title_hu\":\"Az Arsenal új játékossal erősített\",\"lead_hu\":\"Az angol klub közölte az új labdarúgó érkezését.\",\"body_hu\":\"Az Arsenal bejelentette, hogy új játékossal erősítette meg a keretét. A klub közlése szerint az érkező labdarúgó csatlakozott a csapathoz.\",\"language_warnings\":[]}",
+  },
+}

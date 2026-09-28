@@ -1,4 +1,5 @@
 import type { SocialPost, SocialPostRepository } from "@magyarsportonline/db";
+import type { D1SocialPostRepository } from "@magyarsportonline/db/d1";
 
 export interface FacebookQueueMessage {
   socialPostId: string;
@@ -16,9 +17,11 @@ export interface QueueMessage<T> {
 
 interface FacebookPublisherEnv {
   FACEBOOK_AUTO_PUBLISH?: string;
+  FACEBOOK_AUTO_PUBLISH_START_AT?: string;
   FACEBOOK_PAGE_ID?: string;
   FACEBOOK_PAGE_ACCESS_TOKEN?: string;
   META_GRAPH_API_VERSION: string;
+  PUBLIC_SITE_ORIGIN?: string;
 }
 
 interface Logger {
@@ -28,7 +31,7 @@ interface Logger {
 
 interface PublisherDeps {
   repository: Pick<
-    SocialPostRepository,
+    SocialPostRepository | D1SocialPostRepository,
     "getById" | "claimFacebookForPosting" | "markPosted" | "markFailed"
   >;
   fetch: typeof fetch;
@@ -73,6 +76,7 @@ function classifyGraphError(response: Response, error: GraphError | undefined): 
     return "facebook_permission_denied";
   if (error?.is_transient || (error?.code && TEMPORARY_CODES.has(error.code)))
     return "facebook_temporary_error";
+  if (response.status >= 500) return "facebook_temporary_error";
   return "facebook_invalid_response";
 }
 
@@ -80,13 +84,33 @@ function graphErrorMessage(error: GraphError | undefined, status: number): strin
   return (error?.message ?? `Meta Graph API returned HTTP ${status}`).slice(0, 500);
 }
 
-function validPost(post: SocialPost, message: FacebookQueueMessage): boolean {
+function validArticleUrl(value: string, siteOrigin: string): boolean {
+  try {
+    const url = new URL(value);
+    const allowed = new URL(siteOrigin);
+    return (
+      url.protocol === "https:" &&
+      allowed.protocol === "https:" &&
+      url.origin === allowed.origin &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      /^\/hir\/[^/]+$/u.test(url.pathname) &&
+      !/%(?:2f|5c)/iu.test(url.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function validPost(post: SocialPost, message: FacebookQueueMessage, siteOrigin: string): boolean {
   return (
     post.platform === "facebook" &&
     post.storyId === message.storyId &&
     post.storyVersionId === message.storyVersionId &&
     post.canonicalUrl === message.canonicalUrl &&
-    post.canonicalUrl.startsWith("https://magyarsportonline.hu/hir/")
+    validArticleUrl(post.canonicalUrl, siteOrigin)
   );
 }
 
@@ -105,7 +129,7 @@ export async function processFacebookMessage(
   }
   const queued = message.body;
   const post = await deps.repository.getById(queued.socialPostId);
-  if (!post || !validPost(post, queued)) {
+  if (!post || !validPost(post, queued, env.PUBLIC_SITE_ORIGIN ?? "https://mso24.hu")) {
     if (post)
       await deps.repository.markFailed(
         post.id,
@@ -134,6 +158,26 @@ export async function processFacebookMessage(
     return;
   }
   if (env.FACEBOOK_AUTO_PUBLISH !== "true") {
+    message.ack();
+    return;
+  }
+  const activationStart = env.FACEBOOK_AUTO_PUBLISH_START_AT
+    ? new Date(env.FACEBOOK_AUTO_PUBLISH_START_AT)
+    : null;
+  if (!activationStart || Number.isNaN(activationStart.getTime())) {
+    deps.logger.error(
+      { reasonCode: "facebook_activation_boundary_missing" },
+      "Facebook activation boundary is not configured",
+    );
+    message.retry({ delaySeconds: 900 });
+    return;
+  }
+  if (post.createdAt < activationStart) {
+    await deps.repository.markFailed(
+      post.id,
+      "facebook_before_activation",
+      "Durable post intent predates Facebook activation boundary",
+    );
     message.ack();
     return;
   }
@@ -171,7 +215,16 @@ export async function processFacebookMessage(
         signal: AbortSignal.timeout(15_000),
       },
     );
-  } catch {
+  } catch (error) {
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : typeof error;
+    deps.logger.error(
+      {
+        reasonCode: "facebook_network_ambiguous",
+        // The token is sent only as an Authorization header and is never logged.
+        fetchError: detail.replace(/[A-Za-z0-9_-]{40,}/gu, "[redacted]").slice(0, 200),
+      },
+      "Facebook Graph request ended without a response",
+    );
     await deps.repository.markFailed(
       claimed.id,
       "facebook_network_ambiguous",
@@ -197,7 +250,9 @@ export async function processFacebookMessage(
     return;
   }
 
-  const reasonCode = classifyGraphError(response, body.error);
+  const reasonCode = response.ok
+    ? "facebook_network_ambiguous"
+    : classifyGraphError(response, body.error);
   await deps.repository.markFailed(
     claimed.id,
     reasonCode,

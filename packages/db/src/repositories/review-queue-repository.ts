@@ -2,6 +2,8 @@ import { and, asc, count, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import type { ReviewQueueReason, ReviewQueueStatus, RiskLevel } from "@magyarsportonline/shared";
 import type { Database } from "../client";
 import { reviewQueueItems, stories, storyVersions } from "../schema/index";
+import { pipelineJobs } from "../schema/index";
+import { LostJobClaimError, type JobClaim } from "./pipeline-job-repository";
 
 export type ReviewQueueItem = typeof reviewQueueItems.$inferSelect;
 
@@ -49,6 +51,44 @@ export interface PendingReviewFilters {
 /** Bounded-context repository for the Publish Gate (docs/architecture/02-agents.md §2.7). */
 export class ReviewQueueRepository {
   constructor(private readonly db: Database) {}
+
+  /** Idempotent handoff of a saved draft to human quality review. */
+  async ensureContentQualityReview(
+    storyId: string,
+    storyVersionId: string,
+    claim?: JobClaim,
+  ): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      if (claim) {
+        const active = await tx.execute<{ id: string }>(sql`
+          SELECT id FROM ${pipelineJobs}
+          WHERE id = ${claim.jobId} AND claim_owner = ${claim.owner} AND status = 'in_progress'
+          FOR UPDATE
+        `);
+        if (active.length === 0) throw new LostJobClaimError();
+      }
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${"quality-review:" + storyVersionId}, 0))`,
+      );
+      const [existing] = await tx
+        .select({ id: reviewQueueItems.id })
+        .from(reviewQueueItems)
+        .where(
+          and(
+            eq(reviewQueueItems.storyVersionId, storyVersionId),
+            eq(reviewQueueItems.reason, "content_quality_failed"),
+            eq(reviewQueueItems.status, "pending"),
+          ),
+        )
+        .limit(1);
+      if (existing) return;
+      await tx.insert(reviewQueueItems).values({
+        storyId,
+        storyVersionId,
+        reason: "content_quality_failed",
+      });
+    });
+  }
 
   async insert(input: {
     storyId: string;

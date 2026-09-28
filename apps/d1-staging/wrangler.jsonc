@@ -1,0 +1,15 @@
+{
+  "name": "mso-d1-remediation-staging",
+  "account_id": "7a225d650d7e05daba6355e5526a8fb9",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mso-remediation-staging-20260928",
+      "database_id": "eb02f98e-fd89-4277-94be-0f763056b91e",
+    },
+  ],
+}

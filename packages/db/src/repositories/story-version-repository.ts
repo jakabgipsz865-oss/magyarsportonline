@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { Database } from "../client";
-import { stories, storyVersions } from "../schema/index";
+import { pipelineJobs, stories, storyVersions } from "../schema/index";
+import { LostJobClaimError, type JobClaim } from "./pipeline-job-repository";
 
 export type StoryVersion = typeof storyVersions.$inferSelect;
 
@@ -88,8 +89,20 @@ export class StoryVersionRepository {
    * read, so two concurrent updates to the same Story cannot compute the
    * same version number.
    */
-  async createNextVersion(storyId: string, input: NewStoryVersionInput): Promise<StoryVersion> {
+  async createNextVersion(
+    storyId: string,
+    input: NewStoryVersionInput,
+    claim?: JobClaim,
+  ): Promise<StoryVersion> {
     return this.db.transaction(async (tx) => {
+      if (claim) {
+        const active = await tx.execute<{ id: string }>(sql`
+          SELECT id FROM ${pipelineJobs}
+          WHERE id = ${claim.jobId} AND claim_owner = ${claim.owner} AND status = 'in_progress'
+          FOR UPDATE
+        `);
+        if (active.length === 0) throw new LostJobClaimError();
+      }
       const [storyRow] = await tx
         .select({ id: stories.id, versionCount: stories.versionCount })
         .from(stories)
@@ -177,23 +190,41 @@ export class StoryVersionRepository {
       /** Fresh assessment for this exact edited content; null means it passed. */
       qualityIssues?: unknown[] | null;
     },
+    claim?: JobClaim,
   ): Promise<boolean> {
+    const values = {
+      titleHu: content.titleHu,
+      leadHu: content.leadHu,
+      bodyHu: content.bodyHu,
+      editorialRewriteApplied: content.editorialRewriteApplied,
+      ...(content.qualityIssues !== undefined
+        ? {
+            qualityIssues:
+              content.qualityIssues && content.qualityIssues.length > 0
+                ? content.qualityIssues
+                : null,
+          }
+        : {}),
+    };
+    if (claim) {
+      return this.db.transaction(async (tx) => {
+        const active = await tx.execute<{ id: string }>(sql`
+          SELECT id FROM ${pipelineJobs}
+          WHERE id = ${claim.jobId} AND claim_owner = ${claim.owner} AND status = 'in_progress'
+          FOR UPDATE
+        `);
+        if (active.length === 0) throw new LostJobClaimError();
+        const rows = await tx
+          .update(storyVersions)
+          .set(values)
+          .where(and(eq(storyVersions.id, versionId), eq(storyVersions.isPublished, false)))
+          .returning({ id: storyVersions.id });
+        return rows.length > 0;
+      });
+    }
     const rows = await this.db
       .update(storyVersions)
-      .set({
-        titleHu: content.titleHu,
-        leadHu: content.leadHu,
-        bodyHu: content.bodyHu,
-        editorialRewriteApplied: content.editorialRewriteApplied,
-        ...(content.qualityIssues !== undefined
-          ? {
-              qualityIssues:
-                content.qualityIssues && content.qualityIssues.length > 0
-                  ? content.qualityIssues
-                  : null,
-            }
-          : {}),
-      })
+      .set(values)
       .where(and(eq(storyVersions.id, versionId), eq(storyVersions.isPublished, false)))
       .returning({ id: storyVersions.id });
     return rows.length > 0;

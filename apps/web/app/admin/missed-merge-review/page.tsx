@@ -2,6 +2,8 @@ import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AdminHeader } from "../_components/admin-header";
+import { d1Binding } from "../../../lib/db";
+import { D1MissedMergePage } from "./d1-page";
 import {
   decideMissedMergeReview,
   refreshAndListMissedMergeReviews,
@@ -180,6 +182,7 @@ function ReviewCard({
  * Hozzáférés: HTTP Basic auth a middleware-ben (ADMIN_SECRET).
  */
 export default async function MissedMergeReviewPage(): Promise<ReactNode> {
+  if (d1Binding()) return <D1MissedMergePage />;
   const { pending, decided, decidedCount } = await refreshAndListMissedMergeReviews();
 
   return (

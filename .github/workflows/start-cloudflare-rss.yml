@@ -12,6 +12,9 @@ concurrency:
 
 jobs:
   start:
+    # Superseded by the coordinated D1 cutover. The former job reset source
+    # watermarks and depended on PostgreSQL; it must never run against D1.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 30

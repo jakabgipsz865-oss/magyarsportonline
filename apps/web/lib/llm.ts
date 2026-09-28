@@ -1,7 +1,6 @@
 import {
   CloudflareWorkersAiLlmClient,
   DailyRequestCappedLlmClient,
-  DailyLlmRequestCapError,
   GeminiLlmClient,
   NoLlmClient,
   ProviderFallbackLlmClient,
@@ -12,38 +11,13 @@ import {
   isGeminiDefinitelyUnmeteredError,
   type LlmClient,
 } from "@magyarsportonline/llm";
-import { createRepositories } from "./db";
+import { createLlmUsageRepository, d1Binding } from "./db";
 import { env } from "./env";
 import { getLogger } from "./logger";
 
 let cachedFactClient: LlmClient | undefined;
 let cachedWriterClient: LlmClient | undefined;
 let cachedRepairClient: LlmClient | undefined;
-
-class MonthlyBudgetCappedLlmClient implements LlmClient {
-  constructor(
-    private readonly inner: LlmClient,
-    private readonly monthlyBudgetUsd: number,
-    private readonly usage: ReturnType<typeof createRepositories>["llmUsageRepository"],
-  ) {}
-  get modelLabel() {
-    return this.inner.modelLabel;
-  }
-  private async assertBudget() {
-    const now = new Date();
-    const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    if ((await this.usage.sumCostUsdSince(since)) >= this.monthlyBudgetUsd)
-      throw new DailyLlmRequestCapError("gemini-monthly-budget", 0);
-  }
-  async completeText(request: Parameters<LlmClient["completeText"]>[0]) {
-    await this.assertBudget();
-    return this.inner.completeText(request);
-  }
-  async completeJson(request: Parameters<LlmClient["completeJson"]>[0]) {
-    await this.assertBudget();
-    return this.inner.completeJson(request);
-  }
-}
 
 /**
  * `LLM_PROVIDER=none` is an explicit local-development/test mode. Production
@@ -63,7 +37,11 @@ export function getFactLlmClient(): LlmClient {
         "LLM_PROVIDER=cloudflare requires CLOUDFLARE_ACCOUNT_ID and WORKERS_AI_API_TOKEN to be set (see docs/infrastructure-setup.md)",
       );
     }
-    cachedFactClient = new ProviderFallbackLlmClient({
+    if (d1Binding() && env.GEMINI_MONTHLY_EXTERNAL_SPEND_USD === undefined)
+      throw new Error(
+        "D1 paid AI requires GEMINI_MONTHLY_EXTERNAL_SPEND_USD from verified pre-cutover billing",
+      );
+    const factClient = new ProviderFallbackLlmClient({
       inner: new CloudflareWorkersAiLlmClient({
         accountId: env.CLOUDFLARE_ACCOUNT_ID,
         apiToken: env.WORKERS_AI_API_TOKEN,
@@ -71,12 +49,22 @@ export function getFactLlmClient(): LlmClient {
       }),
       fallback: new NoLlmClient(),
       providerName: "cloudflare",
-      usageSink: createRepositories().llmUsageRepository,
-      estimateCostUsd: estimateCloudflareCostUsd,
       describeError: describeCloudflareError,
       logger: getLogger(),
       failClosed: true,
     });
+    cachedFactClient = new DailyRequestCappedLlmClient(
+      factClient,
+      "cloudflare",
+      env.GEMINI_DAILY_REQUEST_CAP,
+      createLlmUsageRepository(),
+      () => false,
+      estimateCloudflareCostUsd,
+      {
+        capUsd: env.GEMINI_MONTHLY_BUDGET_USD,
+        externalSpentUsd: env.GEMINI_MONTHLY_EXTERNAL_SPEND_USD ?? 0,
+      },
+    );
   } else {
     cachedFactClient = new NoLlmClient();
   }
@@ -86,6 +74,10 @@ export function getFactLlmClient(): LlmClient {
 
 function createGeminiWriter(model: string): LlmClient {
   if (env.LLM_PROVIDER === "none") return new NoLlmClient();
+  if (d1Binding() && env.GEMINI_MONTHLY_EXTERNAL_SPEND_USD === undefined)
+    throw new Error(
+      "D1 paid AI requires GEMINI_MONTHLY_EXTERNAL_SPEND_USD from verified pre-cutover billing",
+    );
   const geminiApiKey = env.GEMINI_BILLING_MODE === "byok" ? env.GEMINI_API_KEY : undefined;
   if (
     env.GEMINI_BILLING_MODE === "byok" &&
@@ -115,7 +107,7 @@ function createGeminiWriter(model: string): LlmClient {
           baseUrl: env.GEMINI_BASE_URL!,
           gatewayToken: env.CLOUDFLARE_AI_GATEWAY_TOKEN!,
         });
-  const repos = createRepositories();
+  const usage = createLlmUsageRepository();
   const failClosed = new ProviderFallbackLlmClient({
     inner: geminiClient,
     fallback: new NoLlmClient(),
@@ -124,29 +116,27 @@ function createGeminiWriter(model: string): LlmClient {
     logger: getLogger(),
     failClosed: true,
   });
-  // Gemini is routed through Cloudflare AI Gateway, where a provider-scoped
-  // monthly spend limit enforces the paid budget. Keep this daily cap as a
-  // second, application-side guard against runaway request volume.
+  // Both Gemini roles and Workers AI Fact reserve against the same D1 ledger.
   const cappedGemini = new DailyRequestCappedLlmClient(
     failClosed,
     "gemini",
     env.GEMINI_DAILY_REQUEST_CAP,
-    repos.llmUsageRepository,
+    usage,
     isGeminiDefinitelyUnmeteredError,
     estimateGeminiCostUsd,
+    {
+      capUsd: env.GEMINI_MONTHLY_BUDGET_USD,
+      externalSpentUsd: env.GEMINI_MONTHLY_EXTERNAL_SPEND_USD ?? 0,
+    },
   );
-  return new MonthlyBudgetCappedLlmClient(
-    cappedGemini,
-    env.GEMINI_MONTHLY_BUDGET_USD,
-    repos.llmUsageRepository,
-  );
+  return cappedGemini;
 }
 
 export function getWriterLlmClient(): LlmClient {
   return (cachedWriterClient ??= createGeminiWriter(env.GEMINI_MODEL));
 }
 
-/** Gemini Flash is shared by the one targeted repair and technical fallback roles. */
+/** Gemini Flash is reserved for one targeted repair of a persisted draft. */
 export function getWriterRepairLlmClient(): LlmClient {
   return (cachedRepairClient ??= createGeminiWriter("gemini-3.5-flash"));
 }

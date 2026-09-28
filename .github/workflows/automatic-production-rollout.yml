@@ -21,7 +21,7 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -euo pipefail
-          BASE="https://magyarsportonline.hu"
+          BASE="https://mso24.hu"
           STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           echo "$STARTED_AT" > /tmp/started-at
           ingest_code=$(curl -sS -o /tmp/ingest.json -w '%{http_code}' --max-time 90 \
@@ -35,7 +35,7 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -euo pipefail
-          BASE="https://magyarsportonline.hu"
+          BASE="https://mso24.hu"
           empty_passes=0
           for i in $(seq 1 18); do
             set +e
@@ -81,7 +81,7 @@ jobs:
           TARGET_COUNT: ${{ inputs.target_count || '5' }}
         run: |
           set -euo pipefail
-          BASE="https://magyarsportonline.hu"
+          BASE="https://mso24.hu"
           STARTED_AT=$(cat /tmp/started-at)
           code=$(curl -sS -o /tmp/approved.json -w '%{http_code}' --max-time 60 \
             -X POST "$BASE/api/internal/review-queue/approve-ready?createdAfter=$STARTED_AT&limit=$TARGET_COUNT" \
@@ -99,9 +99,9 @@ jobs:
           mkdir -p evidence
           cp /tmp/ingest.json evidence/ 2>/dev/null || true
           cp /tmp/approved.json evidence/ 2>/dev/null || true
-          curl -fsS "https://magyarsportonline.hu/api/v1/stories?limit=30&page=1" \
+          curl -fsS "https://mso24.hu/api/v1/stories?limit=30&page=1" \
             -o evidence/public-stories.json
-          jq -r '.data[] | "https://magyarsportonline.hu/hir/" + .slug' \
+          jq -r '.data[] | "https://mso24.hu/hir/" + .slug' \
             evidence/public-stories.json
 
       - name: Upload rollout evidence

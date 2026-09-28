@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createRepositories } from "../../../../../lib/db";
+import { D1PipelineJobRepository } from "@magyarsportonline/db/d1";
+import { createRepositories, d1Binding } from "../../../../../lib/db";
 import { env } from "../../../../../lib/env";
 
 export const maxDuration = 60;
@@ -15,16 +16,25 @@ function parseLimit(request: NextRequest): number {
   return Number.isFinite(raw) ? Math.max(1, Math.min(Math.trunc(raw), 500)) : 100;
 }
 
+function queueRepository() {
+  const d1 = d1Binding();
+  if (d1) {
+    if (!env.D1_PIPELINE_START_AT) throw new Error("D1_PIPELINE_START_AT is required");
+    return { repository: new D1PipelineJobRepository(d1), since: env.D1_PIPELINE_START_AT };
+  }
+  return { repository: createRepositories().pipelineJobRepository, since: new Date(0) };
+}
+
 /** Read-only queue diagnostics. Article/event payloads are never returned. */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const repos = createRepositories();
+  const { repository, since } = queueRepository();
   const [queue, deadLetters] = await Promise.all([
-    repos.pipelineJobRepository.getStatusCounts(),
-    repos.pipelineJobRepository.getDeadLetterSummary(),
+    repository.getStatusCounts(new Date(), since),
+    repository.getDeadLetterSummary(20, since),
   ]);
   return NextResponse.json({ queue, deadLetters });
 }
@@ -45,11 +55,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const repos = createRepositories();
+  const { repository, since } = queueRepository();
   const limit = parseLimit(request);
-  const before = await repos.pipelineJobRepository.getStatusCounts();
-  const requeued = await repos.pipelineJobRepository.requeueDeadLetters(limit);
-  const after = await repos.pipelineJobRepository.getStatusCounts();
+  const before = await repository.getStatusCounts(new Date(), since);
+  const requeued = await repository.requeueDeadLetters(limit, since);
+  const after = await repository.getStatusCounts(new Date(), since);
 
   return NextResponse.json({ ok: true, limit, requeued, before, after });
 }

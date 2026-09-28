@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { env } from "../../../../../lib/env";
 import { getLogger } from "../../../../../lib/logger";
 import { editReviewItemContent } from "../../../../../lib/review";
+import { d1Binding } from "../../../../../lib/db";
+import { editD1Review } from "../../../../../lib/d1-review";
 
 interface EditRequestBody {
   itemId: string;
@@ -61,18 +63,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const result = await editReviewItemContent(body.itemId, {
+    const content = {
       titleHu: body.titleHu,
       leadHu: body.leadHu,
       bodyHu: body.bodyHu,
-    });
+    };
+    const d1 = d1Binding();
+    const result = d1
+      ? await editD1Review(d1, body.itemId, content)
+      : await editReviewItemContent(body.itemId, content);
     if (!result.ok) {
       const status =
         result.error === "already_resolved"
           ? 409
           : result.error === "already_published"
             ? 422
-            : 404;
+            : result.error === "quality_blocked"
+              ? 422
+              : 404;
       return NextResponse.json({ error: result.error }, { status });
     }
     return NextResponse.json({ edited: true, itemId: body.itemId });

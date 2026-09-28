@@ -53,6 +53,11 @@ export const env = createEnv({
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
+    // Set at the actual D1 cutover. Imported historical jobs stay dormant.
+    D1_PIPELINE_START_AT: z.coerce.date().optional(),
+    // Mock response is permitted only in a D1-only workers.dev staging runtime.
+    D1_TEST_WRITER_OUTPUT: z.string().optional(),
+    D1_TEST_SOURCE_ORIGIN: z.string().url().optional(),
 
     GEMINI_API_KEY: z.string().min(1).optional(),
     GEMINI_MODEL: z.string().min(1).default("gemini-3.5-flash-lite"),
@@ -63,6 +68,9 @@ export const env = createEnv({
       .transform((value) => value === "true"),
     GEMINI_DAILY_REQUEST_CAP: z.coerce.number().int().positive().max(450).default(450),
     GEMINI_MONTHLY_BUDGET_USD: z.coerce.number().positive().max(10).default(9.5),
+    // Spend outside the imported D1 ledger in this UTC month. Required for
+    // D1 paid AI so migration never silently resets the monthly budget.
+    GEMINI_MONTHLY_EXTERNAL_SPEND_USD: z.coerce.number().min(0).optional(),
     GEMINI_BASE_URL: z.string().url().optional(),
     CLOUDFLARE_AI_GATEWAY_ID: z.string().min(1).default("magyarsportonline"),
     CLOUDFLARE_AI_GATEWAY_TOKEN: z.string().min(1).optional(),
@@ -74,7 +82,7 @@ export const env = createEnv({
 
     // A publikus site kanonikus origin-je (SEO: canonical URL, sitemap,
     // JSON-LD, RSS). Vercel-en alapértelmezésként a production URL.
-    SITE_URL: z.string().url().default("https://magyarsportonline.hu"),
+    SITE_URL: z.string().url().default("https://mso24.hu"),
 
     FACEBOOK_AUTO_PUBLISH: z
       .enum(["true", "false"])

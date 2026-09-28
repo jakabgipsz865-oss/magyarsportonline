@@ -4,8 +4,7 @@ import { articleMediaFromHtml, type PublisherArticleMedia } from "../remote-imag
 import { ARTICLE_EXTRACTORS } from "./extractors/index";
 import type { ArticleExtractor, FetchedArticle, FetchedArticlePage, HtmlFetcher } from "./types";
 
-const DEFAULT_USER_AGENT =
-  "Mozilla/5.0 (compatible; MagyarSportOnlineBot/1.0; +https://magyarsportonline.hu)";
+const DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; MagyarSportOnlineBot/1.0; +https://mso24.hu)";
 const FETCH_TIMEOUT_MS = 15_000;
 
 /**
@@ -58,19 +57,37 @@ export class ArticleFetcher {
     url: string,
     _publisherUrl?: string,
   ): Promise<{ article: FetchedArticle; media: PublisherArticleMedia } | null> {
-    const page = await this.fetchPage(url);
-    if (!page) return null;
+    const result = await this.fetchWithMediaDetailed(url, _publisherUrl);
+    return result.page;
+  }
+
+  async fetchWithMediaDetailed(
+    url: string,
+    _publisherUrl?: string,
+  ): Promise<{
+    page: { article: FetchedArticle; media: PublisherArticleMedia } | null;
+    failure: string | null;
+  }> {
+    const result = await this.fetchPageDetailed(url);
+    const page = result.page;
+    if (!page) return { page: null, failure: result.failure };
     return {
-      article: page.article,
-      media: articleMediaFromHtml(page.html, page.articleUrl),
+      page: { article: page.article, media: articleMediaFromHtml(page.html, page.articleUrl) },
+      failure: null,
     };
   }
 
   /** Return the extracted article together with the exact HTML used for it. */
   async fetchPage(url: string): Promise<FetchedArticlePage | null> {
+    return (await this.fetchPageDetailed(url)).page;
+  }
+
+  async fetchPageDetailed(
+    url: string,
+  ): Promise<{ page: FetchedArticlePage | null; failure: string | null }> {
     const extractor = this.extractors.find((candidate) => candidate.supports(url));
     if (!extractor) {
-      return null;
+      return { page: null, failure: "unsupported_domain" };
     }
 
     try {
@@ -84,9 +101,12 @@ export class ArticleFetcher {
           const resolvedResult = extractor.extract(resolvedHtml, resolvedUrl);
           if (resolvedResult) {
             return {
-              article: { ...resolvedResult, resolvedUrl },
-              html: resolvedHtml,
-              articleUrl: resolvedUrl,
+              page: {
+                article: { ...resolvedResult, resolvedUrl },
+                html: resolvedHtml,
+                articleUrl: resolvedUrl,
+              },
+              failure: null,
             };
           }
         } catch (error) {
@@ -108,7 +128,9 @@ export class ArticleFetcher {
           "article extractor found no matching structure, falling back to RSS snippet",
         );
       }
-      return result ? { article: result, html, articleUrl: url } : null;
+      return result
+        ? { page: { article: result, html, articleUrl: url }, failure: null }
+        : { page: null, failure: "extractor_empty_or_insufficient_text" };
     } catch (error) {
       this.logger?.warn(
         {
@@ -118,7 +140,16 @@ export class ArticleFetcher {
         },
         "full article fetch failed, falling back to RSS snippet",
       );
-      return null;
+      const message = error instanceof Error ? error.message : String(error);
+      const status = /HTTP (\d{3}) fetching/u.exec(message)?.[1];
+      return {
+        page: null,
+        failure: status
+          ? `http_${status}`
+          : error instanceof Error && error.name === "AbortError"
+            ? "timeout"
+            : "network_error",
+      };
     }
   }
 }

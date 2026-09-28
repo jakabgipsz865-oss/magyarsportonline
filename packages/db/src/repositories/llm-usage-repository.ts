@@ -78,14 +78,34 @@ export class LlmUsageRepository {
     since: Date,
     cap: number,
     context?: { role: string; rawArticleId?: string; storyId?: string; jobId?: string },
+    budget?: { since: Date; capUsd: number; externalSpentUsd: number; reserveUsd: number },
   ): Promise<string | null> {
     return this.db.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`mso-llm-cap:${provider}`}))`);
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('mso-llm-shared-budget'))`);
       const [count] = await tx
         .select({ total: sql<number>`count(*)::int` })
         .from(llmUsage)
         .where(and(eq(llmUsage.provider, provider), gte(llmUsage.occurredAt, since)));
       if ((count?.total ?? 0) >= cap) return null;
+      if (budget) {
+        if (
+          !Number.isFinite(budget.capUsd) ||
+          !Number.isFinite(budget.externalSpentUsd) ||
+          !Number.isFinite(budget.reserveUsd) ||
+          budget.capUsd <= 0 ||
+          budget.externalSpentUsd < 0 ||
+          budget.reserveUsd <= 0
+        )
+          throw new Error("Invalid monthly AI budget reservation");
+        const [spent] = await tx
+          .select({
+            total: sql<string>`coalesce(sum(${llmUsage.costUsd}), 0)`,
+          })
+          .from(llmUsage)
+          .where(gte(llmUsage.occurredAt, budget.since));
+        if (Number(spent?.total ?? 0) + budget.externalSpentUsd + budget.reserveUsd > budget.capUsd)
+          return null;
+      }
       const [reservation] = await tx
         .insert(llmUsage)
         .values({
@@ -93,7 +113,7 @@ export class LlmUsageRepository {
           model,
           inputTokens: 0,
           outputTokens: 0,
-          costUsd: "0.000000",
+          costUsd: (budget ? Math.ceil(budget.reserveUsd * 1_000_000) / 1_000_000 : 0).toFixed(6),
           role: context?.role ?? "unspecified",
           rawArticleId: context?.rawArticleId,
           storyId: context?.storyId,

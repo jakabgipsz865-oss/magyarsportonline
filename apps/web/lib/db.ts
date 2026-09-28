@@ -24,6 +24,17 @@ import {
   createDatabaseClient,
   type Database,
 } from "@magyarsportonline/db";
+import {
+  D1PublicCategoryRepository,
+  D1PublicEntityRepository,
+  D1PipelineJobRepository,
+  D1LlmUsageRepository,
+  D1RawArticleIngestRepository,
+  D1SocialPostRepository,
+  D1SourceIngestRepository,
+  D1StoryReadModelRepository,
+  type D1Client,
+} from "@magyarsportonline/db/d1";
 import { getCloudflareContext } from "@opennextjs/cloudflare/cloudflare-context";
 import { cache } from "react";
 import { env } from "./env";
@@ -54,12 +65,25 @@ function hyperdriveConnectionString(): string | undefined {
   }
 }
 
+export function d1Binding(): D1Client | undefined {
+  try {
+    return getCloudflareContext().env.DB;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Returns a request-scoped Hyperdrive client in Workers and a process-wide
  * client in Node/local tooling. A database connection must never be shared
  * across Worker requests; Hyperdrive performs the actual connection pooling.
  */
 export function getDb(): Database {
+  if (d1Binding()) {
+    throw new Error(
+      "PostgreSQL repositories are unavailable in D1 mode; port this route explicitly",
+    );
+  }
   const hyperdriveUrl = hyperdriveConnectionString();
   if (hyperdriveUrl) return createWorkerDatabase(hyperdriveUrl);
 
@@ -100,3 +124,80 @@ export function createRepositories(db: Database = getDb()) {
 }
 
 export type Repositories = ReturnType<typeof createRepositories>;
+
+/**
+ * All public database reads can use the isolated D1 binding. The production
+ * Worker has no DB binding yet and retains its existing PostgreSQL path.
+ * A D1-only test deployment must omit both Hyperdrive and DATABASE_URL, so
+ * an unported internal route fails closed instead of silently reading Neon.
+ */
+export function createPublicRepositories() {
+  const d1 = d1Binding();
+  if (d1) {
+    return {
+      storyReadModelRepository: new D1StoryReadModelRepository(d1),
+      categoryRepository: new D1PublicCategoryRepository(d1),
+      entityRepository: new D1PublicEntityRepository(d1),
+    };
+  }
+  const repositories = createRepositories();
+  return {
+    storyReadModelRepository: repositories.storyReadModelRepository,
+    categoryRepository: repositories.categoryRepository,
+    entityRepository: repositories.entityRepository,
+  };
+}
+
+/** Facebook intents use the same backing store as the active Worker. */
+export function createSocialPostRepository() {
+  const d1 = d1Binding();
+  return d1 ? new D1SocialPostRepository(d1) : createRepositories().socialPostRepository;
+}
+
+/** Metering and hard request caps follow the active database binding. */
+export function createLlmUsageRepository() {
+  const d1 = d1Binding();
+  return d1 ? new D1LlmUsageRepository(d1) : createRepositories().llmUsageRepository;
+}
+
+/** RSS receipt and full-page fetch use D1 without enabling the Writer path. */
+export function createIngestRepositories() {
+  const d1 = d1Binding();
+  if (d1) {
+    const jobs = new D1PipelineJobRepository(d1);
+    const raw = new D1RawArticleIngestRepository(d1);
+    const activationBoundary = () => {
+      if (!env.D1_PIPELINE_START_AT) {
+        throw new Error("D1_PIPELINE_START_AT is required before D1 ingestion is enabled");
+      }
+      return env.D1_PIPELINE_START_AT;
+    };
+    return {
+      pipelineJobRepository: {
+        getStatusCounts: () => jobs.getStatusCounts(new Date(), activationBoundary()),
+      },
+      sourceRepository: new D1SourceIngestRepository(d1),
+      rawArticleRepository: {
+        insertTabloid: raw.insertTabloid.bind(raw),
+        deferTabloidFetch: raw.deferTabloidFetch.bind(raw),
+        upgradeAndEnqueueTabloid: (
+          id: string,
+          data: Parameters<typeof raw.upgradeAndEnqueueTabloid>[1],
+          owner?: string,
+        ) => raw.upgradeAndEnqueueTabloid(id, data, owner, activationBoundary()),
+        claimTabloidFetchBatch: (
+          sourceIds: string[],
+          limit: number,
+          staleLockMs: number,
+          now = new Date(),
+        ) => raw.claimTabloidFetchBatch(sourceIds, limit, staleLockMs, now, activationBoundary()),
+      },
+    };
+  }
+  const repos = createRepositories();
+  return {
+    pipelineJobRepository: repos.pipelineJobRepository,
+    sourceRepository: repos.sourceRepository,
+    rawArticleRepository: repos.rawArticleRepository,
+  };
+}

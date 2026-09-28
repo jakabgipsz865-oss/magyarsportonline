@@ -103,6 +103,36 @@ describe("structuredNewsArticleExtractor.extract", () => {
     expect(result?.bodyOriginal.length).toBeGreaterThan(truncated.length);
   });
 
+  it("extracts Daily Mail itemprop body without surrounding recommendations", () => {
+    const html = `<html><head><script type="application/ld+json">${JSON.stringify({
+      "@type": "NewsArticle",
+      headline: "Goalkeeper faces criticism after the league match",
+    })}</script></head><body><h1>Football News</h1><div id="js-article-text">
+      <p class="byline-section">Published: Monday at 21:30. Updated Tuesday.</p>
+      <div itemprop="articleBody"><p>${ARTICLE_BODY}</p><p>${ARTICLE_BODY} The manager then addressed the decision.</p></div>
+      <div class="related"><p>${ARTICLE_BODY.repeat(4)} Unrelated recommendation.</p></div>
+    </div></body></html>`;
+    const result = structuredNewsArticleExtractor.extract(
+      html,
+      "https://www.dailymail.com/sport/football/article-123/example.html",
+    );
+    expect(result?.titleOriginal).toContain("Goalkeeper faces criticism");
+    expect(result?.bodyOriginal).toContain("manager then addressed");
+    expect(result?.bodyOriginal).not.toContain("Unrelated recommendation");
+    expect(result?.bodyOriginal).not.toContain("Published: Monday");
+  });
+
+  it("joins Kronen editorial blocks and excludes the longer recommendation area", () => {
+    const html = `<html><body><h1>Streit um das entscheidende Tor</h1>
+      <div class="box c_tinymce_lead"><div class="c_outer"><p>${ARTICLE_BODY}</p></div></div>
+      <div class="box c_tinymce"><div class="c_outer"><p>${ARTICLE_BODY} The goalkeeper disputed the decision.</p></div></div>
+      <aside><p>${ARTICLE_BODY.repeat(5)} Unrelated recommendation.</p></aside>
+    </body></html>`;
+    const result = structuredNewsArticleExtractor.extract(html, "https://www.krone.at/4294471");
+    expect(result?.bodyOriginal).toContain("goalkeeper disputed");
+    expect(result?.bodyOriginal).not.toContain("Unrelated recommendation");
+  });
+
   it("does not extract valid-looking JSON-LD from a non-allowlisted domain", () => {
     const html = jsonLdHtml({
       "@type": "NewsArticle",

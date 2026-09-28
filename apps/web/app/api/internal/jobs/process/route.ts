@@ -1,16 +1,22 @@
 import { parseEvent } from "@magyarsportonline/events";
 import {
   isCloudflareDailyNeuronQuotaError,
+  GeminiApiError,
   isDailyLlmQuotaError,
   isGeminiDailyQuotaError,
   delayUntilNextGeminiQuotaReset,
 } from "@magyarsportonline/llm";
 import { NextResponse, type NextRequest } from "next/server";
-import { createRepositories } from "../../../../../lib/db";
+import { createRepositories, d1Binding } from "../../../../../lib/db";
+import { processOneD1Job } from "../../../../../lib/d1-job-process";
+import { getD1StagingWriter } from "../../../../../lib/d1-staging-writer";
+import { getWriterLlmClient, getWriterRepairLlmClient } from "../../../../../lib/llm";
 import { delayUntilNextCloudflareQuotaReset } from "../../../../../lib/cloudflare-quota";
 import { env } from "../../../../../lib/env";
 import { getLogger } from "../../../../../lib/logger";
 import { buildQueueingEmitter, dispatchJobToHandler } from "../../../../../lib/pipeline";
+import { TabloidWriterBusyError } from "../../../../../lib/tabloid";
+import { timedPipelineStage } from "../../../../../lib/pipeline-timing";
 
 /**
  * The worker half of the async pipeline sprint (2026-07-29,
@@ -50,6 +56,15 @@ function backoffFor(attempts: number): number {
   return Math.min(BASE_BACKOFF_MS * 2 ** Math.max(0, attempts - 1), MAX_BACKOFF_MS);
 }
 
+function retryAfterFromError(error: unknown): number {
+  let current = error;
+  for (let depth = 0; depth < 3; depth++) {
+    if (current instanceof GeminiApiError) return current.retryAfterMs ?? 0;
+    current = current instanceof Error ? current.cause : null;
+  }
+  return 0;
+}
+
 async function handleProcess(request: NextRequest): Promise<NextResponse> {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
@@ -59,12 +74,33 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
   if (!env.TABLOID_AUTO_PUBLISH)
     return NextResponse.json({ paused: true, processed: 0, llmCalls: 0 });
 
+  const d1 = d1Binding();
+  if (d1) {
+    if (!env.D1_PIPELINE_START_AT) {
+      return NextResponse.json({ error: "D1_PIPELINE_START_AT is required" }, { status: 503 });
+    }
+    const mockWriter = getD1StagingWriter();
+    const result = await processOneD1Job(
+      d1,
+      {
+        activationAt: env.D1_PIPELINE_START_AT,
+        siteUrl: env.SITE_URL,
+        forceReviewMode: env.FORCE_REVIEW_MODE,
+        facebookEnabled: env.FACEBOOK_AUTO_PUBLISH,
+        facebookStartAt: env.FACEBOOK_AUTO_PUBLISH_START_AT,
+      },
+      mockWriter ?? getWriterLlmClient(),
+      mockWriter ?? getWriterRepairLlmClient(),
+    );
+    return NextResponse.json(result);
+  }
+
   const repos = createRepositories();
   const emitter = buildQueueingEmitter(repos.pipelineJobRepository);
   const logger = getLogger();
   const deadline = Date.now() + BUDGET_MS;
-  const activeQuotaDeferral = await repos.pipelineJobRepository.findActiveDeferral(
-    CLOUDFLARE_DAILY_QUOTA_ERROR_PREFIX,
+  const activeQuotaDeferral = await timedPipelineStage("quota_deferral_lookup", {}, () =>
+    repos.pipelineJobRepository.findActiveDeferral(CLOUDFLARE_DAILY_QUOTA_ERROR_PREFIX),
   );
   if (activeQuotaDeferral) {
     const queue = await repos.pipelineJobRepository.getStatusCounts();
@@ -94,19 +130,44 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
   }> = [];
 
   while (Date.now() < deadline) {
-    const [job] = await repos.pipelineJobRepository.claimBatch(1, STALE_LOCK_MS);
+    const [job] = await timedPipelineStage("job_claim", {}, () =>
+      repos.pipelineJobRepository.claimBatch(1, STALE_LOCK_MS),
+    );
     if (!job) {
       break;
     }
     processed += 1;
+    const owner = job.claimOwner;
+    if (!owner) throw new Error(`Claimed job ${job.id} has no owner`);
 
     try {
       const event = parseEvent(job.event);
-      await dispatchJobToHandler(event, repos, emitter, job.id);
-      await repos.pipelineJobRepository.complete(job.id);
+      await timedPipelineStage(
+        "job_dispatch",
+        { jobId: job.id, attempt: job.attempts, leaseOwner: owner },
+        () => dispatchJobToHandler(event, repos, emitter, job.id, owner),
+      );
+      if (
+        !(await timedPipelineStage(
+          "job_complete",
+          { jobId: job.id, attempt: job.attempts, leaseOwner: owner },
+          () => repos.pipelineJobRepository.complete(job.id, owner),
+        ))
+      )
+        throw new Error("Job claim expired before completion");
       succeeded += 1;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      if (error instanceof TabloidWriterBusyError) {
+        await repos.pipelineJobRepository.deferWithoutAttempt(
+          job.id,
+          owner,
+          `[writer_lease_active] ${message}`,
+          error.retryAfterMs,
+        );
+        logger.info({ jobId: job.id }, "Writer lease active; job deferred without an attempt");
+        continue;
+      }
       if (
         isCloudflareDailyNeuronQuotaError(error) ||
         isGeminiDailyQuotaError(error) ||
@@ -120,6 +181,7 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
         quotaRetryAt = new Date(now.getTime() + delayMs).toISOString();
         await repos.pipelineJobRepository.deferWithoutAttempt(
           job.id,
+          owner,
           `${isGeminiQuota ? GEMINI_DAILY_QUOTA_ERROR_PREFIX : CLOUDFLARE_DAILY_QUOTA_ERROR_PREFIX} ${message}`,
           delayMs,
         );
@@ -131,7 +193,11 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
         break;
       }
       const exhausted = job.attempts >= job.maxAttempts;
-      await repos.pipelineJobRepository.fail(job.id, message, backoffFor(job.attempts));
+      const backoffMs = Math.min(
+        MAX_BACKOFF_MS,
+        Math.max(backoffFor(job.attempts), retryAfterFromError(error)),
+      );
+      if (!(await repos.pipelineJobRepository.fail(job.id, owner, message, backoffMs))) continue;
       if (exhausted) {
         deadLettered += 1;
       } else {

@@ -16,6 +16,20 @@ export class DailyLlmRequestCapError extends Error {
   }
 }
 
+export class MonthlyLlmBudgetError extends Error {
+  constructor(public readonly capUsd: number) {
+    super(`Gemini monthly application budget (${capUsd} USD) reached`);
+    this.name = "MonthlyLlmBudgetError";
+  }
+}
+
+export interface MonthlyReservationBudget {
+  since: Date;
+  capUsd: number;
+  externalSpentUsd: number;
+  reserveUsd: number;
+}
+
 export interface DailyRequestUsageReader {
   reserveRequest(
     provider: string,
@@ -23,7 +37,9 @@ export interface DailyRequestUsageReader {
     since: Date,
     cap: number,
     context?: { role: string; rawArticleId?: string; storyId?: string; jobId?: string },
+    budget?: MonthlyReservationBudget,
   ): Promise<string | null>;
+  sumCostUsdSince?(since: Date): Promise<number>;
   finalizeRequest(
     reservationId: string,
     inputTokens: number,
@@ -104,6 +120,7 @@ export class DailyRequestCappedLlmClient implements LlmClient {
       inputTokens: number,
       outputTokens: number,
     ) => number = () => 0,
+    private readonly monthlyBudget?: { capUsd: number; externalSpentUsd: number },
   ) {}
 
   get modelLabel(): string | undefined {
@@ -135,14 +152,41 @@ export class DailyRequestCappedLlmClient implements LlmClient {
   }
 
   private async reserve(request: TextCompletionRequest | JsonCompletionRequest): Promise<string> {
+    const model = this.inner.modelLabel ?? "unknown";
+    const budget = this.monthlyBudget
+      ? {
+          since: new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)),
+          capUsd: this.monthlyBudget.capUsd,
+          externalSpentUsd: this.monthlyBudget.externalSpentUsd,
+          // UTF-8 byte length is a conservative upper bound on input tokens.
+          // Reserve twice the configured output allowance for thinking/metadata.
+          reserveUsd: Math.max(
+            0.000001,
+            this.estimateCostUsd(
+              model,
+              new TextEncoder().encode(
+                request.system + request.messages.map((message) => message.content).join(""),
+              ).length,
+              request.maxTokens * 2,
+            ),
+          ),
+        }
+      : undefined;
     const reservationId = await this.usage.reserveRequest(
       this.provider,
-      this.inner.modelLabel ?? "unknown",
+      model,
       geminiQuotaDayStart(),
       this.cap,
       request.usageContext,
+      budget,
     );
     if (!reservationId) {
+      if (budget) {
+        if (!this.usage.sumCostUsdSince) throw new Error("Monthly AI usage reader is unavailable");
+        const spent = await this.usage.sumCostUsdSince(budget.since);
+        if (spent + budget.externalSpentUsd + budget.reserveUsd > budget.capUsd)
+          throw new MonthlyLlmBudgetError(budget.capUsd);
+      }
       throw new DailyLlmRequestCapError(this.provider, this.cap);
     }
     return reservationId;

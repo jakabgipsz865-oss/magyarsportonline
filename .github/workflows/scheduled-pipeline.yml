@@ -2,7 +2,7 @@
 # scheduler Worker every minute; keeping a second schedule here would duplicate it.
 #
 # Előfeltétel (repo Settings → Secrets and variables → Actions):
-#   PRODUCTION_URL  — pl. https://magyarsportonline.hu (opcionális)
+#   PRODUCTION_URL  — pl. https://mso24.hu (opcionális)
 #   CRON_SECRET     — ugyanaz az érték, mint a Worker secret (kötelező)
 # Amíg a CRON_SECRET nincs beállítva, a workflow csendben (sikeresen) kilép.
 name: Scheduled pipeline (ingest + job processing)
@@ -28,7 +28,7 @@ jobs:
             echo "CRON_SECRET repo secret not configured — skipping."
             exit 0
           fi
-          BASE="${PRODUCTION_URL:-https://magyarsportonline.hu}"
+          BASE="${PRODUCTION_URL:-https://mso24.hu}"
           echo "Target: $BASE"
           http_code=$(curl -sS -o /tmp/ingest-body.json -w '%{http_code}' \
             --max-time 60 --retry 2 --retry-delay 5 \
@@ -49,7 +49,7 @@ jobs:
           if [ -z "${CRON_SECRET:-}" ]; then
             exit 0
           fi
-          BASE="${PRODUCTION_URL:-https://magyarsportonline.hu}"
+          BASE="${PRODUCTION_URL:-https://mso24.hu}"
           # Call the worker repeatedly until it reports no jobs left to
           # process (processed=0) or a sane iteration cap is hit — one call
           # only drains what fits in its own ~40s budget (see

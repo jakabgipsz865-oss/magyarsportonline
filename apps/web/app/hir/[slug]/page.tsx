@@ -6,7 +6,7 @@ import { deduplication } from "@magyarsportonline/agents";
 import { MediaThumb } from "../../../components/media-thumb";
 import { SiteFooter } from "../../../components/site-footer";
 import { StoryRiver } from "../../../components/story-river";
-import { createRepositories } from "../../../lib/db";
+import { createPublicRepositories } from "../../../lib/db";
 import { env } from "../../../lib/env";
 import { entitySlug } from "../../../lib/entity-slug";
 import { pickRelatedStories } from "../../../lib/related-stories";
@@ -24,7 +24,7 @@ interface PageProps {
 }
 
 const loadStory = cache(async (slug: string) => {
-  const { storyReadModelRepository } = createRepositories();
+  const { storyReadModelRepository } = createPublicRepositories();
   const row = await storyReadModelRepository.getBySlug(slug);
   return row ? toStoryDetailView(row) : null;
 });
@@ -41,6 +41,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     alternates: { canonical: `/hir/${story.slug}` },
     openGraph: {
       type: "article",
+      siteName: "MSO24",
       title: story.title,
       description: story.metaDescription ?? story.lead,
       url: `/hir/${story.slug}`,
@@ -149,7 +150,7 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
     notFound();
   }
 
-  const { storyReadModelRepository, entityRepository } = createRepositories();
+  const { storyReadModelRepository, entityRepository } = createPublicRepositories();
   const [candidateRows, entities] = await Promise.all([
     storyReadModelRepository.listPublished({ limit: RELATED_CANDIDATES_LIMIT, offset: 0 }),
     entityRepository.listAll(),
