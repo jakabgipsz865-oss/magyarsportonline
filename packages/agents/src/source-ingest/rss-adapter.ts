@@ -62,7 +62,18 @@ export function createDefaultParser(): RssParserLike {
         signal: AbortSignal.timeout(8_000),
       });
       if (!response.ok) throw new Error(`RSS HTTP ${response.status} from ${url}`);
-      return parser.parseString(await response.text());
+      const body = await response.text();
+      const beginning = body
+        .slice(0, 512)
+        .replace(/^\uFEFF/, "")
+        .trimStart();
+      if (/^(?:<!doctype\s+html\b|<html(?:\s|>))/i.test(beginning)) {
+        const contentType = response.headers.get("content-type") ?? "missing";
+        throw new Error(
+          `RSS response is HTML (HTTP ${response.status}, Content-Type ${contentType}) from ${response.url || url}`,
+        );
+      }
+      return parser.parseString(body);
     },
   });
 }
