@@ -19,7 +19,8 @@ export class D1SourceIngestRepository {
       SELECT id, name, language, fetch_config FROM sources
       WHERE is_active = 1 AND (
         last_fetched_at IS NULL OR polling_frequency_minutes IS NULL OR
-        julianday(last_fetched_at) <= julianday(?) - polling_frequency_minutes / 1440.0
+        julianday(strftime('%Y-%m-%dT%H:%M:00Z', last_fetched_at)) <=
+          julianday(strftime('%Y-%m-%dT%H:%M:00Z', ?)) - polling_frequency_minutes / 1440.0
       )
       ORDER BY last_fetched_at IS NOT NULL, julianday(last_fetched_at), id
     `).bind(d1Timestamp(now)).all<SourceRow>();

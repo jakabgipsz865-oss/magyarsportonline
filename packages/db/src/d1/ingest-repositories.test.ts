@@ -105,6 +105,10 @@ describe("D1 RSS receipt and full-article job", () => {
 
       await sources.recordFetchResult(sourceId, { status: "ok", fetchedAt: new Date("2026-09-28T12:02:00Z") });
       expect(await sources.listActive(new Date("2026-09-28T12:02:30Z"))).toEqual([]);
+      // A one-minute feed is eligible on the next minute boundary even when
+      // the previous fetch completed partway through its minute.
+      expect((await sources.listActive(new Date("2026-09-28T12:03:00Z"))).map(source => source.id))
+        .toEqual([sourceId]);
       expect((await sources.listActive(new Date("2026-09-28T12:04:00Z"))).map(source => source.id))
         .toEqual([sourceId]);
     } finally {

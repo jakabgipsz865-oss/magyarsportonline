@@ -601,6 +601,7 @@ export async function ingestTabloid(repos: TabloidIngestRepositories = createIng
           }
           const persistStartedAt = Date.now();
           for (const article of articles) {
+            const firstSeenAt = new Date();
             seenCount++;
             const accepted = tabloid.isFootballTabloid(
               article.titleOriginal,
@@ -627,7 +628,7 @@ export async function ingestTabloid(repos: TabloidIngestRepositories = createIng
                 rssTitle: article.titleOriginal,
                 rssDescription: article.bodyOriginal,
                 rssGuid: article.guid ?? article.sourceUrl,
-                firstSeenAt: new Date(),
+                firstSeenAt,
                 processingStatus: accepted ? "awaiting_full_article" : "rejected_topic",
                 decisionReason: accepted ? "awaiting_processing_capacity" : "topic_filter",
                 processingAvailableAt: accepted ? new Date() : null,
