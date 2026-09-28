@@ -12,7 +12,7 @@ import {
   isGeminiDefinitelyUnmeteredError,
   type LlmClient,
 } from "@magyarsportonline/llm";
-import { createRepositories } from "./db";
+import { createLlmUsageRepository } from "./db";
 import { env } from "./env";
 import { getLogger } from "./logger";
 
@@ -24,7 +24,7 @@ class MonthlyBudgetCappedLlmClient implements LlmClient {
   constructor(
     private readonly inner: LlmClient,
     private readonly monthlyBudgetUsd: number,
-    private readonly usage: ReturnType<typeof createRepositories>["llmUsageRepository"],
+    private readonly usage: ReturnType<typeof createLlmUsageRepository>,
   ) {}
   get modelLabel() {
     return this.inner.modelLabel;
@@ -71,7 +71,7 @@ export function getFactLlmClient(): LlmClient {
       }),
       fallback: new NoLlmClient(),
       providerName: "cloudflare",
-      usageSink: createRepositories().llmUsageRepository,
+      usageSink: createLlmUsageRepository(),
       estimateCostUsd: estimateCloudflareCostUsd,
       describeError: describeCloudflareError,
       logger: getLogger(),
@@ -115,7 +115,7 @@ function createGeminiWriter(model: string): LlmClient {
           baseUrl: env.GEMINI_BASE_URL!,
           gatewayToken: env.CLOUDFLARE_AI_GATEWAY_TOKEN!,
         });
-  const repos = createRepositories();
+  const usage = createLlmUsageRepository();
   const failClosed = new ProviderFallbackLlmClient({
     inner: geminiClient,
     fallback: new NoLlmClient(),
@@ -131,14 +131,14 @@ function createGeminiWriter(model: string): LlmClient {
     failClosed,
     "gemini",
     env.GEMINI_DAILY_REQUEST_CAP,
-    repos.llmUsageRepository,
+    usage,
     isGeminiDefinitelyUnmeteredError,
     estimateGeminiCostUsd,
   );
   return new MonthlyBudgetCappedLlmClient(
     cappedGemini,
     env.GEMINI_MONTHLY_BUDGET_USD,
-    repos.llmUsageRepository,
+    usage,
   );
 }
 

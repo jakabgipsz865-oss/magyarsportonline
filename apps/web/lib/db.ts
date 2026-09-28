@@ -28,6 +28,7 @@ import {
   D1PublicCategoryRepository,
   D1PublicEntityRepository,
   D1PipelineJobRepository,
+  D1LlmUsageRepository,
   D1RawArticleIngestRepository,
   D1SocialPostRepository,
   D1SourceIngestRepository,
@@ -149,6 +150,12 @@ export function createPublicRepositories() {
 export function createSocialPostRepository() {
   const d1 = d1Binding();
   return d1 ? new D1SocialPostRepository(d1) : createRepositories().socialPostRepository;
+}
+
+/** Metering and hard request caps follow the active database binding. */
+export function createLlmUsageRepository() {
+  const d1 = d1Binding();
+  return d1 ? new D1LlmUsageRepository(d1) : createRepositories().llmUsageRepository;
 }
 
 /** RSS receipt and full-page fetch use D1 without enabling the Writer path. */
