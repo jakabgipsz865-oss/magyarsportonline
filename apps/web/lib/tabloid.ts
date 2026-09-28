@@ -591,9 +591,18 @@ export async function ingestTabloid(repos: TabloidIngestRepositories = createIng
           const feeds = await timedPipelineStage("rss_fetch", { sourceId: source.id }, () => Promise.allSettled(
             (config.feedUrls ?? [config.url]).map((url) => adapter.fetch({ url })),
           ));
+          const firstSeenAt = new Date();
           const articles = feeds.flatMap((result) =>
             result.status === "fulfilled" ? result.value : [],
           );
+          if (source.id === "98941b64-9c63-4996-a4da-c5a02a1f2de3") {
+            getLogger().info({
+              sourceId: source.id,
+              observedAt: firstSeenAt.toISOString(),
+              itemUrlHashes: articles.map((article) => createHash("sha256")
+                .update(article.sourceUrl).digest("hex").slice(0, 16)),
+            }, "RSS item observation for Gazzetta timing verification");
+          }
           if (feeds.every((result) => result.status === "rejected")) {
             const reasons = feeds.map((result) => result.status === "rejected"
               ? result.reason instanceof Error ? result.reason.message : String(result.reason)
@@ -602,7 +611,6 @@ export async function ingestTabloid(repos: TabloidIngestRepositories = createIng
           }
           const persistStartedAt = Date.now();
           for (const article of articles) {
-            const firstSeenAt = new Date();
             seenCount++;
             const accepted = tabloid.isFootballTabloid(
               article.titleOriginal,
