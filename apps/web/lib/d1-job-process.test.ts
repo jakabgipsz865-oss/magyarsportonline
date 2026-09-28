@@ -4,8 +4,9 @@ import { createHash } from "node:crypto";
 import type { DatabaseSync as DatabaseSyncType } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
 import type { D1Client, D1Statement } from "@magyarsportonline/db/d1";
-import { D1PipelineJobRepository, D1RawArticleIngestRepository, D1StoryReadModelRepository } from "@magyarsportonline/db/d1";
+import { D1LlmUsageRepository, D1PipelineJobRepository, D1RawArticleIngestRepository, D1StoryReadModelRepository } from "@magyarsportonline/db/d1";
 import type { LlmClient } from "@magyarsportonline/llm";
+import { DailyRequestCappedLlmClient } from "@magyarsportonline/llm";
 import { tabloid } from "@magyarsportonline/agents";
 import { processOneD1Job } from "./d1-job-process";
 
@@ -273,6 +274,50 @@ describe("D1 full article publication", () => {
       expect((await processOneD1Job(d1, options, mock.client, mock.client)).outcome)
         .toMatchObject({ status: "review" });
       expect(mock.completeJson).toHaveBeenCalledTimes(1);
+      expect((db.prepare("SELECT count(*) AS n FROM story_versions").get() as { n: number }).n).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("meters a mock provider through D1 and stops a second new Story at the daily cap", async () => {
+    const { db, d1 } = fixture();
+    try {
+      const now = new Date();
+      const jobs = new D1PipelineJobRepository(d1);
+      for (const suffix of ["first", "second"]) {
+        const rawId = crypto.randomUUID();
+        db.prepare(`INSERT INTO raw_articles (id,source_id,source_url,title_original,body_original,
+          language,content_origin,inline_images,extracted_entities,first_seen_at)
+          VALUES (?,?,?,?,?,'en','full_article','[]','{}',?)`)
+          .run(rawId, SOURCE_ID, `https://example.com/football-${suffix}`,
+            `Arsenal football signing ${suffix}`,
+            "Arsenal announced a new football signing. The club said the player joined the team.",
+            now.toISOString());
+        await jobs.enqueue({
+          id: crypto.randomUUID(), correlation_id: crypto.randomUUID(),
+          trace_id: crypto.randomUUID(), occurred_at: now.toISOString(), version: 1,
+          type: "source/article.ingested", payload: { raw_article_id: rawId, source_id: SOURCE_ID },
+        });
+      }
+      const mock = writer();
+      const capped = new DailyRequestCappedLlmClient(
+        mock.client, "gemini", 1, new D1LlmUsageRepository(d1), () => false,
+        () => 0.001,
+      );
+      const options = {
+        activationAt: new Date(now.getTime() - 60_000),
+        siteUrl: "https://mso24.hu", forceReviewMode: false,
+        facebookEnabled: false, facebookStartAt: now,
+      };
+      expect((await processOneD1Job(d1, options, capped, capped)).outcome)
+        .toMatchObject({ status: "published" });
+      const second = await processOneD1Job(d1, options, capped, capped);
+      expect(second).toMatchObject({ processed: 1, quotaDeferred: true });
+      expect(mock.completeJson).toHaveBeenCalledTimes(1);
+      expect((db.prepare("SELECT count(*) AS n FROM llm_usage").get() as { n: number }).n).toBe(1);
+      expect((db.prepare("SELECT sum(cost_usd) AS cost FROM llm_usage").get() as { cost: number }).cost)
+        .toBeCloseTo(0.001);
       expect((db.prepare("SELECT count(*) AS n FROM story_versions").get() as { n: number }).n).toBe(1);
     } finally {
       db.close();

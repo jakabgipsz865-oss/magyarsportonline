@@ -51,7 +51,7 @@ RSS-t és Writer-választ használt; nem az éles adatállomány egyeztetése.
 
 ## Helyi regresszió és hibatűrés
 
-- 62/62 adatbázis-, 537/537 agent- és 109/109 webteszt sikeres.
+- 62/62 adatbázis-, 537/537 agent- és 110/110 webteszt sikeres.
   Hat PostgreSQL-integrációs teszt élő Neon-kapcsolat hiányában kihagyva.
 - A D1 teljesfolyamat-tesztek igazolják az egyetlen Facebook social intentet
   `https://mso24.hu/hir/...` linkkel, a megismételt job idempotenciáját,
@@ -59,7 +59,11 @@ RSS-t és Writer-választ használt; nem az éles adatállomány egyeztetése.
   a Writer-hiba utáni backoffos újrapróbálást, valamint a nem igazolt számszerű
   állítás kézi review-ba irányítását publikáció és Facebook intent nélkül.
   A dead-letter ellenőrzés és kézi requeue D1-útvonala kizárja az importált,
-  aktiválási határ előtti jobokat.
+  aktiválási határ előtti jobokat. Egy teljes D1 jobfolyamat-teszt a mock
+  provider előtt a valódi D1 napi híváslimit-adaptert használta: egy
+  naplózott, becsült költségű hívás után a második új Story Writer-hívása
+  el sem indult, a job kvótahaladékot kapott. Ez a limit integrációját
+  bizonyítja, de nem valódi Gemini-hívást.
 - Az RSS parser natív Workers `fetch` útvonala, a D1 költségnapló/napi
   híváslimit, valamint a DB, agents és web TypeScript ellenőrzése sikeres.
   A web és agent módosított fájlok ESLint-ellenőrzése tiszta.
