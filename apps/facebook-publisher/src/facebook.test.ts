@@ -204,6 +204,8 @@ describe("Facebook queue consumer", () => {
     );
     expect(fixture.retry).not.toHaveBeenCalled();
     expect(fixture.ack).toHaveBeenCalledOnce();
+    expect(JSON.stringify(fixture.logger.error.mock.calls)).toContain("Error: timeout");
+    expect(JSON.stringify(fixture.logger.error.mock.calls)).not.toContain(TOKEN);
   });
 
   it("keeps a successful HTTP response without a post ID in ambiguous review", async () => {

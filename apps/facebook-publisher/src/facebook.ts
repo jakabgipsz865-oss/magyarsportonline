@@ -202,7 +202,13 @@ export async function processFacebookMessage(
         signal: AbortSignal.timeout(15_000),
       },
     );
-  } catch {
+  } catch (error) {
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : typeof error;
+    deps.logger.error({
+      reasonCode: "facebook_network_ambiguous",
+      // The token is sent only as an Authorization header and is never logged.
+      fetchError: detail.replace(/[A-Za-z0-9_-]{40,}/gu, "[redacted]").slice(0, 200),
+    }, "Facebook Graph request ended without a response");
     await deps.repository.markFailed(
       claimed.id,
       "facebook_network_ambiguous",
