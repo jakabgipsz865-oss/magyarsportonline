@@ -684,24 +684,13 @@ describe("tabloid publication", () => {
       }),
     ]);
   });
-  it("uses one full Flash fallback only for a technical primary failure", async () => {
+  it("never uses Flash for a technical primary failure", async () => {
     const { repos } = fixtures();
-    mocks.write.mockRejectedValueOnce(new mocks.TechnicalError("schema")).mockResolvedValueOnce({
-      title_hu: "Magyar hír",
-      lead_hu: "Személyes történet.",
-      body_hu: "A játékos a családjáról beszélt.",
-      language_warnings: [],
-      generatedByModel: "gemini-3.5-flash",
-    });
-    await publishTabloid("one", repos);
-    expect(mocks.write).toHaveBeenCalledTimes(2);
+    mocks.write.mockRejectedValueOnce(new mocks.TechnicalError("schema"));
+    await expect(publishTabloid("one", repos)).rejects.toThrow("schema");
+    expect(mocks.write).toHaveBeenCalledTimes(1);
     expect(mocks.write.mock.calls[0]?.[1]).toEqual(
       expect.objectContaining({ usageContext: expect.objectContaining({ role: "primary" }) }),
-    );
-    expect(mocks.write.mock.calls[1]?.[1]).toEqual(
-      expect.objectContaining({
-        usageContext: expect.objectContaining({ role: "technical_fallback" }),
-      }),
     );
     expect(mocks.repair).not.toHaveBeenCalled();
   });

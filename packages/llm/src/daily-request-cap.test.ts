@@ -34,6 +34,7 @@ describe("DailyRequestCappedLlmClient", () => {
       expect.any(Date),
       20,
       undefined,
+      undefined,
     );
     expect(finalizeRequest).not.toHaveBeenCalled();
   });
@@ -76,6 +77,7 @@ describe("DailyRequestCappedLlmClient", () => {
       expect.any(Date),
       450,
       usageContext,
+      undefined,
     );
     expect(finalizeRequest).toHaveBeenCalledWith("reservation-id", 100, 20, 0.0042);
   });

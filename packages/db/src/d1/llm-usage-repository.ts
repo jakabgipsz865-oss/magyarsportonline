@@ -51,19 +51,32 @@ export class D1LlmUsageRepository {
   async reserveRequest(
     provider: string, model: string, since: Date, cap: number,
     context?: { role: string; rawArticleId?: string; storyId?: string; jobId?: string },
+    budget?: { since: Date; capUsd: number; externalSpentUsd: number; reserveUsd: number },
   ): Promise<string | null> {
     if (cap <= 0) return null;
+    if (budget && (!Number.isFinite(budget.capUsd) || !Number.isFinite(budget.externalSpentUsd) ||
+      !Number.isFinite(budget.reserveUsd) || budget.capUsd <= 0 ||
+      budget.externalSpentUsd < 0 || budget.reserveUsd <= 0))
+      throw new Error("Invalid monthly AI budget reservation");
     const id = crypto.randomUUID();
+    const reserveUsd = budget ? Math.ceil(budget.reserveUsd * 1_000_000) / 1_000_000 : 0;
     const result = await this.db.prepare(`
       INSERT INTO llm_usage (id, provider, model, input_tokens, output_tokens,
         cost_usd, role, status, raw_article_id, story_id, job_id, occurred_at)
-      SELECT ?, ?, ?, 0, 0, '0.000000', ?, 'reserved', ?, ?, ?, ?
+      SELECT ?, ?, ?, 0, 0, ?, ?, 'reserved', ?, ?, ?, ?
       WHERE (SELECT count(*) FROM llm_usage
         WHERE provider = ? AND occurred_at >= ?) < ?
-    `).bind(id, provider, model, context?.role ?? "unspecified",
+        AND (? IS NULL OR
+          (SELECT coalesce(sum(CAST(cost_usd AS REAL)),0) FROM llm_usage
+            WHERE occurred_at>=?) + ? + ? <= ?)
+    `).bind(id, provider, model, reserveUsd.toFixed(6),
+      context?.role ?? "unspecified",
       context?.rawArticleId ?? null, context?.storyId ?? null,
       context?.jobId ?? null, d1Timestamp(new Date()), provider,
-      d1Timestamp(since), cap).run();
+      d1Timestamp(since), cap,
+      budget ? d1Timestamp(budget.since) : null,
+      d1Timestamp(budget?.since ?? since), budget?.externalSpentUsd ?? 0,
+      reserveUsd, budget?.capUsd ?? 0).run();
     return result.meta.changes === 1 ? id : null;
   }
 

@@ -9,13 +9,12 @@ import {
   type TabloidSourceMode,
 } from "@magyarsportonline/shared";
 import { revalidatePath } from "next/cache";
-import { createIngestRepositories, createRepositories, type Repositories } from "./db";
+import { createIngestRepositories, createRepositories, d1Binding, type Repositories } from "./db";
 import { env } from "./env";
 import { getWriterLlmClient, getWriterRepairLlmClient } from "./llm";
 import { getLogger } from "./logger";
 import { buildFacebookPostText, enqueueFacebookPublicationSafely } from "./facebook-publication";
 import { timedPipelineStage } from "./pipeline-timing";
-import { getD1StagingWriter } from "./d1-staging-writer";
 import { getCloudflareContext } from "@opennextjs/cloudflare/cloudflare-context";
 import registry from "./tabloid-sources.json";
 
@@ -65,7 +64,12 @@ export class TabloidWriterBusyError extends Error {
 }
 
 function e2eFeedBinding(): { fetch(request: Request): Promise<Response> } {
-  getD1StagingWriter(); // validates the D1-only workers.dev staging boundary
+  if (!env.D1_TEST_SOURCE_ORIGIN || !d1Binding() ||
+      !new URL(env.SITE_URL).hostname.endsWith(".workers.dev") ||
+      !new URL(env.D1_TEST_SOURCE_ORIGIN).hostname.endsWith(".workers.dev") ||
+      env.FACEBOOK_AUTO_PUBLISH || env.DATABASE_URL) {
+    throw new Error("D1 E2E feed is only allowed in D1-only workers.dev staging");
+  }
   const binding = (getCloudflareContext().env as unknown as {
     E2E_FEED?: { fetch(request: Request): Promise<Response> };
   }).E2E_FEED;
@@ -74,7 +78,7 @@ function e2eFeedBinding(): { fetch(request: Request): Promise<Response> } {
 }
 
 function feedParserForActiveRuntime(): sourceIngest.RssParserLike {
-  if (!env.D1_TEST_WRITER_OUTPUT) return sourceIngest.createDefaultParser();
+  if (!env.D1_TEST_SOURCE_ORIGIN) return sourceIngest.createDefaultParser();
   const feed = e2eFeedBinding();
   const parser = sourceIngest.createDefaultParser() as sourceIngest.RssParserLike & {
     parseString(xml: string): ReturnType<sourceIngest.RssParserLike["parseURL"]>;
@@ -91,7 +95,7 @@ function feedParserForActiveRuntime(): sourceIngest.RssParserLike {
 }
 
 function articleFetcherForActiveRuntime() {
-  if (!env.D1_TEST_WRITER_OUTPUT) return new sourceIngest.ArticleFetcher();
+  if (!env.D1_TEST_SOURCE_ORIGIN) return new sourceIngest.ArticleFetcher();
   const feed = e2eFeedBinding();
   const allowedHost = new URL(env.D1_TEST_SOURCE_ORIGIN!).hostname;
   const htmlFetcher = { fetch: async (url: string) => {
@@ -274,19 +278,8 @@ export async function publishTabloid(
             ...(options.jobId ? { jobId: options.jobId } : {}),
           },
         };
-        let result: Awaited<ReturnType<typeof tabloid.writeTabloid>>;
-        let technicalFallback = false;
-        try {
-          result = await timedPipelineStage("writer", storyTiming, () =>
-            tabloid.writeTabloid(getWriterLlmClient(), writerInput));
-        } catch (error) {
-          if (!(error instanceof tabloid.TabloidTechnicalError)) throw error;
-          technicalFallback = true;
-          result = await timedPipelineStage("writer_technical_fallback", storyTiming, () => tabloid.writeTabloid(getWriterRepairLlmClient(), {
-            ...writerInput,
-            usageContext: { ...writerInput.usageContext, role: "technical_fallback" },
-          }));
-        }
+        const result = await timedPipelineStage("writer", storyTiming, () =>
+          tabloid.writeTabloid(getWriterLlmClient(), writerInput));
 
         // Persist the successful model response before any quality repair,
         // projection, social enqueue, or publication step can fail. Retries
@@ -298,9 +291,7 @@ export async function publishTabloid(
           changeSummaryHu: options.forceRewrite
             ? "A forrás részletesebb feldolgozása és a forrásképek beágyazása."
             : null,
-          generatedByModel: technicalFallback
-            ? tabloid.TABLOID_REPAIR_MODEL
-            : result.generatedByModel,
+          generatedByModel: result.generatedByModel,
           isAiGenerated: true,
           promptVersion: tabloid.TABLOID_PROMPT,
           factConsistencyScore: 0,
@@ -320,7 +311,7 @@ export async function publishTabloid(
         let finalResult = result;
         let repairStatus: "not_needed" | "success" | "failed" = "not_needed";
 
-        if (initialFlags.length > 0 && !technicalFallback) {
+        if (initialFlags.length > 0) {
           await saveDraft(version.id, {
             titleHu: result.title_hu,
             leadHu: result.lead_hu,
@@ -408,9 +399,6 @@ export async function publishTabloid(
               repaired: repairStatus === "success",
               repairStatus,
             })),
-            ...(technicalFallback
-              ? [{ kind: "hard", code: "technical_schema_failure", field: "body", repaired: true }]
-              : []),
           ],
         });
         version = await repos.storyVersionRepository.getById(version.id);

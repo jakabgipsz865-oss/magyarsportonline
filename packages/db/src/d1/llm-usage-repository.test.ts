@@ -36,6 +36,34 @@ function fixture(): { db: DatabaseSyncType; d1: D1Client } {
 }
 
 describe("D1 LLM usage guard", () => {
+  it("holds shared monthly cost for in-flight primary and repair calls", async () => {
+    const { db, d1 } = fixture();
+    try {
+      const usage = new D1LlmUsageRepository(d1);
+      const since = new Date(Date.now() - 60_000);
+      await usage.insert({ provider: "cloudflare", model: "fact", inputTokens: 1,
+        outputTokens: 1, costUsd: 0.003, occurredAt: new Date() });
+      const budget = { since, capUsd: 0.015, externalSpentUsd: 0.005,
+        reserveUsd: 0.004 };
+      const [primary, repair] = await Promise.all([
+        usage.reserveRequest("gemini", "gemini-3.5-flash-lite", since, 10,
+          { role: "primary" }, budget),
+        usage.reserveRequest("gemini", "gemini-3.5-flash", since, 10,
+          { role: "targeted_repair" }, budget),
+      ]);
+      expect([primary, repair].filter(Boolean)).toHaveLength(1);
+      expect(await usage.sumCostUsdSince(since)).toBeCloseTo(0.007);
+      const held = primary ?? repair;
+      if (!held) throw new Error("Expected one reservation");
+      await usage.finalizeRequest(held, 100, 50, 0.002);
+      expect(await usage.sumCostUsdSince(since)).toBeCloseTo(0.005);
+      expect(await usage.reserveRequest("gemini", "gemini-3.5-flash", since, 10,
+        { role: "targeted_repair" }, budget)).toBeTruthy();
+    } finally {
+      db.close();
+    }
+  });
+
   it("reserves within a cap, counts failed calls, and releases only unused requests", async () => {
     const { db, d1 } = fixture();
     try {

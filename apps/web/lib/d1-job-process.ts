@@ -3,11 +3,17 @@ import { D1PipelineJobRepository, type D1Client } from "@magyarsportonline/db/d1
 import {
   delayUntilNextGeminiQuotaReset, isDailyLlmQuotaError,
   isGeminiDailyQuotaError, type LlmClient,
+  MonthlyLlmBudgetError,
 } from "@magyarsportonline/llm";
 import { publishD1Tabloid, type D1PublicationOptions } from "./d1-tabloid";
 
 const STALE_LOCK_MS = 10 * 60_000;
 const GEMINI_DAILY_QUOTA_ERROR_PREFIX = "[daily_ai_quota:gemini]";
+const GEMINI_MONTHLY_BUDGET_ERROR_PREFIX = "[monthly_ai_budget:gemini]";
+
+function delayUntilNextUtcMonth(now = new Date()): number {
+  return Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 5) - now.getTime();
+}
 
 /** Claims one post-cutover job; imported historical jobs remain untouched. */
 export async function processOneD1Job(
@@ -20,6 +26,13 @@ export async function processOneD1Job(
   if (activeQuotaDeferral) {
     return { processed: 0, quotaDeferred: true,
       retryAt: activeQuotaDeferral.toISOString(),
+      queue: await jobs.getStatusCounts(new Date(), options.activationAt) };
+  }
+  const monthlyDeferral = await jobs.findActiveDeferral(
+    GEMINI_MONTHLY_BUDGET_ERROR_PREFIX, options.activationAt);
+  if (monthlyDeferral) {
+    return { processed: 0, budgetDeferred: true,
+      retryAt: monthlyDeferral.toISOString(),
       queue: await jobs.getStatusCounts(new Date(), options.activationAt) };
   }
   const [job] = await jobs.claimBatch(1, STALE_LOCK_MS, new Date(), options.activationAt);
@@ -40,6 +53,14 @@ export async function processOneD1Job(
       queue: await jobs.getStatusCounts(new Date(), options.activationAt) };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (error instanceof MonthlyLlmBudgetError) {
+      const delayMs = delayUntilNextUtcMonth();
+      await jobs.deferWithoutAttempt(job.id, owner,
+        `${GEMINI_MONTHLY_BUDGET_ERROR_PREFIX} ${message}`, delayMs);
+      return { processed: 1, budgetDeferred: true,
+        retryAt: new Date(Date.now() + delayMs).toISOString(),
+        queue: await jobs.getStatusCounts(new Date(), options.activationAt) };
+    }
     if (message === "D1 Writer lease is active") {
       await jobs.deferWithoutAttempt(job.id, owner, `[writer_lease_active] ${message}`, 60_000);
       return { processed: 1, deferred: true,

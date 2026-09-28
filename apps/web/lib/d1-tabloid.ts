@@ -60,7 +60,8 @@ function writerInput(raw: RawRow, source: SourceRow, knowledge: Array<{ instruct
   };
 }
 
-async function relevantKnowledge(db: D1Client, raw: RawRow) {
+export async function relevantD1Knowledge(db: D1Client,
+  raw: Pick<RawRow, "language" | "title_original" | "body_original">) {
   const rows = await db.prepare(`
     SELECT instruction_hu, avoid_hu, source_phrase, match_terms, contexts, knowledge_type
     FROM editorial_knowledge_entries
@@ -101,6 +102,17 @@ async function updateDraft(db: D1Client, versionId: string, claim: Claim,
   if (!changed) throw new Error("D1 draft claim expired before save");
 }
 
+async function claimTargetedRepair(db: D1Client, version: VersionRow, claim: Claim,
+  flags: tabloid.TabloidQualityFlag[]): Promise<void> {
+  const pending = flags.map(flag => ({ ...flag, repaired: false, repairStatus: "pending" }));
+  const acquired = await db.prepare(`UPDATE story_versions SET quality_issues=?
+    WHERE id=? AND is_published=0 AND quality_issues=? AND EXISTS
+      (SELECT 1 FROM pipeline_jobs WHERE id=? AND status='in_progress' AND claim_owner=?)
+    RETURNING id`).bind(JSON.stringify(pending), version.id, version.quality_issues,
+      claim.jobId, claim.owner).first<{ id: string }>();
+  if (!acquired) throw new Error("D1 Writer lease is active");
+}
+
 async function ensureReview(db: D1Client, storyId: string, versionId: string, claim: Claim,
   reason: "content_quality_failed" | "force_review_mode" = "content_quality_failed") {
   await db.prepare(`
@@ -113,7 +125,7 @@ async function ensureReview(db: D1Client, storyId: string, versionId: string, cl
     claim.jobId, claim.owner, versionId, reason).run();
 }
 
-async function project(db: D1Client, storyId: string, versionId: string) {
+export async function projectD1Story(db: D1Client, storyId: string, versionId: string) {
   const story = await db.prepare("SELECT * FROM stories WHERE id=?").bind(storyId).first<StoryRow>();
   const versions = await db.prepare("SELECT * FROM story_versions WHERE story_id=? ORDER BY version_number")
     .bind(storyId).all<VersionRow>();
@@ -211,7 +223,7 @@ export async function publishD1Tabloid(
 
   let version = await latestVersion(db, storyId);
   if (version && version.prompt_version !== tabloid.TABLOID_PROMPT) return { status: "skipped", storyId };
-  const knowledge = await relevantKnowledge(db, raw);
+  const knowledge = await relevantD1Knowledge(db, raw);
   let freshlyWritten: tabloid.TabloidOutput | null = null;
   if (!version) {
     const expiresAt = d1Timestamp(new Date((options.now ?? new Date()).getTime() + 10 * 60_000));
@@ -227,15 +239,10 @@ export async function publishD1Tabloid(
       version = await latestVersion(db, storyId);
       if (!version) {
         const input = writerInput(raw, source, knowledge, claim, storyId);
-        let output: tabloid.TabloidOutput;
-        try {
-          output = await tabloid.writeTabloid(llm, input);
-        } catch (error) {
-          if (!(error instanceof tabloid.TabloidTechnicalError)) throw error;
-          output = await tabloid.writeTabloid(repairLlm, {
-            ...input, usageContext: { ...input.usageContext, role: "technical_fallback" },
-          });
-        }
+        // A provider/schema/network failure is retried through the durable
+        // job with the inexpensive primary model. It must never invoke the
+        // costly repair model for a full-article regeneration.
+        const output = await tabloid.writeTabloid(llm, input);
         freshlyWritten = output;
         const versionId = crypto.randomUUID();
         const statements = [
@@ -280,8 +287,7 @@ export async function publishD1Tabloid(
     };
     let flags = initial.map(flag => ({ ...flag, repaired: false }));
     if (initial.length && freshlyWritten && initial.every(flag => repairable.has(flag.code))) {
-      await updateDraft(db, version.id, claim, output,
-        initial.map(flag => ({ ...flag, repaired: false, repairStatus: "pending" })));
+      await claimTargetedRepair(db, version, claim, initial);
       try {
         const repaired = await tabloid.repairTabloid(repairLlm, freshlyWritten, initial,
           { role: "targeted_repair", rawArticleId: raw.id, storyId, jobId: claim.jobId });
@@ -357,6 +363,6 @@ export async function publishD1Tabloid(
     canonicalUrl, claim.jobId, claim.owner, storyId, version.id));
   const result = await db.batch(statements);
   if (result[1]?.meta.changes !== 1) return { status: "skipped", storyId, versionId: version.id };
-  await project(db, storyId, version.id);
+  await projectD1Story(db, storyId, version.id);
   return { status: "published", storyId, versionId: version.id, slug };
 }

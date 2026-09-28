@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   isDailyLlmQuotaError,
   isGeminiDailyQuotaError,
+  MonthlyLlmBudgetError,
   type LlmClient,
   type LlmUsageContext,
 } from "@magyarsportonline/llm";
@@ -337,7 +338,8 @@ export async function writeTabloid(
       ...(input.usageContext ? { usageContext: input.usageContext } : {}),
     });
   } catch (error) {
-    if (isDailyLlmQuotaError(error) || isGeminiDailyQuotaError(error)) throw error;
+    if (isDailyLlmQuotaError(error) || isGeminiDailyQuotaError(error) ||
+      error instanceof MonthlyLlmBudgetError) throw error;
     throw new TabloidTechnicalError("Tabloid writer provider or schema failure", { cause: error });
   }
   if (result.isFallback) throw new TabloidTechnicalError("Tabloid writer returned a fallback");
@@ -374,10 +376,23 @@ export async function repairTabloid(
   usageContext: LlmUsageContext,
 ): Promise<TabloidOutput> {
   const fields = new Set(flags.map((flag) => flag.field));
+  const paragraphs = output.body_hu.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean);
+  const bodyFlags = flags.filter(flag => flag.field === "body");
+  const bodyIndices = bodyFlags.map(flag => {
+    if (!flag.detail || paragraphs.length < 2) return -1;
+    const matches = paragraphs.flatMap((part, index) =>
+      part.toLocaleLowerCase("hu-HU").includes(flag.detail!.toLocaleLowerCase("hu-HU"))
+        ? [index] : []);
+    return matches.length === 1 ? matches[0]! : -1;
+  });
+  const bodyIndex = bodyIndices[0];
+  if (bodyFlags.length && (bodyIndex === undefined || bodyIndex < 0 ||
+    bodyIndices.some(index => index !== bodyIndex)))
+    throw new Error("Targeted repair requires one identifiable body paragraph");
   const fragments = {
     ...(fields.has("title") ? { title_hu: output.title_hu } : {}),
     ...(fields.has("lead") ? { lead_hu: output.lead_hu } : {}),
-    ...(fields.has("body") ? { body_hu: output.body_hu } : {}),
+    ...(fields.has("body") ? { body_hu: paragraphs[bodyIndex!]! } : {}),
   };
   const result = await llm.completeJson({
     model: TABLOID_REPAIR_MODEL,
@@ -414,7 +429,8 @@ export async function repairTabloid(
     ...output,
     title_hu: repaired.title_hu ?? output.title_hu,
     lead_hu: repaired.lead_hu ?? output.lead_hu,
-    body_hu: paragraphizeBody(repaired.body_hu ?? output.body_hu),
+    body_hu: bodyIndex === undefined ? output.body_hu :
+      paragraphs.map((part, index) => index === bodyIndex ? repaired.body_hu! : part).join("\n\n"),
     language_warnings: [],
     generatedByModel: output.generatedByModel,
   };

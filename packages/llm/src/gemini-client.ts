@@ -145,6 +145,14 @@ interface GeminiGenerateContentResponse {
   promptFeedback?: { blockReason?: string };
 }
 
+function billedOutputTokens(usage: GeminiGenerateContentResponse["usageMetadata"]): number {
+  if (!usage) return 0;
+  return Math.max(
+    (usage.candidatesTokenCount ?? 0) + (usage.thoughtsTokenCount ?? 0),
+    (usage.totalTokenCount ?? 0) - (usage.promptTokenCount ?? 0),
+  );
+}
+
 interface CloudflareAiRunEnvelope {
   result?: GeminiGenerateContentResponse;
   success?: boolean;
@@ -240,7 +248,7 @@ export class GeminiLlmClient implements LlmClient {
     return {
       text: extractText(response),
       inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
-      outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
+      outputTokens: billedOutputTokens(response.usageMetadata),
       modelLabel: this.model,
     };
   }
@@ -263,13 +271,13 @@ export class GeminiLlmClient implements LlmClient {
     );
     const meteredUsage = {
       inputTokens: usage?.promptTokenCount ?? 0,
-      outputTokens: usage?.candidatesTokenCount ?? 0,
+      outputTokens: billedOutputTokens(usage),
     };
     if (finishReason === "MAX_TOKENS") {
       throw new GeminiApiError(
         200,
         "OUTPUT_TRUNCATED",
-        `Gemini output truncated (promptTokens=${meteredUsage.inputTokens}, thoughtsTokens=${usage?.thoughtsTokenCount ?? 0}, candidateTokens=${meteredUsage.outputTokens}, totalTokens=${usage?.totalTokenCount ?? 0})`,
+        `Gemini output truncated (promptTokens=${meteredUsage.inputTokens}, thoughtsTokens=${usage?.thoughtsTokenCount ?? 0}, candidateTokens=${usage?.candidatesTokenCount ?? 0}, billedOutputTokens=${meteredUsage.outputTokens}, totalTokens=${usage?.totalTokenCount ?? 0})`,
         meteredUsage,
         finishReason,
       );
@@ -281,7 +289,7 @@ export class GeminiLlmClient implements LlmClient {
       throw new GeminiApiError(
         200,
         "INVALID_SCHEMA",
-        `Gemini returned malformed JSON (finishReason=${finishReason ?? "UNKNOWN"}, promptTokens=${meteredUsage.inputTokens}, thoughtsTokens=${usage?.thoughtsTokenCount ?? 0}, candidateTokens=${meteredUsage.outputTokens}, totalTokens=${usage?.totalTokenCount ?? 0})`,
+        `Gemini returned malformed JSON (finishReason=${finishReason ?? "UNKNOWN"}, promptTokens=${meteredUsage.inputTokens}, thoughtsTokens=${usage?.thoughtsTokenCount ?? 0}, candidateTokens=${usage?.candidatesTokenCount ?? 0}, billedOutputTokens=${meteredUsage.outputTokens}, totalTokens=${usage?.totalTokenCount ?? 0})`,
         meteredUsage,
         finishReason,
       );
@@ -289,7 +297,7 @@ export class GeminiLlmClient implements LlmClient {
     return {
       data,
       inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
-      outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
+      outputTokens: billedOutputTokens(response.usageMetadata),
       modelLabel: this.model,
     };
   }

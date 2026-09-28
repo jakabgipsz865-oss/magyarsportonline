@@ -331,9 +331,9 @@ describe("GeminiLlmClient", () => {
       status: 200,
       apiStatus: "OUTPUT_TRUNCATED",
       finishReason: "MAX_TOKENS",
-      meteredUsage: { inputTokens: 101, outputTokens: 48 },
+      meteredUsage: { inputTokens: 101, outputTokens: 2948 },
       message:
-        "Gemini output truncated (promptTokens=101, thoughtsTokens=2900, candidateTokens=48, totalTokens=3049)",
+        "Gemini output truncated (promptTokens=101, thoughtsTokens=2900, candidateTokens=48, billedOutputTokens=2948, totalTokens=3049)",
     });
   });
 });

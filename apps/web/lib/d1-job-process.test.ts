@@ -201,15 +201,15 @@ describe("D1 full article publication", () => {
       const good = writer();
       const completeJson = vi.fn()
         .mockRejectedValueOnce(new Error("fixture Writer unavailable"))
-        .mockRejectedValueOnce(new Error("fixture fallback unavailable"))
         .mockImplementation(good.completeJson);
       const client = { ...good.client, completeJson } as LlmClient;
+      const repair = writer();
       const options = {
         activationAt: new Date(now.getTime() - 60_000),
         siteUrl: "https://mso24.hu", forceReviewMode: false,
         facebookEnabled: false, facebookStartAt: now,
       };
-      const failed = await processOneD1Job(d1, options, client, client);
+      const failed = await processOneD1Job(d1, options, client, repair.client);
       expect(failed).toMatchObject({ processed: 1, failed: 1,
         error: { message: "Tabloid writer provider or schema failure" } });
       expect((db.prepare("SELECT count(*) AS n FROM story_versions").get() as { n: number }).n).toBe(0);
@@ -218,10 +218,11 @@ describe("D1 full article publication", () => {
         .get(rawId) as { lease: string | null };
       expect(lease.lease).toBeNull();
       db.prepare("UPDATE pipeline_jobs SET available_at=?").run(new Date(now.getTime() - 1000).toISOString());
-      const resumed = await processOneD1Job(d1, options, client, client);
+      const resumed = await processOneD1Job(d1, options, client, repair.client);
       expect(resumed).toMatchObject({ processed: 1, succeeded: 1,
         outcome: { status: "published" } });
-      expect(completeJson).toHaveBeenCalledTimes(3);
+      expect(completeJson).toHaveBeenCalledTimes(2);
+      expect(repair.completeJson).not.toHaveBeenCalled();
       expect((db.prepare("SELECT count(*) AS n FROM stories").get() as { n: number }).n).toBe(1);
       expect((db.prepare("SELECT count(*) AS n FROM story_versions").get() as { n: number }).n).toBe(1);
       expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);

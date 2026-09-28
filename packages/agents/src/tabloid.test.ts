@@ -306,6 +306,24 @@ describe("one-call Hungarian writer", () => {
       }),
     );
   });
+  it("sends only an identified paragraph to Flash and avoids an unscoped body rewrite", async () => {
+    const llm = client({ body_hu: "A csapat pontosan passzolt." });
+    const output = {
+      title_hu: "A csapat győzött", lead_hu: "A mérkőzésen sok helyzet volt.",
+      body_hu: "Az első félidőben kevés helyzet volt.\n\nA csapat rosszul passzolt.",
+      language_warnings: [], generatedByModel: "gemini-3.5-flash-lite",
+    };
+    await repairTabloid(llm, output, [{ kind: "hard", code: "forbidden_terminology",
+      field: "body", detail: "rosszul" }], { role: "targeted_repair" });
+    expect(llm.completeJson.mock.calls[0]?.[0]?.messages[0]?.content)
+      .toContain("A csapat rosszul passzolt.");
+    expect(llm.completeJson.mock.calls[0]?.[0]?.messages[0]?.content)
+      .not.toContain("Az első félidőben");
+    await expect(repairTabloid(llm, output,
+      [{ kind: "language", code: "foreign_language", field: "body" }],
+      { role: "targeted_repair" })).rejects.toThrow("one identifiable body paragraph");
+    expect(llm.completeJson).toHaveBeenCalledOnce();
+  });
   it("deterministically splits a long one-block draft into readable paragraphs", () => {
     expect(
       paragraphizeBody(
