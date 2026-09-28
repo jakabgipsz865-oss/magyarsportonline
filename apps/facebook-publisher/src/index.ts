@@ -21,7 +21,7 @@ export default {
     for (const message of batch.messages) {
       await processFacebookMessage(message, env, {
         repository,
-        fetch,
+        fetch: (input, init) => globalThis.fetch(input, init),
         logger: console,
       });
     }
