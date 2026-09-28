@@ -1,6 +1,6 @@
 import { deduplication, publishGate } from "@magyarsportonline/agents";
 import { NextResponse, type NextRequest } from "next/server";
-import { createRepositories } from "../../../../../lib/db";
+import { createRepositories, d1Binding } from "../../../../../lib/db";
 import { env } from "../../../../../lib/env";
 import { approveReviewItem } from "../../../../../lib/review";
 
@@ -10,6 +10,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (request.headers.get("authorization") !== `Bearer ${env.CRON_SECRET}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  if (d1Binding()) return NextResponse.json(
+    { error: "bulk historical approval is disabled after D1 cutover" }, { status: 409 });
 
   const createdAfterRaw = request.nextUrl.searchParams.get("createdAfter");
   const createdAfter = createdAfterRaw ? new Date(createdAfterRaw) : null;

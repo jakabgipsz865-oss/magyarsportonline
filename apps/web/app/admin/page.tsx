@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AdminHeader } from "./_components/admin-header";
-import { createRepositories } from "../../lib/db";
+import { createRepositories, d1Binding } from "../../lib/db";
+import { countD1PendingReviews } from "../../lib/d1-review";
 
 export const dynamic = "force-dynamic";
 
@@ -34,11 +35,20 @@ function DashboardMetricCard({
  * a részletes adminoldalak feladata marad.
  */
 export default async function AdminDashboardPage(): Promise<ReactNode> {
-  const repos = createRepositories();
-  const [pendingReviewCount, pendingMergeReviewCount] = await Promise.all([
-    repos.reviewQueueRepository.countPending(),
-    repos.missedMergeReviewRepository.countPending(),
-  ]);
+  const d1 = d1Binding();
+  const [pendingReviewCount, pendingMergeReviewCount] = d1
+    ? await Promise.all([
+        countD1PendingReviews(d1),
+        d1.prepare("SELECT COUNT(*) AS count FROM missed_merge_reviews WHERE decision IS NULL")
+          .first<{ count: number }>().then(row => row?.count ?? 0),
+      ])
+    : await (async () => {
+        const repos = createRepositories();
+        return Promise.all([
+          repos.reviewQueueRepository.countPending(),
+          repos.missedMergeReviewRepository.countPending(),
+        ]);
+      })();
 
   return (
     <main className="admin-page">

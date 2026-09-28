@@ -11,6 +11,8 @@ import {
 } from "../../../lib/review";
 import { listTriagedReviewItems, type TriagedReviewItem } from "../../../lib/review-triage";
 import { isEditorialCorrectionCategory } from "../../../lib/editorial-corrections";
+import { d1Binding } from "../../../lib/db";
+import { D1ReviewPage } from "./d1-review-page";
 
 // DB-driven admin nézet — sosem prerendelt, mindig friss (a betöltéskor
 // újrafuttatja a triage-osztályozást is, lásd listTriagedReviewItems).
@@ -366,7 +368,7 @@ function ReviewCard({
 }
 
 interface PageProps {
-  searchParams: Promise<{ category?: string; page?: string; q?: string; approval?: string }>;
+  searchParams: Promise<{ category?: string; page?: string; q?: string; approval?: string; result?: string }>;
 }
 
 function buildHref(category: TriageCategory, page: number, query: string): string {
@@ -393,6 +395,7 @@ function buildHref(category: TriageCategory, page: number, query: string): strin
  */
 export default async function ReviewQueuePage({ searchParams }: PageProps): Promise<ReactNode> {
   const params = await searchParams;
+  if (d1Binding()) return <D1ReviewPage result={params.result} />;
   const category: TriageCategory = CATEGORY_TABS.some((tab) => tab.category === params.category)
     ? (params.category as TriageCategory)
     : DEFAULT_CATEGORY;

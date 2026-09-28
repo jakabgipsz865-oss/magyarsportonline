@@ -6,11 +6,14 @@ import {
   type EditorialKnowledgeApplyResult,
   type EditorialKnowledgeImportPreview,
 } from "@magyarsportonline/db";
-import { createRepositories } from "./db";
+import { createRepositories, d1Binding } from "./db";
+import { applyD1KnowledgeImport, listD1Knowledge, previewD1KnowledgeImport } from "./d1-knowledge";
 export { MAX_KNOWLEDGE_IMPORT_BYTES, parseAdminKnowledgePackage } from "./admin-knowledge-upload";
 
 export async function buildAdminKnowledgePackage() {
-  const records = await createRepositories().editorialKnowledgeRepository.listAllRecords();
+  const d1 = d1Binding();
+  const records = d1 ? await listD1Knowledge(d1) :
+    await createRepositories().editorialKnowledgeRepository.listAllRecords();
   const createdAt = new Date();
   const knowledgePackage = createEditorialKnowledgePackage({
     format: EDITORIAL_KNOWLEDGE_FORMAT,
@@ -34,15 +37,17 @@ export async function buildAdminKnowledgePackage() {
 export async function previewAdminKnowledgeImport(
   knowledgePackage: unknown,
 ): Promise<EditorialKnowledgeImportPreview> {
-  return createRepositories().editorialKnowledgeRepository.previewImport(knowledgePackage);
+  const d1 = d1Binding();
+  return d1 ? previewD1KnowledgeImport(d1, knowledgePackage) :
+    createRepositories().editorialKnowledgeRepository.previewImport(knowledgePackage);
 }
 
 export async function applyAdminKnowledgeImport(
   knowledgePackage: unknown,
   expectedDigest: string,
 ): Promise<EditorialKnowledgeApplyResult> {
-  return createRepositories().editorialKnowledgeRepository.applyImport(
-    knowledgePackage,
-    expectedDigest,
-  );
+  const d1 = d1Binding();
+  return d1 ? applyD1KnowledgeImport(d1, knowledgePackage, expectedDigest) :
+    createRepositories().editorialKnowledgeRepository.applyImport(
+      knowledgePackage, expectedDigest);
 }
