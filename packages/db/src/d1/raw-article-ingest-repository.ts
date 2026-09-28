@@ -51,6 +51,23 @@ const eventFor = (id: string, sourceId: string) => ({
 export class D1RawArticleIngestRepository {
   constructor(private readonly db: D1Client) {}
 
+  /** Avoid one D1 INSERT round trip for every unchanged item in a polled feed. */
+  async existingSourceUrls(sourceId: string, urls: string[]): Promise<Set<string>> {
+    const existing = new Set<string>();
+    for (let offset = 0; offset < urls.length; offset += 200) {
+      const batch = urls.slice(offset, offset + 200);
+      if (batch.length === 0) continue;
+      const rows = await this.db
+        .prepare(
+          `SELECT source_url FROM raw_articles WHERE source_id=? AND source_url IN (${batch.map(() => "?").join(",")})`,
+        )
+        .bind(sourceId, ...batch)
+        .all<{ source_url: string }>();
+      for (const row of rows.results) existing.add(row.source_url);
+    }
+    return existing;
+  }
+
   async insertTabloid(data: NewRawArticle, enqueue: boolean): Promise<{ id: string } | null> {
     // The RSS receipt path never enqueues until the complete article is saved.
     // A caller needing the combined operation must use upgradeAndEnqueueTabloid.

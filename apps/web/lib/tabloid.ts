@@ -626,6 +626,7 @@ interface TabloidIngestRepositories {
   };
   rawArticleRepository: {
     insertTabloid(data: NewRawArticle, enqueue: boolean): Promise<{ id: string } | null>;
+    existingSourceUrls?(sourceId: string, urls: string[]): Promise<Set<string>>;
     claimTabloidFetchBatch(
       sourceIds: string[],
       limit: number,
@@ -713,6 +714,10 @@ export async function ingestTabloid(repos: TabloidIngestRepositories = createIng
             throw new Error(`RSS fetch failed: ${reasons}`);
           }
           const persistStartedAt = Date.now();
+          const existingUrls = await repos.rawArticleRepository.existingSourceUrls?.(
+            source.id,
+            articles.map((article) => article.sourceUrl),
+          );
           for (const article of articles) {
             seenCount++;
             const accepted = tabloid.isFootballTabloid(
@@ -727,6 +732,7 @@ export async function ingestTabloid(repos: TabloidIngestRepositories = createIng
             );
             const unknownDate = Boolean(activationAt && !article.publishedAtSource);
             if (!accepted) rejectedCount++;
+            if (existingUrls?.has(article.sourceUrl)) continue;
             const raw = await repos.rawArticleRepository.insertTabloid(
               {
                 sourceId: source.id,
