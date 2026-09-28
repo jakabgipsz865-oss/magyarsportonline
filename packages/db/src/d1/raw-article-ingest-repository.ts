@@ -119,8 +119,29 @@ export class D1RawArticleIngestRepository {
       "titleOriginal" | "sourceUrl" | "subtitleOriginal" | "bodyOriginal" |
       "authorOriginal" | "publishedAtSource" | "imageUrl" | "inlineImages">,
     owner?: string,
+    activationAt?: Date,
   ): Promise<boolean> {
     if (!owner) throw new Error("D1 full-article upgrade requires a fetch claim owner");
+    if (activationAt && data.publishedAtSource && data.publishedAtSource < activationAt) {
+      await this.db.prepare(`
+        UPDATE raw_articles SET source_url=?, title_original=?, subtitle_original=?,
+          body_original=?, author_original=?, published_at_source=?, image_url=?,
+          inline_images=?, content_origin='full_article',
+          processing_status='historical_before_activation',
+          decision_reason='full_article_published_before_activation',
+          processing_available_at=NULL, processing_owner=NULL, processing_locked_at=NULL
+        WHERE id=? AND processing_owner=? AND processing_status='fetching'
+          AND NOT EXISTS (
+            SELECT 1 FROM pipeline_jobs
+            WHERE json_extract(event, '$.type')='source/article.ingested'
+              AND json_extract(event, '$.payload.raw_article_id')=?
+          )
+      `).bind(data.sourceUrl, data.titleOriginal, data.subtitleOriginal ?? null,
+        data.bodyOriginal, data.authorOriginal ?? null,
+        d1Timestamp(data.publishedAtSource), data.imageUrl ?? null,
+        JSON.stringify(data.inlineImages ?? []), id, owner, id).run();
+      return false;
+    }
     if (!this.db.batch) throw new Error("D1 transactional batch binding is unavailable");
     const existing = await this.db.prepare(`
       SELECT id FROM pipeline_jobs WHERE json_extract(event, '$.type')='source/article.ingested'

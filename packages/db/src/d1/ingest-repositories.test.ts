@@ -111,6 +111,23 @@ describe("D1 RSS receipt and full-article job", () => {
       expect(jobs).toHaveLength(1);
       expect(jobs[0]?.status).toBe("pending");
       expect(JSON.parse(jobs[0]!.event).payload.raw_article_id).toBe(claim.id);
+      const misleadingFeedDate = await raw.insertTabloid({
+        ...receipt, sourceUrl: "https://example.com/misdated", rssGuid: "misdated-guid",
+        extractedEntities: { rssGuid: "misdated-guid" },
+        publishedAtSource: new Date("2026-09-28T12:00:30Z"),
+      }, false);
+      const [misdatedClaim] = await raw.claimTabloidFetchBatch([sourceId], 1, 300_000,
+        new Date("2026-09-28T12:01:30Z"), new Date("2026-09-28T12:00:00Z"));
+      expect(misdatedClaim?.id).toBe(misleadingFeedDate?.id);
+      expect(await raw.upgradeAndEnqueueTabloid(misdatedClaim!.id, {
+        ...complete, sourceUrl: "https://example.com/misdated",
+        publishedAtSource: new Date("2026-09-28T11:58:00Z"),
+      }, misdatedClaim!.processingOwner!, new Date("2026-09-28T12:00:00Z")))
+        .toBe(false);
+      expect(db.prepare("SELECT COUNT(*) AS n FROM pipeline_jobs").get()).toMatchObject({ n: 1 });
+      expect(db.prepare("SELECT processing_status, decision_reason, content_origin FROM raw_articles WHERE id=?")
+        .get(misdatedClaim!.id)).toMatchObject({ processing_status: "historical_before_activation",
+          decision_reason: "full_article_published_before_activation", content_origin: "full_article" });
       expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 
       await sources.recordFetchResult(sourceId, { status: "ok", fetchedAt: new Date("2026-09-28T12:02:00Z") });

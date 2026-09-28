@@ -178,7 +178,11 @@ export function createIngestRepositories() {
       rawArticleRepository: {
         insertTabloid: raw.insertTabloid.bind(raw),
         deferTabloidFetch: raw.deferTabloidFetch.bind(raw),
-        upgradeAndEnqueueTabloid: raw.upgradeAndEnqueueTabloid.bind(raw),
+        upgradeAndEnqueueTabloid: (
+          id: string,
+          data: Parameters<typeof raw.upgradeAndEnqueueTabloid>[1],
+          owner?: string,
+        ) => raw.upgradeAndEnqueueTabloid(id, data, owner, activationBoundary()),
         claimTabloidFetchBatch: (sourceIds: string[], limit: number, staleLockMs: number, now = new Date()) =>
           raw.claimTabloidFetchBatch(sourceIds, limit, staleLockMs, now, activationBoundary()),
       },
