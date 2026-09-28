@@ -76,8 +76,9 @@ export class D1PipelineJobRepository {
       JSON.stringify(shape.payload)).run();
   }
 
-  async getStatusCounts(now = new Date()): Promise<PipelineQueueStatusCounts> {
+  async getStatusCounts(now = new Date(), since = new Date(0)): Promise<PipelineQueueStatusCounts> {
     const staleAt = d1Timestamp(new Date(now.getTime() - 10 * 60_000));
+    const sinceAt = d1Timestamp(since);
     const row = await this.db.prepare(`
       SELECT
         sum(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pending,
@@ -86,8 +87,8 @@ export class D1PipelineJobRepository {
         sum(CASE WHEN status='dead_letter' THEN 1 ELSE 0 END) AS dead_letter,
         sum(CASE WHEN status='in_progress' AND locked_at < ? THEN 1 ELSE 0 END) AS stale,
         max(CASE WHEN status='completed' THEN updated_at END) AS last_completed_at
-      FROM pipeline_jobs
-    `).bind(staleAt).first<{
+      FROM pipeline_jobs WHERE created_at >= ?
+    `).bind(staleAt, sinceAt).first<{
       pending: number | null; in_progress: number | null; completed: number | null;
       dead_letter: number | null; stale: number | null; last_completed_at: string | null;
     }>();
@@ -131,27 +132,32 @@ export class D1PipelineJobRepository {
     return result.results.length;
   }
 
-  async claimBatch(limit: number, staleLockMs: number, now = new Date()): Promise<PipelineJobRow[]> {
+  async claimBatch(
+    limit: number, staleLockMs: number, now = new Date(), since = new Date(0),
+  ): Promise<PipelineJobRow[]> {
     if (limit <= 0) return [];
     const recoveryLane = Math.floor(now.getTime() / 30_000) % 4 === 0;
     const owner = crypto.randomUUID();
     const nowIso = d1Timestamp(now);
     const staleAt = d1Timestamp(new Date(now.getTime() - staleLockMs));
+    const sinceAt = d1Timestamp(since);
     const result = await this.db.prepare(`
       UPDATE pipeline_jobs
       SET status='in_progress', locked_at=?, claim_owner=?,
         claim_version=claim_version+1, attempts=attempts+1, updated_at=?
       WHERE id IN (
         SELECT id FROM pipeline_jobs
-        WHERE (status='pending' AND available_at <= ?)
+        WHERE created_at >= ? AND (
+          (status='pending' AND available_at <= ?)
            OR (status='in_progress' AND locked_at < ?)
+        )
         ORDER BY
           CASE WHEN ?=0 THEN CASE WHEN status='pending' THEN 0 ELSE 1 END END,
           CASE WHEN ?=1 THEN coalesce(locked_at, created_at) END ASC,
           CASE WHEN ?=0 THEN created_at END DESC
         LIMIT ?
       ) RETURNING *
-    `).bind(nowIso, owner, nowIso, nowIso, staleAt,
+    `).bind(nowIso, owner, nowIso, sinceAt, nowIso, staleAt,
       Number(recoveryLane), Number(recoveryLane), Number(recoveryLane),
       Math.min(limit, 20)).all<JobRow>();
     return result.results.map(hydrate);

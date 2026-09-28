@@ -53,6 +53,8 @@ export const env = createEnv({
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
+    // Set at the actual D1 cutover. Imported historical jobs stay dormant.
+    D1_PIPELINE_START_AT: z.coerce.date().optional(),
 
     GEMINI_API_KEY: z.string().min(1).optional(),
     GEMINI_MODEL: z.string().min(1).default("gemini-3.5-flash-lite"),

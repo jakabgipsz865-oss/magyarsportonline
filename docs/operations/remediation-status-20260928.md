@@ -5,7 +5,7 @@
 | Terület | Helyben / elkülönített környezetben | Tényleges production | Végponttól végpontig bizonyíték |
 | --- | --- | --- | --- |
 | Production-forrás eltérés | A production v183 forrása a `4054dad` commitban rekonstruálva; a javítások és D1-munka a `codex/mso-remediation` ágon verziózva. | GitHub `main` jelenleg `84411b91`; a javítási ág nincs élesítve. | Forráseltérés rendezése a javítási ágon: PASS. Éles futás: **NOT VERIFIED**. |
-| RSS/job/Writer és kivonatolók | 536/536 agent, 105/105 web, 59/59 db helyi teszt sikeres; a PostgreSQL-integrációs tesztek élő kapcsolat hiányában ebben a futásban kihagyva. | A jelenlegi éles főoldal és RSS 2026-09-28-án HTTP 500. | Helyi regresszió: PASS; valódi új production feldolgozás: **NOT VERIFIED**. |
+| RSS/job/Writer és kivonatolók | 536/536 agent, 105/105 web, 60/60 db helyi teszt sikeres; a PostgreSQL-integrációs tesztek élő kapcsolat hiányában ebben a futásban kihagyva. | A jelenlegi éles főoldal és RSS 2026-09-28-án HTTP 500. | Helyi regresszió: PASS; valódi új production feldolgozás: **NOT VERIFIED**. |
 | Történeti PostgreSQL mentés | A 2026-09-27 18:02:49 UTC körüli custom dump helyi PostgreSQL 18-ba hibamentesen visszaállt. 28/28 tábla, 26 731/26 731 sor egyező logikai hash; 31 FK; nulla invalid index. | Neon megőrizve. A jelenlegi ágról az új kapcsolatok kvóta miatt elutasítottak. | Mentés visszaállíthatósága: PASS. Jelenlegi Neonhoz való teljesség: **NOT VERIFIED**. |
 | D1 adatállomány | 28 táblás séma és 26 731 soros import; elkülönített remote D1 export-visszaimport 28/28 hash egyezés, `foreign_key_check` tiszta. | Nincs D1 adatkapcsoló éles Workeren. | Történeti mentéshez egyezés: PASS. Végső friss szinkron: **NOT VERIFIED**. |
 | D1 alkalmazás | Publikus Next.js útvonalak D1-kötéssel: főoldal, cikklista/részlet, cikkoldal, RSS, sitemap, kategória, csapatok HTTP 200 a helyi Workers runtime-ban; csak `DB` és `ASSETS` kötés, nincs `DATABASE_URL`/Hyperdrive. A nem portolt belső PostgreSQL-útvonalak D1 módban hibával leállnak. | A production web/publisher továbbra is Hyperdrive-os verzió. A csak olvasó D1 teszt Worker külön workers.dev címen fut, D1 kötésen kívül nincs más erőforrása. | Helyi D1 E2E: PASS. Távoli D1 Worker health/list/detail/taxonomy: PASS. Teljes Next.js távoli D1 preview főoldal, cikk API/oldal, RSS, Impresszum, Adatvédelem: PASS. Írási pipeline D1-en: **NOT VERIFIED**. |
@@ -32,7 +32,8 @@ javasolva vagy indítva.
 
 1. A még PostgreSQL-es belső szerkesztői, Writer és publikációs műveletek,
    valamint a job feldolgozó útvonal D1-re portolása és Workers-regressziója.
-   Az RSS fogadás/fetch D1-adaptere elkészült, de a Writer még nem fut D1-en.
+   Az RSS fogadás/fetch D1-adaptere és a történeti jobokat kizáró cutover-határ
+   elkészült, de a Writer még nem fut D1-en.
    A publikus olvasás és a Facebook social intent önmagában nem teljes
    Cloudflare-only alkalmazás.
 2. A teljes Next.js és job-feldolgozó útvonalak D1 staging feltöltése és

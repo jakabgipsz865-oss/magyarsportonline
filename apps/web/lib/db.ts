@@ -155,7 +155,14 @@ export function createSocialPostRepository() {
 export function createIngestRepositories() {
   const d1 = d1Binding();
   if (d1) return {
-    pipelineJobRepository: new D1PipelineJobRepository(d1),
+    pipelineJobRepository: {
+      getStatusCounts: () => {
+        if (!env.D1_PIPELINE_START_AT) {
+          throw new Error("D1_PIPELINE_START_AT is required before D1 ingestion is enabled");
+        }
+        return new D1PipelineJobRepository(d1).getStatusCounts(new Date(), env.D1_PIPELINE_START_AT);
+      },
+    },
     sourceRepository: new D1SourceIngestRepository(d1),
     rawArticleRepository: new D1RawArticleIngestRepository(d1),
   };

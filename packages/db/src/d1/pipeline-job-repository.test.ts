@@ -75,4 +75,26 @@ describe("D1 pipeline job fencing", () => {
       db.close();
     }
   });
+
+  it("leaves imported historical jobs dormant behind the D1 activation boundary", async () => {
+    const db = fixture();
+    try {
+      const jobs = new D1PipelineJobRepository(localD1(db));
+      await jobs.enqueue({ type: "source/article.ingested", payload: { raw_article_id: "historical" } });
+      await jobs.enqueue({ type: "source/article.ingested", payload: { raw_article_id: "fresh" } });
+      db.prepare(`UPDATE pipeline_jobs SET created_at='2026-09-01T00:00:00.000000+00:00'
+        WHERE json_extract(event, '$.payload.raw_article_id')='historical'`).run();
+      const boundary = new Date(Date.now() - 60_000);
+      expect((await jobs.getStatusCounts(new Date(), boundary)).pending).toBe(1);
+      const claimed = await jobs.claimBatch(2, 60_000, new Date(Date.now() + 1000), boundary);
+      expect(claimed).toHaveLength(1);
+      expect((claimed[0]?.event as { payload: { raw_article_id: string } }).payload.raw_article_id)
+        .toBe("fresh");
+      expect((db.prepare(`SELECT status FROM pipeline_jobs
+        WHERE json_extract(event, '$.payload.raw_article_id')='historical'`).get() as { status: string }).status)
+        .toBe("pending");
+    } finally {
+      db.close();
+    }
+  });
 });

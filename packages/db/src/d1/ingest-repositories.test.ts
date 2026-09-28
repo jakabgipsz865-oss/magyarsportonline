@@ -73,6 +73,7 @@ describe("D1 RSS receipt and full-article job", () => {
         new Date("2026-09-28T12:01:00Z"));
       expect(claim?.id).toBe(inserted?.id);
       expect(claim?.processingOwner).toBeTruthy();
+      if (!claim) throw new Error("Expected an RSS receipt claim");
 
       const complete = {
         sourceUrl: receipt.sourceUrl, titleOriginal: receipt.titleOriginal,
