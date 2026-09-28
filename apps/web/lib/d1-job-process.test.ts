@@ -3,6 +3,9 @@ import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import type { DatabaseSync as DatabaseSyncType } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
+vi.hoisted(() => {
+  process.env.CRON_SECRET ??= "d1-job-test-only";
+});
 import type { D1Client, D1Statement } from "@magyarsportonline/db/d1";
 import {
   D1LlmUsageRepository,
