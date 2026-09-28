@@ -80,7 +80,9 @@ export function d1Binding(): D1Client | undefined {
  */
 export function getDb(): Database {
   if (d1Binding()) {
-    throw new Error("PostgreSQL repositories are unavailable in D1 mode; port this route explicitly");
+    throw new Error(
+      "PostgreSQL repositories are unavailable in D1 mode; port this route explicitly",
+    );
   }
   const hyperdriveUrl = hyperdriveConnectionString();
   if (hyperdriveUrl) return createWorkerDatabase(hyperdriveUrl);
@@ -183,8 +185,12 @@ export function createIngestRepositories() {
           data: Parameters<typeof raw.upgradeAndEnqueueTabloid>[1],
           owner?: string,
         ) => raw.upgradeAndEnqueueTabloid(id, data, owner, activationBoundary()),
-        claimTabloidFetchBatch: (sourceIds: string[], limit: number, staleLockMs: number, now = new Date()) =>
-          raw.claimTabloidFetchBatch(sourceIds, limit, staleLockMs, now, activationBoundary()),
+        claimTabloidFetchBatch: (
+          sourceIds: string[],
+          limit: number,
+          staleLockMs: number,
+          now = new Date(),
+        ) => raw.claimTabloidFetchBatch(sourceIds, limit, staleLockMs, now, activationBoundary()),
       },
     };
   }

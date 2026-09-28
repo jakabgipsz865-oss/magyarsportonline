@@ -1,5 +1,8 @@
 import { TABLOID_PUBLIC_PROMPT, TABLOID_PUBLIC_START } from "@magyarsportonline/shared";
-import type { NewStoryReadModelRow, StoryReadModelRow } from "../repositories/story-read-model-repository";
+import type {
+  NewStoryReadModelRow,
+  StoryReadModelRow,
+} from "../repositories/story-read-model-repository";
 import { d1Timestamp, type D1Client } from "./client";
 
 interface ReadModelSqlRow {
@@ -25,7 +28,7 @@ interface ReadModelSqlRow {
 }
 
 const json = (value: unknown): string => JSON.stringify(value);
-const parse = (value: string | null): unknown => value === null ? null : JSON.parse(value);
+const parse = (value: string | null): unknown => (value === null ? null : JSON.parse(value));
 
 function hydrate(row: ReadModelSqlRow): StoryReadModelRow {
   return {
@@ -62,24 +65,39 @@ export class D1StoryReadModelRepository {
   constructor(private readonly db: D1Client) {}
 
   async getBySlug(slug: string): Promise<StoryReadModelRow | null> {
-    const row = await this.db.prepare(`
+    const row = await this.db
+      .prepare(
+        `
       SELECT * FROM story_read_model WHERE slug = ? AND ${publicFilter} LIMIT 1
-    `).bind(slug, d1Timestamp(new Date(TABLOID_PUBLIC_START)), TABLOID_PUBLIC_PROMPT)
+    `,
+      )
+      .bind(slug, d1Timestamp(new Date(TABLOID_PUBLIC_START)), TABLOID_PUBLIC_PROMPT)
       .first<ReadModelSqlRow>();
     return row ? hydrate(row) : null;
   }
 
   async listPublished(params: { limit: number; offset: number }): Promise<StoryReadModelRow[]> {
-    const result = await this.db.prepare(`
+    const result = await this.db
+      .prepare(
+        `
       SELECT * FROM story_read_model WHERE ${publicFilter}
       ORDER BY published_at DESC, story_id DESC LIMIT ? OFFSET ?
-    `).bind(d1Timestamp(new Date(TABLOID_PUBLIC_START)), TABLOID_PUBLIC_PROMPT,
-      Math.max(0, params.limit), Math.max(0, params.offset)).all<ReadModelSqlRow>();
+    `,
+      )
+      .bind(
+        d1Timestamp(new Date(TABLOID_PUBLIC_START)),
+        TABLOID_PUBLIC_PROMPT,
+        Math.max(0, params.limit),
+        Math.max(0, params.offset),
+      )
+      .all<ReadModelSqlRow>();
     return result.results.map(hydrate);
   }
 
   async upsert(row: NewStoryReadModelRow): Promise<void> {
-    await this.db.prepare(`
+    await this.db
+      .prepare(
+        `
       INSERT INTO story_read_model (
         story_id, slug, title_hu, lead_hu, body_html, image_url,
         inline_images, is_ai_generated, meta_description, structured_data,
@@ -97,18 +115,33 @@ export class D1StoryReadModelRepository {
         last_updated_at=excluded.last_updated_at,
         version_history_summary=excluded.version_history_summary,
         credibility_summary=excluded.credibility_summary
-    `).bind(row.storyId, row.slug, row.titleHu, row.leadHu, row.bodyHtml,
-      row.imageUrl ?? null, json(row.inlineImages ?? []), Number(row.isAiGenerated ?? true),
-      row.metaDescription ?? null, row.structuredData == null ? null : json(row.structuredData),
-      json(row.sourcesSummary ?? []), json(row.tags ?? []),
-      row.category == null ? null : json(row.category), row.confidenceScore ?? null,
-      Number(row.isDeveloping ?? false), d1Timestamp(row.publishedAt),
-      d1Timestamp(row.lastUpdatedAt ?? new Date()), json(row.versionHistorySummary ?? []),
-      row.credibilitySummary == null ? null : json(row.credibilitySummary)).run();
+    `,
+      )
+      .bind(
+        row.storyId,
+        row.slug,
+        row.titleHu,
+        row.leadHu,
+        row.bodyHtml,
+        row.imageUrl ?? null,
+        json(row.inlineImages ?? []),
+        Number(row.isAiGenerated ?? true),
+        row.metaDescription ?? null,
+        row.structuredData == null ? null : json(row.structuredData),
+        json(row.sourcesSummary ?? []),
+        json(row.tags ?? []),
+        row.category == null ? null : json(row.category),
+        row.confidenceScore ?? null,
+        Number(row.isDeveloping ?? false),
+        d1Timestamp(row.publishedAt),
+        d1Timestamp(row.lastUpdatedAt ?? new Date()),
+        json(row.versionHistorySummary ?? []),
+        row.credibilitySummary == null ? null : json(row.credibilitySummary),
+      )
+      .run();
   }
 
   async deleteByStoryId(storyId: string): Promise<void> {
-    await this.db.prepare("DELETE FROM story_read_model WHERE story_id = ?")
-      .bind(storyId).run();
+    await this.db.prepare("DELETE FROM story_read_model WHERE story_id = ?").bind(storyId).run();
   }
 }

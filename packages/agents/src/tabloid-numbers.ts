@@ -54,20 +54,36 @@ function facts(text: string): NumericFact[] {
     occupied.push([start, end]);
   }
   for (const match of text.matchAll(DATE_ISO))
-    add(match as RegExpExecArray, "date", `${match[1]}-${match[2]!.padStart(2, "0")}-${match[3]!.padStart(2, "0")}`);
+    add(
+      match as RegExpExecArray,
+      "date",
+      `${match[1]}-${match[2]!.padStart(2, "0")}-${match[3]!.padStart(2, "0")}`,
+    );
   for (const match of text.matchAll(DATE_DMY))
-    add(match as RegExpExecArray, "date", `${match[3]}-${match[2]!.padStart(2, "0")}-${match[1]!.padStart(2, "0")}`);
+    add(
+      match as RegExpExecArray,
+      "date",
+      `${match[3]}-${match[2]!.padStart(2, "0")}-${match[1]!.padStart(2, "0")}`,
+    );
   for (const match of text.matchAll(MONEY))
-    add(match as RegExpExecArray, "money", `${Number(amount(match[1]!)) * multiplier(match[2])}:${moneyUnit(match[3]!)}`);
+    add(
+      match as RegExpExecArray,
+      "money",
+      `${Number(amount(match[1]!)) * multiplier(match[2])}:${moneyUnit(match[3]!)}`,
+    );
   for (const match of text.matchAll(TIME)) {
-    const context = text.slice(Math.max(0, match.index - 18), match.index).toLocaleLowerCase("hu-HU");
+    const context = text
+      .slice(Math.max(0, match.index - 18), match.index)
+      .toLocaleLowerCase("hu-HU");
     if (/\b(at|from|until|óra|órakor|time|kickoff|kezd|kor)\b/u.test(context))
       add(match as RegExpExecArray, "time", `${match[1]!.padStart(2, "0")}:${match[2]}`);
   }
-  for (const match of text.matchAll(SCORE)) add(match as RegExpExecArray, "score", `${match[1]}:${match[2]}`);
+  for (const match of text.matchAll(SCORE))
+    add(match as RegExpExecArray, "score", `${match[1]}:${match[2]}`);
   for (const match of text.matchAll(ORDINAL))
     add(match as RegExpExecArray, "number", amount(match[1]!));
-  for (const match of text.matchAll(NUMBER)) add(match as RegExpExecArray, "number", amount(match[0]));
+  for (const match of text.matchAll(NUMBER))
+    add(match as RegExpExecArray, "number", amount(match[0]));
   return found.sort((a, b) => a.start - b.start);
 }
 
@@ -79,10 +95,17 @@ function sharedNames(source: string, output: string): string[] {
 function nearbyName(text: string, fact: NumericFact, names: string[]): string | null {
   let nearest: { name: string; distance: number } | null = null;
   for (const name of names) {
-    for (const match of text.matchAll(new RegExp(`(?<!\\p{L})${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?!\\p{L})`, "gu"))) {
+    for (const match of text.matchAll(
+      new RegExp(`(?<!\\p{L})${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?!\\p{L})`, "gu"),
+    )) {
       const distance = fact.start - (match.index + name.length);
       const between = text.slice(match.index + name.length, fact.start);
-      if (distance >= 0 && distance <= 18 && !/[.!?;\n]/u.test(between) && (!nearest || distance < nearest.distance))
+      if (
+        distance >= 0 &&
+        distance <= 18 &&
+        !/[.!?;\n]/u.test(between) &&
+        (!nearest || distance < nearest.distance)
+      )
         nearest = { name, distance };
     }
   }
@@ -95,8 +118,14 @@ function scoreWinner(text: string, score: NumericFact, names: string[]): string 
   const result = `${left}\\s*[-–—:]\\s*${right}`;
   for (const name of names) {
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const winnerBeforeScore = new RegExp(`\\b${escaped}\\s+${result}(?:-ra|-re)?\\s+(?:verte|legyőzte|defeated|beat)\\b`, "iu");
-    const winnerBeforeOpponent = new RegExp(`\\b${escaped}\\s+(?:beat|defeated|verte|legyőzte)\\s+\\p{Lu}[\\p{L}'’-]{2,}\\s+${result}`, "iu");
+    const winnerBeforeScore = new RegExp(
+      `\\b${escaped}\\s+${result}(?:-ra|-re)?\\s+(?:verte|legyőzte|defeated|beat)\\b`,
+      "iu",
+    );
+    const winnerBeforeOpponent = new RegExp(
+      `\\b${escaped}\\s+(?:beat|defeated|verte|legyőzte)\\s+\\p{Lu}[\\p{L}'’-]{2,}\\s+${result}`,
+      "iu",
+    );
     if (winnerBeforeScore.test(text) || winnerBeforeOpponent.test(text)) return name;
   }
   return null;
@@ -108,7 +137,9 @@ export function unverifiedNumericClaims(source: string, output: string): string[
   const names = sharedNames(source, output);
   const issues: string[] = [];
   for (const claim of outputFacts) {
-    const candidates = sourceFacts.filter((fact) => fact.kind === claim.kind && fact.key === claim.key);
+    const candidates = sourceFacts.filter(
+      (fact) => fact.kind === claim.kind && fact.key === claim.key,
+    );
     if (candidates.length === 0) {
       issues.push(`${claim.kind}:${claim.raw}`);
       continue;
@@ -121,10 +152,14 @@ export function unverifiedNumericClaims(source: string, output: string): string[
     }
     if (claim.kind === "number") {
       const name = nearbyName(output, claim, names);
-      if (name && candidates.some((fact) => {
-        const sourceName = nearbyName(source, fact, names);
-        return sourceName !== null && sourceName !== name;
-      }) && !candidates.some((fact) => nearbyName(source, fact, names) === name))
+      if (
+        name &&
+        candidates.some((fact) => {
+          const sourceName = nearbyName(source, fact, names);
+          return sourceName !== null && sourceName !== name;
+        }) &&
+        !candidates.some((fact) => nearbyName(source, fact, names) === name)
+      )
         issues.push(`assignment:${name}:${claim.raw}`);
     }
   }

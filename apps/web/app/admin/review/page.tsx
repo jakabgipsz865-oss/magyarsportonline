@@ -368,7 +368,13 @@ function ReviewCard({
 }
 
 interface PageProps {
-  searchParams: Promise<{ category?: string; page?: string; q?: string; approval?: string; result?: string }>;
+  searchParams: Promise<{
+    category?: string;
+    page?: string;
+    q?: string;
+    approval?: string;
+    result?: string;
+  }>;
 }
 
 function buildHref(category: TriageCategory, page: number, query: string): string {

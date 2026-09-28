@@ -15,9 +15,13 @@ integration("PipelineJobRepository PostgreSQL claims", () => {
   beforeAll(async () => {
     client = postgres(connectionString!, { max: 8 });
     db = drizzle(client);
-    await client.unsafe("CREATE TYPE pipeline_job_status AS ENUM ('pending','in_progress','completed','dead_letter')").catch((error: unknown) => {
-      if (!(error instanceof Error) || !error.message.includes("already exists")) throw error;
-    });
+    await client
+      .unsafe(
+        "CREATE TYPE pipeline_job_status AS ENUM ('pending','in_progress','completed','dead_letter')",
+      )
+      .catch((error: unknown) => {
+        if (!(error instanceof Error) || !error.message.includes("already exists")) throw error;
+      });
     await client.unsafe(`CREATE TABLE IF NOT EXISTS pipeline_jobs (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), event jsonb NOT NULL,
       status pipeline_job_status NOT NULL DEFAULT 'pending',
@@ -29,10 +33,17 @@ integration("PipelineJobRepository PostgreSQL claims", () => {
     )`);
     repo = new PipelineJobRepository(db as never);
   });
-  beforeEach(async () => { await client.unsafe("TRUNCATE pipeline_jobs"); });
-  afterAll(async () => { await client?.end(); });
+  beforeEach(async () => {
+    await client.unsafe("TRUNCATE pipeline_jobs");
+  });
+  afterAll(async () => {
+    await client?.end();
+  });
 
-  const event = (id: string) => ({ type: "source/article.ingested", payload: { raw_article_id: id } });
+  const event = (id: string) => ({
+    type: "source/article.ingested",
+    payload: { raw_article_id: id },
+  });
 
   it("claims distinct rows in parallel and fences an expired owner", async () => {
     await db.insert(pipelineJobs).values([{ event: event("a") }, { event: event("b") }]);
@@ -46,7 +57,10 @@ integration("PipelineJobRepository PostgreSQL claims", () => {
     expect(first[0]!.claimOwner).toBeTruthy();
     expect(first[0]!.claimVersion).toBe(1);
 
-    await client.unsafe("UPDATE pipeline_jobs SET locked_at = now() - interval '20 minutes' WHERE id = $1", [first[0]!.id]);
+    await client.unsafe(
+      "UPDATE pipeline_jobs SET locked_at = now() - interval '20 minutes' WHERE id = $1",
+      [first[0]!.id],
+    );
     const [reclaimed] = await repo.claimBatch(1, 1000, new Date(0));
     expect(reclaimed?.id).toBe(first[0]!.id);
     expect(reclaimed?.claimOwner).not.toBe(first[0]!.claimOwner);
@@ -57,13 +71,20 @@ integration("PipelineJobRepository PostgreSQL claims", () => {
   });
 
   it("reserves recovery capacity while fresh work continues", async () => {
-    const [stale] = await db.insert(pipelineJobs).values({
-      event: event("stale"), status: "in_progress",
-      lockedAt: new Date(Date.now() - 20 * 60_000),
-      createdAt: new Date(Date.now() - 30 * 60_000),
-      claimOwner: "dead-worker", claimVersion: 1,
-    }).returning();
-    await db.insert(pipelineJobs).values(Array.from({ length: 8 }, (_, i) => ({ event: event(`fresh-${i}`) })));
+    const [stale] = await db
+      .insert(pipelineJobs)
+      .values({
+        event: event("stale"),
+        status: "in_progress",
+        lockedAt: new Date(Date.now() - 20 * 60_000),
+        createdAt: new Date(Date.now() - 30 * 60_000),
+        claimOwner: "dead-worker",
+        claimVersion: 1,
+      })
+      .returning();
+    await db
+      .insert(pipelineJobs)
+      .values(Array.from({ length: 8 }, (_, i) => ({ event: event(`fresh-${i}`) })));
     const [fresh] = await repo.claimBatch(1, 1000, new Date(30_000));
     expect(fresh?.status).toBe("in_progress");
     expect(fresh?.id).not.toBe(stale!.id);
@@ -72,15 +93,20 @@ integration("PipelineJobRepository PostgreSQL claims", () => {
   });
 
   it("claims the oldest pending job in a recovery lane despite stale and newly arriving jobs", async () => {
-    const [old] = await db.insert(pipelineJobs).values({
-      event: event("old-pending"),
-      createdAt: new Date(Date.now() - 60 * 60_000),
-    }).returning();
+    const [old] = await db
+      .insert(pipelineJobs)
+      .values({
+        event: event("old-pending"),
+        createdAt: new Date(Date.now() - 60 * 60_000),
+      })
+      .returning();
     await db.insert(pipelineJobs).values({
-      event: event("stale"), status: "in_progress",
+      event: event("stale"),
+      status: "in_progress",
       lockedAt: new Date(Date.now() - 20 * 60_000),
       createdAt: new Date(Date.now() - 25 * 60_000),
-      claimOwner: "dead-worker", claimVersion: 1,
+      claimOwner: "dead-worker",
+      claimVersion: 1,
     });
     for (let i = 0; i < 3; i++) {
       await db.insert(pipelineJobs).values({ event: event(`fresh-arrival-${i}`) });

@@ -8,19 +8,21 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": {
     "directory": ".open-next/assets",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
   },
-  "d1_databases": [{
-    "binding": "DB",
-    "database_name": "mso-remediation-staging-20260928",
-    "database_id": "eb02f98e-fd89-4277-94be-0f763056b91e"
-  }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mso-remediation-staging-20260928",
+      "database_id": "eb02f98e-fd89-4277-94be-0f763056b91e",
+    },
+  ],
   "vars": {
     "SITE_URL": "https://mso24.hu",
     "CRON_SECRET": "staging-no-cron",
     "LLM_PROVIDER": "none",
     "TABLOID_AUTO_PUBLISH": "false",
     "FORCE_REVIEW_MODE": "true",
-    "FACEBOOK_AUTO_PUBLISH": "false"
-  }
+    "FACEBOOK_AUTO_PUBLISH": "false",
+  },
 }

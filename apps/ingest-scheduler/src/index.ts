@@ -33,20 +33,35 @@ async function post(url: string, label: string, env: Env, timeoutMs: number): Pr
     if (!response.ok) throw new Error(`${label} returned HTTP ${response.status}`);
     let outcome: Record<string, unknown> = {};
     if (response.headers.get("content-type")?.includes("application/json")) {
-      const body = await response.json() as Record<string, unknown>;
+      const body = (await response.json()) as Record<string, unknown>;
       outcome = {
         ...(typeof body["processed"] === "number" ? { processed: body["processed"] } : {}),
         ...(typeof body["succeeded"] === "number" ? { succeeded: body["succeeded"] } : {}),
         ...(typeof body["failed"] === "number" ? { failed: body["failed"] } : {}),
         ...(typeof body["queuedCount"] === "number" ? { queuedCount: body["queuedCount"] } : {}),
-        ...(typeof body["deferredWithoutFullArticle"] === "number" ? { deferredWithoutFullArticle: body["deferredWithoutFullArticle"] } : {}),
-        ...(Array.isArray(body["results"]) ? {
-          failedSources: body["results"].filter((item: unknown) =>
-            typeof item === "object" && item !== null && (item as { status?: unknown }).status === "error").length,
-          seenCount: body["results"].reduce((total: number, item: unknown) =>
-            total + (typeof item === "object" && item !== null && typeof (item as { seenCount?: unknown }).seenCount === "number"
-              ? (item as { seenCount: number }).seenCount : 0), 0),
-        } : {}),
+        ...(typeof body["deferredWithoutFullArticle"] === "number"
+          ? { deferredWithoutFullArticle: body["deferredWithoutFullArticle"] }
+          : {}),
+        ...(Array.isArray(body["results"])
+          ? {
+              failedSources: body["results"].filter(
+                (item: unknown) =>
+                  typeof item === "object" &&
+                  item !== null &&
+                  (item as { status?: unknown }).status === "error",
+              ).length,
+              seenCount: body["results"].reduce(
+                (total: number, item: unknown) =>
+                  total +
+                  (typeof item === "object" &&
+                  item !== null &&
+                  typeof (item as { seenCount?: unknown }).seenCount === "number"
+                    ? (item as { seenCount: number }).seenCount
+                    : 0),
+                0,
+              ),
+            }
+          : {}),
       };
     }
     console.log(`${label} completed`, { status: response.status, ...outcome });
@@ -68,7 +83,12 @@ export async function runCron(env: Env): Promise<void> {
       env,
       INGEST_TIMEOUT_MS,
     ),
-    post(endpoint(env.APP_ORIGIN, "/api/internal/jobs/process"), "jobs/process", env, JOBS_TIMEOUT_MS),
+    post(
+      endpoint(env.APP_ORIGIN, "/api/internal/jobs/process"),
+      "jobs/process",
+      env,
+      JOBS_TIMEOUT_MS,
+    ),
     post(
       endpoint(env.APP_ORIGIN, "/api/internal/facebook/enqueue-pending"),
       "facebook/enqueue-pending",
@@ -88,7 +108,9 @@ export default {
       console.warn("scheduled invocation skipped while previous invocation is still active");
       return;
     }
-    activeScheduledRun = runCron(env).finally(() => { activeScheduledRun = null; });
+    activeScheduledRun = runCron(env).finally(() => {
+      activeScheduledRun = null;
+    });
     ctx.waitUntil(activeScheduledRun);
   },
 };

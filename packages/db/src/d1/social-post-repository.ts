@@ -54,53 +54,81 @@ function hydrate(row: SocialPostRow): SocialPost {
 export class D1SocialPostRepository {
   constructor(private readonly db: D1Client) {}
 
-  async createFacebookQueued(input: FacebookSocialPostInput): Promise<{ post: SocialPost; created: boolean }> {
+  async createFacebookQueued(
+    input: FacebookSocialPostInput,
+  ): Promise<{ post: SocialPost; created: boolean }> {
     const now = d1Timestamp(new Date());
-    const created = await this.db.prepare(`
+    const created = await this.db
+      .prepare(
+        `
       INSERT INTO social_posts
         (id, story_id, story_version_id, platform, post_text, canonical_url,
          status, attempt_count, created_at, updated_at)
       VALUES (?, ?, ?, 'facebook', ?, ?, 'queued', 0, ?, ?)
       ON CONFLICT DO NOTHING RETURNING *
-    `).bind(crypto.randomUUID(), input.storyId, input.storyVersionId, input.postText,
-      input.canonicalUrl, now, now).first<SocialPostRow>();
+    `,
+      )
+      .bind(
+        crypto.randomUUID(),
+        input.storyId,
+        input.storyVersionId,
+        input.postText,
+        input.canonicalUrl,
+        now,
+        now,
+      )
+      .first<SocialPostRow>();
     if (created) return { post: hydrate(created), created: true };
 
-    const existing = await this.db.prepare(
-      "SELECT * FROM social_posts WHERE story_id = ? AND platform = 'facebook' LIMIT 1",
-    ).bind(input.storyId).first<SocialPostRow>();
+    const existing = await this.db
+      .prepare("SELECT * FROM social_posts WHERE story_id = ? AND platform = 'facebook' LIMIT 1")
+      .bind(input.storyId)
+      .first<SocialPostRow>();
     if (!existing) throw new Error("Facebook social post conflict returned no existing row");
     return { post: hydrate(existing), created: false };
   }
 
   async getById(id: string): Promise<SocialPost | null> {
-    const row = await this.db.prepare("SELECT * FROM social_posts WHERE id = ? LIMIT 1")
-      .bind(id).first<SocialPostRow>();
+    const row = await this.db
+      .prepare("SELECT * FROM social_posts WHERE id = ? LIMIT 1")
+      .bind(id)
+      .first<SocialPostRow>();
     return row ? hydrate(row) : null;
   }
 
   async listPendingFacebookEnqueue(limit = 25, since?: Date): Promise<SocialPost[]> {
-    const rows = await this.db.prepare(`
+    const rows = await this.db
+      .prepare(
+        `
       SELECT * FROM social_posts
       WHERE platform = 'facebook' AND status = 'queued' AND enqueued_at IS NULL
         AND created_at >= ?
       ORDER BY created_at LIMIT ?
-    `).bind(d1Timestamp(since ?? new Date(0)), Math.max(1, Math.min(limit, 100)))
+    `,
+      )
+      .bind(d1Timestamp(since ?? new Date(0)), Math.max(1, Math.min(limit, 100)))
       .all<SocialPostRow>();
     return rows.results.map(hydrate);
   }
 
   async markEnqueued(id: string, at = new Date()): Promise<void> {
     const now = d1Timestamp(at);
-    await this.db.prepare(`
+    await this.db
+      .prepare(
+        `
       UPDATE social_posts SET enqueued_at = ?, updated_at = ?
       WHERE id = ? AND status = 'queued'
-    `).bind(now, now, id).run();
+    `,
+      )
+      .bind(now, now, id)
+      .run();
   }
 
   async claimFacebookForPosting(id: string, at = new Date()): Promise<SocialPost | null> {
     const now = d1Timestamp(at);
-    const row = await this.db.prepare(`
+    const row = await this.db
+      .prepare(
+        `
       UPDATE social_posts
       SET status = 'posting', error_code = NULL, last_error = NULL,
           attempt_count = attempt_count + 1, last_attempt_at = ?, updated_at = ?
@@ -109,50 +137,83 @@ export class D1SocialPostRepository {
              (status = 'failed' AND error_code IN
                ('facebook_rate_limited', 'facebook_temporary_error')))
       RETURNING *
-    `).bind(now, now, id).first<SocialPostRow>();
+    `,
+      )
+      .bind(now, now, id)
+      .first<SocialPostRow>();
     return row ? hydrate(row) : null;
   }
 
   async markPosted(id: string, externalPostId: string, at = new Date()): Promise<void> {
     const now = d1Timestamp(at);
-    await this.db.prepare(`
+    await this.db
+      .prepare(
+        `
       UPDATE social_posts
       SET status = 'posted', external_post_id = ?, error_code = NULL,
           last_error = NULL, posted_at = ?, updated_at = ?
       WHERE id = ? AND status = 'posting'
-    `).bind(externalPostId, now, now, id).run();
+    `,
+      )
+      .bind(externalPostId, now, now, id)
+      .run();
   }
 
-  async markFailed(id: string, errorCode: string, lastError: string, at = new Date()): Promise<void> {
-    await this.db.prepare(`
+  async markFailed(
+    id: string,
+    errorCode: string,
+    lastError: string,
+    at = new Date(),
+  ): Promise<void> {
+    await this.db
+      .prepare(
+        `
       UPDATE social_posts SET status = 'failed', error_code = ?, last_error = ?, updated_at = ?
       WHERE id = ? AND status IN ('queued', 'posting', 'failed')
-    `).bind(errorCode, lastError.slice(0, 500), d1Timestamp(at), id).run();
+    `,
+      )
+      .bind(errorCode, lastError.slice(0, 500), d1Timestamp(at), id)
+      .run();
   }
 
   async getFacebookMetricsSince(since: Date): Promise<FacebookMetrics> {
     const threshold = d1Timestamp(since);
-    const counts = await this.db.prepare(`
+    const counts = await this.db
+      .prepare(
+        `
       SELECT
         sum(CASE WHEN status = 'queued' THEN 1 ELSE 0 END) AS queued,
         sum(CASE WHEN status = 'posting' THEN 1 ELSE 0 END) AS posting,
         sum(CASE WHEN status = 'posted' AND posted_at >= ? THEN 1 ELSE 0 END) AS posted_24h,
         sum(CASE WHEN status = 'failed' AND updated_at >= ? THEN 1 ELSE 0 END) AS failed_24h
       FROM social_posts WHERE platform = 'facebook'
-    `).bind(threshold, threshold).first<{
-      queued: number | null; posting: number | null;
-      posted_24h: number | null; failed_24h: number | null;
-    }>();
-    const latestPosted = await this.db.prepare(`
+    `,
+      )
+      .bind(threshold, threshold)
+      .first<{
+        queued: number | null;
+        posting: number | null;
+        posted_24h: number | null;
+        failed_24h: number | null;
+      }>();
+    const latestPosted = await this.db
+      .prepare(
+        `
       SELECT posted_at, external_post_id FROM social_posts
       WHERE platform = 'facebook' AND status = 'posted'
       ORDER BY posted_at DESC LIMIT 1
-    `).first<{ posted_at: string | null; external_post_id: string | null }>();
-    const latestFailure = await this.db.prepare(`
+    `,
+      )
+      .first<{ posted_at: string | null; external_post_id: string | null }>();
+    const latestFailure = await this.db
+      .prepare(
+        `
       SELECT error_code FROM social_posts
       WHERE platform = 'facebook' AND status = 'failed'
       ORDER BY updated_at DESC LIMIT 1
-    `).first<{ error_code: string | null }>();
+    `,
+      )
+      .first<{ error_code: string | null }>();
     return {
       queued: counts?.queued ?? 0,
       posting: counts?.posting ?? 0,

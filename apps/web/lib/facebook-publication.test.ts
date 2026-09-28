@@ -17,7 +17,9 @@ import {
   enqueuePendingFacebookPosts,
 } from "./facebook-publication";
 
-function setup(options: { enabled?: boolean; created?: boolean; status?: string; enqueuedAt?: Date | null } = {}) {
+function setup(
+  options: { enabled?: boolean; created?: boolean; status?: string; enqueuedAt?: Date | null } = {},
+) {
   const post = {
     id: "social-1",
     storyId: "story-1",
@@ -142,16 +144,23 @@ describe("Facebook publication hook", () => {
     const fixture = setup();
     fixture.deps.socialPostRepository.listPendingFacebookEnqueue.mockResolvedValueOnce([
       {
-        id: "old-social", storyId: "old-story", storyVersionId: "old-version",
-        canonicalUrl: "https://mso24.hu/hir/old-story", status: "queued",
-        enqueuedAt: null, createdAt: new Date("2026-09-15T20:29:59.000Z"),
+        id: "old-social",
+        storyId: "old-story",
+        storyVersionId: "old-version",
+        canonicalUrl: "https://mso24.hu/hir/old-story",
+        status: "queued",
+        enqueuedAt: null,
+        createdAt: new Date("2026-09-15T20:29:59.000Z"),
       },
     ]);
     await expect(enqueuePendingFacebookPosts(fixture.deps)).resolves.toEqual({
-      disabled: false, enqueued: 0,
+      disabled: false,
+      enqueued: 0,
     });
-    expect(fixture.deps.socialPostRepository.listPendingFacebookEnqueue)
-      .toHaveBeenCalledWith(25, fixture.deps.activationStart);
+    expect(fixture.deps.socialPostRepository.listPendingFacebookEnqueue).toHaveBeenCalledWith(
+      25,
+      fixture.deps.activationStart,
+    );
     expect(fixture.send).not.toHaveBeenCalled();
   });
 });

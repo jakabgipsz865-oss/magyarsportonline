@@ -149,7 +149,10 @@ export async function enqueuePendingFacebookPosts(
   deps: FacebookPublicationDeps = defaultDeps(),
 ): Promise<{ disabled: boolean; enqueued: number }> {
   if (!deps.enabled) return { disabled: true, enqueued: 0 };
-  const pending = await deps.socialPostRepository.listPendingFacebookEnqueue(25, deps.activationStart);
+  const pending = await deps.socialPostRepository.listPendingFacebookEnqueue(
+    25,
+    deps.activationStart,
+  );
   let enqueued = 0;
   for (const post of pending) {
     if (post.createdAt < deps.activationStart) continue;

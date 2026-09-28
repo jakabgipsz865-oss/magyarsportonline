@@ -105,13 +105,17 @@ describe("structuredNewsArticleExtractor.extract", () => {
 
   it("extracts Daily Mail itemprop body without surrounding recommendations", () => {
     const html = `<html><head><script type="application/ld+json">${JSON.stringify({
-      "@type": "NewsArticle", headline: "Goalkeeper faces criticism after the league match",
+      "@type": "NewsArticle",
+      headline: "Goalkeeper faces criticism after the league match",
     })}</script></head><body><h1>Football News</h1><div id="js-article-text">
       <p class="byline-section">Published: Monday at 21:30. Updated Tuesday.</p>
       <div itemprop="articleBody"><p>${ARTICLE_BODY}</p><p>${ARTICLE_BODY} The manager then addressed the decision.</p></div>
       <div class="related"><p>${ARTICLE_BODY.repeat(4)} Unrelated recommendation.</p></div>
     </div></body></html>`;
-    const result = structuredNewsArticleExtractor.extract(html, "https://www.dailymail.com/sport/football/article-123/example.html");
+    const result = structuredNewsArticleExtractor.extract(
+      html,
+      "https://www.dailymail.com/sport/football/article-123/example.html",
+    );
     expect(result?.titleOriginal).toContain("Goalkeeper faces criticism");
     expect(result?.bodyOriginal).toContain("manager then addressed");
     expect(result?.bodyOriginal).not.toContain("Unrelated recommendation");

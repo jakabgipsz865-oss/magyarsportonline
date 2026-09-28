@@ -3,7 +3,14 @@ import { getLogger } from "./logger";
 /** Logs only stable IDs and timings; never article content or credentials. */
 export async function timedPipelineStage<T>(
   stage: string,
-  context: { jobId?: string | undefined; rawArticleId?: string | undefined; storyId?: string | undefined; sourceId?: string | undefined; attempt?: number | undefined; leaseOwner?: string | undefined },
+  context: {
+    jobId?: string | undefined;
+    rawArticleId?: string | undefined;
+    storyId?: string | undefined;
+    sourceId?: string | undefined;
+    attempt?: number | undefined;
+    leaseOwner?: string | undefined;
+  },
   run: () => Promise<T>,
 ): Promise<T> {
   const startedAt = Date.now();

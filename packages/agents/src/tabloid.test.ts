@@ -199,7 +199,11 @@ describe("one-call Hungarian writer", () => {
       ...input,
       content: sourceContent,
     });
-    expect(assessTabloidQuality({ sourceContent, output }).some((flag) => flag.code === "incomplete_coverage")).toBe(false);
+    expect(
+      assessTabloidQuality({ sourceContent, output }).some(
+        (flag) => flag.code === "incomplete_coverage",
+      ),
+    ).toBe(false);
   });
 
   it.each([
@@ -216,8 +220,16 @@ describe("one-call Hungarian writer", () => {
     ["Kickoff is at 18:30.", "A kezdés 18.30-kor lesz.", false],
     ["Kickoff is at 18:30.", "A kezdés 19.30-kor lesz.", true],
     ["Ronaldo scored 2 and Messi scored 3.", "Ronaldo 3, Messi 2 gólt szerzett.", true],
-    ["Luca Bolay (24) is worth 500.000 Euro.", "A 24 éves Luca Bolay értékét 500.000 eurónak tartják.", false],
-    ["Haaland faced 114 charges. Roberto Mancini denied wrongdoing.", "A 114 vád után Roberto Mancini tagadta a szabálytalanságot.", false],
+    [
+      "Luca Bolay (24) is worth 500.000 Euro.",
+      "A 24 éves Luca Bolay értékét 500.000 eurónak tartják.",
+      false,
+    ],
+    [
+      "Haaland faced 114 charges. Roberto Mancini denied wrongdoing.",
+      "A 114 vád után Roberto Mancini tagadta a szabálytalanságot.",
+      false,
+    ],
     ["The match is on October 11.", "Október 11-én lesz a mérkőzés a Premier League-ben.", false],
     ["Haaland equalised in the 51st minute.", "Haaland az 51. percben egyenlített.", false],
   ])("checks numeric meaning: %s => %s", (sourceContent, body_hu, rejected) => {
@@ -229,8 +241,16 @@ describe("one-call Hungarian writer", () => {
   });
 
   it("matches forbidden expressions at word boundaries", () => {
-    const output = { title_hu: "Keresztüljutott", lead_hu: "A keresztül vezető úton ment.", body_hu: "A játékos keresztülhaladt a pályán." };
-    const flags = assessTabloidQuality({ sourceContent: "The player went through the field.", output, forbiddenTerms: ["kereszt"] });
+    const output = {
+      title_hu: "Keresztüljutott",
+      lead_hu: "A keresztül vezető úton ment.",
+      body_hu: "A játékos keresztülhaladt a pályán.",
+    };
+    const flags = assessTabloidQuality({
+      sourceContent: "The player went through the field.",
+      output,
+      forbiddenTerms: ["kereszt"],
+    });
     expect(flags.some((flag) => flag.code === "forbidden_terminology")).toBe(false);
   });
 
@@ -325,19 +345,29 @@ describe("one-call Hungarian writer", () => {
   it("sends only an identified paragraph to Flash and avoids an unscoped body rewrite", async () => {
     const llm = client({ body_hu: "A csapat pontosan passzolt." });
     const output = {
-      title_hu: "A csapat győzött", lead_hu: "A mérkőzésen sok helyzet volt.",
+      title_hu: "A csapat győzött",
+      lead_hu: "A mérkőzésen sok helyzet volt.",
       body_hu: "Az első félidőben kevés helyzet volt.\n\nA csapat rosszul passzolt.",
-      language_warnings: [], generatedByModel: "gemini-3.5-flash-lite",
+      language_warnings: [],
+      generatedByModel: "gemini-3.5-flash-lite",
     };
-    await repairTabloid(llm, output, [{ kind: "hard", code: "forbidden_terminology",
-      field: "body", detail: "rosszul" }], { role: "targeted_repair" });
-    expect(llm.completeJson.mock.calls[0]?.[0]?.messages[0]?.content)
-      .toContain("A csapat rosszul passzolt.");
-    expect(llm.completeJson.mock.calls[0]?.[0]?.messages[0]?.content)
-      .not.toContain("Az első félidőben");
-    await expect(repairTabloid(llm, output,
-      [{ kind: "language", code: "foreign_language", field: "body" }],
-      { role: "targeted_repair" })).rejects.toThrow("one identifiable body paragraph");
+    await repairTabloid(
+      llm,
+      output,
+      [{ kind: "hard", code: "forbidden_terminology", field: "body", detail: "rosszul" }],
+      { role: "targeted_repair" },
+    );
+    expect(llm.completeJson.mock.calls[0]?.[0]?.messages[0]?.content).toContain(
+      "A csapat rosszul passzolt.",
+    );
+    expect(llm.completeJson.mock.calls[0]?.[0]?.messages[0]?.content).not.toContain(
+      "Az első félidőben",
+    );
+    await expect(
+      repairTabloid(llm, output, [{ kind: "language", code: "foreign_language", field: "body" }], {
+        role: "targeted_repair",
+      }),
+    ).rejects.toThrow("one identifiable body paragraph");
     expect(llm.completeJson).toHaveBeenCalledOnce();
   });
   it("deterministically splits a long one-block draft into readable paragraphs", () => {

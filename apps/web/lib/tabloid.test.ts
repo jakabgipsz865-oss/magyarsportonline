@@ -9,7 +9,13 @@ const mocks = vi.hoisted(() => ({
   project: vi.fn(),
   revalidate: vi.fn(),
   llm: {},
-  env: { TABLOID_AUTO_PUBLISH: true, FACEBOOK_AUTO_PUBLISH: true, FACEBOOK_AUTO_PUBLISH_START_AT: new Date("2026-09-15T20:30:00Z"), D1_PIPELINE_START_AT: undefined as Date | undefined, SITE_URL: "https://mso24.hu" },
+  env: {
+    TABLOID_AUTO_PUBLISH: true,
+    FACEBOOK_AUTO_PUBLISH: true,
+    FACEBOOK_AUTO_PUBLISH_START_AT: new Date("2026-09-15T20:30:00Z"),
+    D1_PIPELINE_START_AT: undefined as Date | undefined,
+    SITE_URL: "https://mso24.hu",
+  },
   accepted: vi.fn((_title: string) => true),
   fetchFullArticle: vi.fn(),
   fetchImages: vi.fn(),
@@ -21,7 +27,8 @@ vi.mock("./env", () => ({ env: mocks.env }));
 vi.mock("./tabloid-sources.json", () => ({ default: [{ id: "source-0" }, { id: "source-1" }] }));
 vi.mock("./db", () => ({ createRepositories: vi.fn(), d1Binding: mocks.d1Binding }));
 vi.mock("./facebook-publication", () => ({
-  buildFacebookPostText: ({ titleHu, canonicalUrl }: { titleHu: string; canonicalUrl: string }) => `${titleHu} ${canonicalUrl}`,
+  buildFacebookPostText: ({ titleHu, canonicalUrl }: { titleHu: string; canonicalUrl: string }) =>
+    `${titleHu} ${canonicalUrl}`,
   enqueueFacebookPublicationSafely: mocks.enqueueFacebook,
 }));
 vi.mock("./logger", () => ({
@@ -184,24 +191,67 @@ describe("tabloid publication", () => {
     mocks.d1Binding.mockReturnValue({} as never);
     mocks.env.D1_PIPELINE_START_AT = new Date("2026-09-28T17:30:00Z");
     mocks.fetchRss.mockResolvedValue([
-      { titleOriginal: "old", bodyOriginal: "football news", sourceUrl: "https://publisher.test/old", publishedAtSource: new Date("2026-09-28T17:29:59Z") },
-      { titleOriginal: "undated", bodyOriginal: "football news", sourceUrl: "https://publisher.test/undated", publishedAtSource: null },
-      { titleOriginal: "fresh", bodyOriginal: "football news", sourceUrl: "https://publisher.test/fresh", publishedAtSource: new Date("2026-09-28T17:30:01Z") },
+      {
+        titleOriginal: "old",
+        bodyOriginal: "football news",
+        sourceUrl: "https://publisher.test/old",
+        publishedAtSource: new Date("2026-09-28T17:29:59Z"),
+      },
+      {
+        titleOriginal: "undated",
+        bodyOriginal: "football news",
+        sourceUrl: "https://publisher.test/undated",
+        publishedAtSource: null,
+      },
+      {
+        titleOriginal: "fresh",
+        bodyOriginal: "football news",
+        sourceUrl: "https://publisher.test/fresh",
+        publishedAtSource: new Date("2026-09-28T17:30:01Z"),
+      },
     ]);
     const insert = vi.fn(async () => null);
     const claim = vi.fn(async () => []);
     const repos = {
       pipelineJobRepository: { getStatusCounts: async () => ({ pending: 0, inProgress: 0 }) },
       sourceRepository: {
-        listActive: async () => [{ id: "source-0", name: "Publisher", language: "en", fetchConfig: { tabloid: true, footballFeed: true, url: "https://publisher.test/feed" } }],
+        listActive: async () => [
+          {
+            id: "source-0",
+            name: "Publisher",
+            language: "en",
+            fetchConfig: { tabloid: true, footballFeed: true, url: "https://publisher.test/feed" },
+          },
+        ],
         recordFetchResult: vi.fn(),
       },
       rawArticleRepository: { insertTabloid: insert, claimTabloidFetchBatch: claim },
     } as unknown as Repositories;
     await ingestTabloid(repos);
-    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ sourceUrl: "https://publisher.test/old", processingStatus: "historical_before_activation", decisionReason: "source_published_before_activation", processingAvailableAt: null }), false);
-    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ sourceUrl: "https://publisher.test/undated", processingStatus: "review_unknown_source_date", processingAvailableAt: null }), false);
-    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ sourceUrl: "https://publisher.test/fresh", processingStatus: "awaiting_full_article" }), false);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceUrl: "https://publisher.test/old",
+        processingStatus: "historical_before_activation",
+        decisionReason: "source_published_before_activation",
+        processingAvailableAt: null,
+      }),
+      false,
+    );
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceUrl: "https://publisher.test/undated",
+        processingStatus: "review_unknown_source_date",
+        processingAvailableAt: null,
+      }),
+      false,
+    );
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceUrl: "https://publisher.test/fresh",
+        processingStatus: "awaiting_full_article",
+      }),
+      false,
+    );
     expect(claim).toHaveBeenCalledOnce();
   });
   it("never republishes a persisted v1 draft", async () => {
@@ -268,11 +318,19 @@ describe("tabloid publication", () => {
       },
       rawArticleRepository: {
         insertTabloid: insert,
-        claimTabloidFetchBatch: vi.fn(async () => [{
-          id: "raw", sourceId: "source-0", sourceUrl: "https://publisher.test/accepted",
-          titleOriginal: "accepted", bodyOriginal: "personal story", imageUrl: url,
-          publishedAtSource: new Date(), processingOwner: "owner-1", processingAttempts: 1,
-        }]),
+        claimTabloidFetchBatch: vi.fn(async () => [
+          {
+            id: "raw",
+            sourceId: "source-0",
+            sourceUrl: "https://publisher.test/accepted",
+            titleOriginal: "accepted",
+            bodyOriginal: "personal story",
+            imageUrl: url,
+            publishedAtSource: new Date(),
+            processingOwner: "owner-1",
+            processingAttempts: 1,
+          },
+        ]),
         upgradeAndEnqueueTabloid: upgradeAndEnqueue,
       },
     } as unknown as Repositories;
@@ -337,11 +395,19 @@ describe("tabloid publication", () => {
       },
       rawArticleRepository: {
         insertTabloid: insert,
-        claimTabloidFetchBatch: vi.fn(async () => [{
-          id: "raw", sourceId: "source-0", sourceUrl: "https://publisher.test/accepted",
-          titleOriginal: "accepted", bodyOriginal: "short RSS snippet", imageUrl: null,
-          publishedAtSource: new Date(), processingOwner: "owner-1", processingAttempts: 1,
-        }]),
+        claimTabloidFetchBatch: vi.fn(async () => [
+          {
+            id: "raw",
+            sourceId: "source-0",
+            sourceUrl: "https://publisher.test/accepted",
+            titleOriginal: "accepted",
+            bodyOriginal: "short RSS snippet",
+            imageUrl: null,
+            publishedAtSource: new Date(),
+            processingOwner: "owner-1",
+            processingAttempts: 1,
+          },
+        ]),
         deferTabloidFetch: vi.fn(async () => true),
         upgradeAndEnqueueTabloid: vi.fn(),
       },
@@ -357,14 +423,16 @@ describe("tabloid publication", () => {
     expect(result).toMatchObject({ deferredWithoutFullArticle: 1 });
   });
   it("persists an arriving RSS item while the processing queue is saturated", async () => {
-    mocks.fetchRss.mockResolvedValue([{
-      titleOriginal: "accepted",
-      bodyOriginal: "football report",
-      sourceUrl: "https://publisher.test/saturated",
-      guid: "saturated-guid",
-      publishedAtSource: new Date("2026-09-27T10:00:00Z"),
-      contentOrigin: "rss_snippet",
-    }]);
+    mocks.fetchRss.mockResolvedValue([
+      {
+        titleOriginal: "accepted",
+        bodyOriginal: "football report",
+        sourceUrl: "https://publisher.test/saturated",
+        guid: "saturated-guid",
+        publishedAtSource: new Date("2026-09-27T10:00:00Z"),
+        contentOrigin: "rss_snippet",
+      },
+    ]);
     const receipts = new Map<string, Record<string, unknown>>();
     const insert = vi.fn(async (data: Record<string, unknown>) => {
       const key = String(data["sourceUrl"]);
@@ -381,14 +449,22 @@ describe("tabloid publication", () => {
     const repos = {
       pipelineJobRepository: { getStatusCounts: async () => ({ pending, inProgress: 0 }) },
       sourceRepository: {
-        listActive: async () => [{
-          id: "source-0", name: "Publisher", language: "en",
-          ingestWatermarkAt: new Date("2026-09-27T10:01:00Z"),
-          fetchConfig: { tabloid: true, footballFeed: true, url: "https://publisher.test/feed" },
-        }],
+        listActive: async () => [
+          {
+            id: "source-0",
+            name: "Publisher",
+            language: "en",
+            ingestWatermarkAt: new Date("2026-09-27T10:01:00Z"),
+            fetchConfig: { tabloid: true, footballFeed: true, url: "https://publisher.test/feed" },
+          },
+        ],
         recordFetchResult: vi.fn(),
       },
-      rawArticleRepository: { insertTabloid: insert, claimTabloidFetchBatch: claim, upgradeAndEnqueueTabloid: upgrade },
+      rawArticleRepository: {
+        insertTabloid: insert,
+        claimTabloidFetchBatch: claim,
+        upgradeAndEnqueueTabloid: upgrade,
+      },
     } as unknown as Repositories;
 
     await ingestTabloid(repos);
@@ -400,7 +476,8 @@ describe("tabloid publication", () => {
 
     pending = 0;
     mocks.fetchFullArticle.mockResolvedValue({
-      titleOriginal: "Full report", bodyOriginal: "A complete football report.",
+      titleOriginal: "Full report",
+      bodyOriginal: "A complete football report.",
       publishedAtSource: new Date("2026-09-27T10:00:00Z"),
     });
     mocks.fetchImages.mockResolvedValue({ primary: null, inlineImages: [] });
@@ -408,7 +485,8 @@ describe("tabloid publication", () => {
 
     expect(insert).toHaveBeenCalledTimes(3);
     expect(insert).toHaveBeenCalledWith(
-      expect.objectContaining({ sourceUrl: "https://publisher.test/saturated" }), false,
+      expect.objectContaining({ sourceUrl: "https://publisher.test/saturated" }),
+      false,
     );
     expect(upgrade).toHaveBeenCalledTimes(1);
     expect(resumed).toMatchObject({ queuedCount: 1 });
@@ -518,7 +596,10 @@ describe("tabloid publication", () => {
     expect(insert).toHaveBeenCalledTimes(3);
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ titleOriginal: "new" }), false);
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ titleOriginal: "old" }), false);
-    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ titleOriginal: "undated" }), false);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ titleOriginal: "undated" }),
+      false,
+    );
     expect(upgradeAndEnqueue).not.toHaveBeenCalled();
   });
   it("keeps historical jobless items out of automatic publication", async () => {
@@ -595,7 +676,9 @@ describe("tabloid publication", () => {
     });
     await publishTabloid("one", repos, { jobId: "job-1", jobOwner: "owner-1" });
     expect(publishVersionIfClaim).toHaveBeenCalledWith(
-      expect.any(String), expect.any(String), expect.any(Date),
+      expect.any(String),
+      expect.any(String),
+      expect.any(Date),
       { jobId: "job-1", owner: "owner-1" },
       expect.objectContaining({
         canonicalUrl: expect.stringMatching(/^https:\/\/mso24\.hu\/hir\//),
@@ -695,13 +778,21 @@ describe("tabloid publication", () => {
       { kind: "hard", code: "number_integrity", field: "body", detail: "99" },
     ]);
 
-    await expect(publishTabloid("one", repos)).resolves.toMatchObject({ skipped: true, reason: "quality-review" });
-    await expect(publishTabloid("one", repos)).resolves.toMatchObject({ skipped: true, reason: "quality-review" });
+    await expect(publishTabloid("one", repos)).resolves.toMatchObject({
+      skipped: true,
+      reason: "quality-review",
+    });
+    await expect(publishTabloid("one", repos)).resolves.toMatchObject({
+      skipped: true,
+      reason: "quality-review",
+    });
 
     expect(mocks.write).toHaveBeenCalledOnce();
     expect(mocks.repair).not.toHaveBeenCalled();
     expect(repos.reviewQueueRepository.ensureContentQualityReview).toHaveBeenCalledWith(
-      expect.any(String), expect.any(String), undefined,
+      expect.any(String),
+      expect.any(String),
+      undefined,
     );
     expect([...versions.values()][0]?.["qualityIssues"]).toEqual([
       expect.objectContaining({

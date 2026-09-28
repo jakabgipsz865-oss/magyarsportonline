@@ -89,7 +89,11 @@ export class StoryVersionRepository {
    * read, so two concurrent updates to the same Story cannot compute the
    * same version number.
    */
-  async createNextVersion(storyId: string, input: NewStoryVersionInput, claim?: JobClaim): Promise<StoryVersion> {
+  async createNextVersion(
+    storyId: string,
+    input: NewStoryVersionInput,
+    claim?: JobClaim,
+  ): Promise<StoryVersion> {
     return this.db.transaction(async (tx) => {
       if (claim) {
         const active = await tx.execute<{ id: string }>(sql`
@@ -189,19 +193,19 @@ export class StoryVersionRepository {
     claim?: JobClaim,
   ): Promise<boolean> {
     const values = {
-        titleHu: content.titleHu,
-        leadHu: content.leadHu,
-        bodyHu: content.bodyHu,
-        editorialRewriteApplied: content.editorialRewriteApplied,
-        ...(content.qualityIssues !== undefined
-          ? {
-              qualityIssues:
-                content.qualityIssues && content.qualityIssues.length > 0
-                  ? content.qualityIssues
-                  : null,
-            }
-          : {}),
-      };
+      titleHu: content.titleHu,
+      leadHu: content.leadHu,
+      bodyHu: content.bodyHu,
+      editorialRewriteApplied: content.editorialRewriteApplied,
+      ...(content.qualityIssues !== undefined
+        ? {
+            qualityIssues:
+              content.qualityIssues && content.qualityIssues.length > 0
+                ? content.qualityIssues
+                : null,
+          }
+        : {}),
+    };
     if (claim) {
       return this.db.transaction(async (tx) => {
         const active = await tx.execute<{ id: string }>(sql`
@@ -210,13 +214,17 @@ export class StoryVersionRepository {
           FOR UPDATE
         `);
         if (active.length === 0) throw new LostJobClaimError();
-        const rows = await tx.update(storyVersions).set(values)
+        const rows = await tx
+          .update(storyVersions)
+          .set(values)
           .where(and(eq(storyVersions.id, versionId), eq(storyVersions.isPublished, false)))
           .returning({ id: storyVersions.id });
         return rows.length > 0;
       });
     }
-    const rows = await this.db.update(storyVersions).set(values)
+    const rows = await this.db
+      .update(storyVersions)
+      .set(values)
       .where(and(eq(storyVersions.id, versionId), eq(storyVersions.isPublished, false)))
       .returning({ id: storyVersions.id });
     return rows.length > 0;

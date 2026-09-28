@@ -8,7 +8,10 @@ import {
   isGeminiDefinitelyUnmeteredError,
 } from "./gemini-client";
 
-function jsonResponse(body: unknown, init?: { status?: number; headers?: Record<string, string> }): Response {
+function jsonResponse(
+  body: unknown,
+  init?: { status?: number; headers?: Record<string, string> },
+): Response {
   return new Response(JSON.stringify(body), {
     status: init?.status ?? 200,
     headers: { "content-type": "application/json", ...init?.headers },
@@ -210,10 +213,12 @@ describe("GeminiLlmClient", () => {
   });
 
   it("does not classify a generic 429 as a daily quota and preserves Retry-After", async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse(
-      { error: { code: 429, message: "Rate limit exceeded", status: "RESOURCE_EXHAUSTED" } },
-      { status: 429, headers: { "Retry-After": "45" } },
-    ));
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse(
+        { error: { code: 429, message: "Rate limit exceeded", status: "RESOURCE_EXHAUSTED" } },
+        { status: 429, headers: { "Retry-After": "45" } },
+      ),
+    );
     const client = new GeminiLlmClient({ apiKey: "key", fetchImpl });
     try {
       await client.completeText(textRequest);
@@ -225,13 +230,20 @@ describe("GeminiLlmClient", () => {
   });
 
   it("identifies a Cloudflare Gateway 2018 rate limit separately", async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse(
-      { success: false, errors: [{ code: 2018, message: "Rate limit exceeded" }] },
-      { status: 429, headers: { "Retry-After": "30" } },
-    ));
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse(
+        { success: false, errors: [{ code: 2018, message: "Rate limit exceeded" }] },
+        { status: 429, headers: { "Retry-After": "30" } },
+      ),
+    );
     const client = new GeminiLlmClient({
-      model: "gemini-test", fetchImpl,
-      unifiedBilling: { accountId: "test-account", apiToken: "test-token", gatewayId: "test-gateway" },
+      model: "gemini-test",
+      fetchImpl,
+      unifiedBilling: {
+        accountId: "test-account",
+        apiToken: "test-token",
+        gatewayId: "test-gateway",
+      },
     });
     try {
       await client.completeText(textRequest);
@@ -244,8 +256,14 @@ describe("GeminiLlmClient", () => {
   });
 
   it("classifies only an explicit per-day provider quota as daily", () => {
-    expect(isGeminiDailyQuotaError(new GeminiApiError(429, "RESOURCE_EXHAUSTED", "Requests per day quota exceeded"))).toBe(true);
-    expect(isGeminiDailyQuotaError(new GeminiApiError(429, "RESOURCE_EXHAUSTED", "Rate limit exceeded"))).toBe(false);
+    expect(
+      isGeminiDailyQuotaError(
+        new GeminiApiError(429, "RESOURCE_EXHAUSTED", "Requests per day quota exceeded"),
+      ),
+    ).toBe(true);
+    expect(
+      isGeminiDailyQuotaError(new GeminiApiError(429, "RESOURCE_EXHAUSTED", "Rate limit exceeded")),
+    ).toBe(false);
   });
 
   it("throws GeminiApiError(status=0) on a network failure", async () => {
@@ -340,7 +358,9 @@ describe("GeminiLlmClient", () => {
 
 describe("describeGeminiError", () => {
   it("classifies quota, forbidden, blocked, service and network errors", () => {
-    expect(describeGeminiError(new GeminiApiError(429, "RESOURCE_EXHAUSTED", "x"))).toBe("rate_limited");
+    expect(describeGeminiError(new GeminiApiError(429, "RESOURCE_EXHAUSTED", "x"))).toBe(
+      "rate_limited",
+    );
     expect(describeGeminiError(new GeminiApiError(403, "PERMISSION_DENIED", "x"))).toBe(
       "forbidden",
     );

@@ -39,8 +39,10 @@ export default async function AdminDashboardPage(): Promise<ReactNode> {
   const [pendingReviewCount, pendingMergeReviewCount] = d1
     ? await Promise.all([
         countD1PendingReviews(d1),
-        d1.prepare("SELECT COUNT(*) AS count FROM missed_merge_reviews WHERE decision IS NULL")
-          .first<{ count: number }>().then(row => row?.count ?? 0),
+        d1
+          .prepare("SELECT COUNT(*) AS count FROM missed_merge_reviews WHERE decision IS NULL")
+          .first<{ count: number }>()
+          .then((row) => row?.count ?? 0),
       ])
     : await (async () => {
         const repos = createRepositories();

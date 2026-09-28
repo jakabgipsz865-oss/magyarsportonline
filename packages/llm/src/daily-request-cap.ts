@@ -153,16 +153,25 @@ export class DailyRequestCappedLlmClient implements LlmClient {
 
   private async reserve(request: TextCompletionRequest | JsonCompletionRequest): Promise<string> {
     const model = this.inner.modelLabel ?? "unknown";
-    const budget = this.monthlyBudget ? {
-      since: new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)),
-      capUsd: this.monthlyBudget.capUsd,
-      externalSpentUsd: this.monthlyBudget.externalSpentUsd,
-      // UTF-8 byte length is a conservative upper bound on input tokens.
-      // Reserve twice the configured output allowance for thinking/metadata.
-      reserveUsd: Math.max(0.000001, this.estimateCostUsd(model,
-        new TextEncoder().encode(request.system + request.messages.map(message => message.content).join("")).length,
-        request.maxTokens * 2)),
-    } : undefined;
+    const budget = this.monthlyBudget
+      ? {
+          since: new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)),
+          capUsd: this.monthlyBudget.capUsd,
+          externalSpentUsd: this.monthlyBudget.externalSpentUsd,
+          // UTF-8 byte length is a conservative upper bound on input tokens.
+          // Reserve twice the configured output allowance for thinking/metadata.
+          reserveUsd: Math.max(
+            0.000001,
+            this.estimateCostUsd(
+              model,
+              new TextEncoder().encode(
+                request.system + request.messages.map((message) => message.content).join(""),
+              ).length,
+              request.maxTokens * 2,
+            ),
+          ),
+        }
+      : undefined;
     const reservationId = await this.usage.reserveRequest(
       this.provider,
       model,

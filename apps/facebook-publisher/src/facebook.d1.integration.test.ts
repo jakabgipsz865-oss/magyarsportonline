@@ -14,10 +14,19 @@ function localD1(db: DatabaseSyncType): D1Client {
       const statement = db.prepare(query);
       let values: (string | number | null)[] = [];
       return {
-        bind(...input) { values = input.map(value => typeof value === "boolean" ? Number(value) : value); return this; },
-        async first<T>() { return (statement.get(...values) as T | undefined) ?? null; },
-        async all<T>() { return { results: statement.all(...values) as T[] }; },
-        async run() { return { meta: { changes: Number(statement.run(...values).changes) } }; },
+        bind(...input) {
+          values = input.map((value) => (typeof value === "boolean" ? Number(value) : value));
+          return this;
+        },
+        async first<T>() {
+          return (statement.get(...values) as T | undefined) ?? null;
+        },
+        async all<T>() {
+          return { results: statement.all(...values) as T[] };
+        },
+        async run() {
+          return { meta: { changes: Number(statement.run(...values).changes) } };
+        },
       };
     },
   };
@@ -38,19 +47,26 @@ describe("Facebook consumer with D1 persistence", () => {
       )`);
       const repository = new D1SocialPostRepository(localD1(db));
       const { post } = await repository.createFacebookQueued({
-        storyId: "story-new", storyVersionId: "version-new", postText: "Fresh",
+        storyId: "story-new",
+        storyVersionId: "version-new",
+        postText: "Fresh",
         canonicalUrl: "https://mso24.hu/hir/fresh",
       });
       const ack = vi.fn();
       const message = {
         body: {
-          socialPostId: post.id, storyId: post.storyId,
-          storyVersionId: post.storyVersionId, canonicalUrl: post.canonicalUrl,
+          socialPostId: post.id,
+          storyId: post.storyId,
+          storyVersionId: post.storyVersionId,
+          canonicalUrl: post.canonicalUrl,
         },
-        attempts: 1, ack, retry: vi.fn(),
+        attempts: 1,
+        ack,
+        retry: vi.fn(),
       };
-      const fetchMock = vi.fn(async () => new Response(JSON.stringify({ id: "page_post_123" }),
-        { status: 200 }));
+      const fetchMock = vi.fn(
+        async () => new Response(JSON.stringify({ id: "page_post_123" }), { status: 200 }),
+      );
       const env = {
         FACEBOOK_AUTO_PUBLISH: "true",
         FACEBOOK_AUTO_PUBLISH_START_AT: "2026-09-15T20:30:00.000Z",

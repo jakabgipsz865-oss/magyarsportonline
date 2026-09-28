@@ -53,7 +53,11 @@ export class ReviewQueueRepository {
   constructor(private readonly db: Database) {}
 
   /** Idempotent handoff of a saved draft to human quality review. */
-  async ensureContentQualityReview(storyId: string, storyVersionId: string, claim?: JobClaim): Promise<void> {
+  async ensureContentQualityReview(
+    storyId: string,
+    storyVersionId: string,
+    claim?: JobClaim,
+  ): Promise<void> {
     await this.db.transaction(async (tx) => {
       if (claim) {
         const active = await tx.execute<{ id: string }>(sql`
@@ -63,16 +67,25 @@ export class ReviewQueueRepository {
         `);
         if (active.length === 0) throw new LostJobClaimError();
       }
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${"quality-review:" + storyVersionId}, 0))`);
-      const [existing] = await tx.select({ id: reviewQueueItems.id }).from(reviewQueueItems)
-        .where(and(
-          eq(reviewQueueItems.storyVersionId, storyVersionId),
-          eq(reviewQueueItems.reason, "content_quality_failed"),
-          eq(reviewQueueItems.status, "pending"),
-        )).limit(1);
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${"quality-review:" + storyVersionId}, 0))`,
+      );
+      const [existing] = await tx
+        .select({ id: reviewQueueItems.id })
+        .from(reviewQueueItems)
+        .where(
+          and(
+            eq(reviewQueueItems.storyVersionId, storyVersionId),
+            eq(reviewQueueItems.reason, "content_quality_failed"),
+            eq(reviewQueueItems.status, "pending"),
+          ),
+        )
+        .limit(1);
       if (existing) return;
       await tx.insert(reviewQueueItems).values({
-        storyId, storyVersionId, reason: "content_quality_failed",
+        storyId,
+        storyVersionId,
+        reason: "content_quality_failed",
       });
     });
   }

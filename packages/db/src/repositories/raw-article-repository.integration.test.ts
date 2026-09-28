@@ -17,9 +17,10 @@ integration("RawArticleRepository RSS receipt recovery", () => {
     for (const statement of [
       "CREATE TYPE ingest_status AS ENUM ('ingested','deduped','merged','error')",
       "CREATE TYPE pipeline_job_status AS ENUM ('pending','in_progress','completed','dead_letter')",
-    ]) await client.unsafe(statement).catch((error: unknown) => {
-      if (!(error instanceof Error) || !error.message.includes("already exists")) throw error;
-    });
+    ])
+      await client.unsafe(statement).catch((error: unknown) => {
+        if (!(error instanceof Error) || !error.message.includes("already exists")) throw error;
+      });
     await client.unsafe(`CREATE TABLE IF NOT EXISTS pipeline_jobs (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), event jsonb NOT NULL,
       status pipeline_job_status NOT NULL DEFAULT 'pending',
@@ -45,23 +46,36 @@ integration("RawArticleRepository RSS receipt recovery", () => {
       story_id uuid, published_at_source timestamptz,
       ingested_at timestamptz NOT NULL DEFAULT now()
     )`);
-    await client.unsafe("CREATE UNIQUE INDEX IF NOT EXISTS raw_articles_source_url_unique ON raw_articles (source_id, source_url)");
-    await client.unsafe("CREATE UNIQUE INDEX IF NOT EXISTS raw_articles_source_guid_unique ON raw_articles (source_id, (extracted_entities->>'rssGuid'))");
+    await client.unsafe(
+      "CREATE UNIQUE INDEX IF NOT EXISTS raw_articles_source_url_unique ON raw_articles (source_id, source_url)",
+    );
+    await client.unsafe(
+      "CREATE UNIQUE INDEX IF NOT EXISTS raw_articles_source_guid_unique ON raw_articles (source_id, (extracted_entities->>'rssGuid'))",
+    );
     repo = new RawArticleRepository(db as never);
   });
   beforeEach(async () => {
     await client.unsafe("TRUNCATE pipeline_jobs");
     await client.unsafe("TRUNCATE raw_articles");
   });
-  afterAll(async () => { await client?.end(); });
+  afterAll(async () => {
+    await client?.end();
+  });
 
   it("retains one immutable receipt, retries the full page, and fences the old fetcher", async () => {
     const firstSeenAt = new Date("2026-09-27T10:00:00Z");
     const receipt = {
-      sourceId, sourceUrl: "https://publisher.test/article", titleOriginal: "RSS headline",
-      bodyOriginal: "RSS description", language: "en", rssTitle: "RSS headline",
-      rssDescription: "RSS description", rssGuid: "guid-1", firstSeenAt,
-      processingStatus: "awaiting_full_article", decisionReason: "awaiting_processing_capacity",
+      sourceId,
+      sourceUrl: "https://publisher.test/article",
+      titleOriginal: "RSS headline",
+      bodyOriginal: "RSS description",
+      language: "en",
+      rssTitle: "RSS headline",
+      rssDescription: "RSS description",
+      rssGuid: "guid-1",
+      firstSeenAt,
+      processingStatus: "awaiting_full_article",
+      decisionReason: "awaiting_processing_capacity",
       processingAvailableAt: new Date(Date.now() - 1000),
       extractedEntities: { rssGuid: "guid-1" },
     };
@@ -71,18 +85,35 @@ integration("RawArticleRepository RSS receipt recovery", () => {
     const [claimed] = await repo.claimTabloidFetchBatch([sourceId], 4, 1000);
     expect(claimed?.id).toBe(first!.id);
     expect(claimed?.processingOwner).toBeTruthy();
-    expect(await repo.deferTabloidFetch(first!.id, claimed!.processingOwner!, "timeout", 1)).toBe(true);
-    await client.unsafe("UPDATE raw_articles SET processing_available_at = now() - interval '1 second' WHERE id = $1", [first!.id]);
+    expect(await repo.deferTabloidFetch(first!.id, claimed!.processingOwner!, "timeout", 1)).toBe(
+      true,
+    );
+    await client.unsafe(
+      "UPDATE raw_articles SET processing_available_at = now() - interval '1 second' WHERE id = $1",
+      [first!.id],
+    );
     const [reclaimed] = await repo.claimTabloidFetchBatch([sourceId], 4, 1000);
     expect(reclaimed?.processingOwner).not.toBe(claimed?.processingOwner);
     const full = {
-      sourceUrl: receipt.sourceUrl, titleOriginal: "Full headline", subtitleOriginal: null,
-      bodyOriginal: "The full source article.", authorOriginal: null,
-      publishedAtSource: new Date("2026-09-27T09:59:00Z"), imageUrl: null, inlineImages: [],
+      sourceUrl: receipt.sourceUrl,
+      titleOriginal: "Full headline",
+      subtitleOriginal: null,
+      bodyOriginal: "The full source article.",
+      authorOriginal: null,
+      publishedAtSource: new Date("2026-09-27T09:59:00Z"),
+      imageUrl: null,
+      inlineImages: [],
     };
-    expect(await repo.upgradeAndEnqueueTabloid(first!.id, full, claimed!.processingOwner!)).toBe(false);
-    expect(await repo.upgradeAndEnqueueTabloid(first!.id, full, reclaimed!.processingOwner!)).toBe(true);
-    const [saved] = await client.unsafe("SELECT rss_title, rss_description, rss_guid, first_seen_at, title_original, processing_status FROM raw_articles WHERE id = $1", [first!.id]);
+    expect(await repo.upgradeAndEnqueueTabloid(first!.id, full, claimed!.processingOwner!)).toBe(
+      false,
+    );
+    expect(await repo.upgradeAndEnqueueTabloid(first!.id, full, reclaimed!.processingOwner!)).toBe(
+      true,
+    );
+    const [saved] = await client.unsafe(
+      "SELECT rss_title, rss_description, rss_guid, first_seen_at, title_original, processing_status FROM raw_articles WHERE id = $1",
+      [first!.id],
+    );
     expect(saved?.["rss_title"]).toBe("RSS headline");
     expect(saved?.["rss_description"]).toBe("RSS description");
     expect(saved?.["rss_guid"]).toBe("guid-1");

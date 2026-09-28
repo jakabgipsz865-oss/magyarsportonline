@@ -38,11 +38,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     const d1 = d1Binding();
-    const result = d1 ? await decideD1Review(d1, itemId, "approve") : await approveReviewItem(itemId);
+    const result = d1
+      ? await decideD1Review(d1, itemId, "approve")
+      : await approveReviewItem(itemId);
     if (!result.ok) {
       if (result.error === "publication_blocked" || result.error === "quality_blocked") {
         return NextResponse.json(
-          { error: result.error, ...(result.error === "publication_blocked" ? { blockers: result.blockers } : {}) },
+          {
+            error: result.error,
+            ...(result.error === "publication_blocked" ? { blockers: result.blockers } : {}),
+          },
           { status: 422 },
         );
       }

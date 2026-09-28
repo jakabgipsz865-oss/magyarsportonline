@@ -3,7 +3,13 @@ import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Database } from "../client";
 import { isUniqueViolation } from "../errors";
 import { withFingerprintLock } from "../locking";
-import { pipelineJobs, socialPosts, stories, storyFingerprints, storyVersions } from "../schema/index";
+import {
+  pipelineJobs,
+  socialPosts,
+  stories,
+  storyFingerprints,
+  storyVersions,
+} from "../schema/index";
 import { LostJobClaimError, type JobClaim } from "./pipeline-job-repository";
 
 export type Story = typeof stories.$inferSelect;
@@ -271,13 +277,17 @@ export class StoryRepository {
             FOR UPDATE
           `);
           if (active.length === 0) throw new LostJobClaimError();
-          const rows = await tx.update(stories).set({ slug })
+          const rows = await tx
+            .update(stories)
+            .set({ slug })
             .where(and(eq(stories.id, storyId), isNull(stories.slug)))
             .returning({ id: stories.id });
           return rows.length > 0;
         });
       }
-      const rows = await this.db.update(stories).set({ slug })
+      const rows = await this.db
+        .update(stories)
+        .set({ slug })
         .where(and(eq(stories.id, storyId), isNull(stories.slug)))
         .returning({ id: stories.id });
       return rows.length > 0;
@@ -317,29 +327,46 @@ export class StoryRepository {
         FOR UPDATE
       `);
       if (active.length === 0) throw new LostJobClaimError();
-      const [story] = await tx.select({ id: stories.id, status: stories.status, currentVersionId: stories.currentVersionId })
-        .from(stories).where(eq(stories.id, storyId)).for("update");
+      const [story] = await tx
+        .select({
+          id: stories.id,
+          status: stories.status,
+          currentVersionId: stories.currentVersionId,
+        })
+        .from(stories)
+        .where(eq(stories.id, storyId))
+        .for("update");
       if (!story) throw new Error("Story missing at publication");
       if (story.status === "published" && story.currentVersionId !== versionId) return false;
       if (story.status !== "published") {
-        const [version] = await tx.update(storyVersions).set({ isPublished: true })
+        const [version] = await tx
+          .update(storyVersions)
+          .set({ isPublished: true })
           .where(and(eq(storyVersions.id, versionId), eq(storyVersions.storyId, storyId)))
           .returning({ id: storyVersions.id });
         if (!version) throw new Error("Story version missing at publication");
-        await tx.update(stories).set({
-          status: "published", currentVersionId: versionId,
-          publishedAt, lastUpdatedAt: publishedAt,
-        }).where(eq(stories.id, storyId));
+        await tx
+          .update(stories)
+          .set({
+            status: "published",
+            currentVersionId: versionId,
+            publishedAt,
+            lastUpdatedAt: publishedAt,
+          })
+          .where(eq(stories.id, storyId));
       }
       if (facebookIntent) {
-        await tx.insert(socialPosts).values({
-          storyId,
-          storyVersionId: versionId,
-          platform: "facebook",
-          status: "queued",
-          postText: facebookIntent.postText,
-          canonicalUrl: facebookIntent.canonicalUrl,
-        }).onConflictDoNothing();
+        await tx
+          .insert(socialPosts)
+          .values({
+            storyId,
+            storyVersionId: versionId,
+            platform: "facebook",
+            status: "queued",
+            postText: facebookIntent.postText,
+            canonicalUrl: facebookIntent.canonicalUrl,
+          })
+          .onConflictDoNothing();
       }
       return true;
     });

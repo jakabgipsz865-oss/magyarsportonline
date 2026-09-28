@@ -26,25 +26,34 @@ export default {
         <pubDate>Mon, 28 Sep 2026 15:31:00 GMT</pubDate>
         <description>An isolated soup recipe with carrots and potatoes.</description>
         </item></channel></rss>`;
-      return new Response(rss, { headers: { ...headers, "content-type": "application/rss+xml; charset=utf-8" } });
+      return new Response(rss, {
+        headers: { ...headers, "content-type": "application/rss+xml; charset=utf-8" },
+      });
     }
-    if (url.pathname === "/football-arsenal-fixture" ||
-        url.pathname === "/football-arsenal-ai-fixture") {
+    if (
+      url.pathname === "/football-arsenal-fixture" ||
+      url.pathname === "/football-arsenal-ai-fixture"
+    ) {
       const headline = url.pathname.endsWith("ai-fixture")
         ? "Arsenal football signing AI pipeline fixture"
         : "Arsenal football signing isolated test fixture";
       const structured = JSON.stringify({
-        "@context": "https://schema.org", "@type": "NewsArticle",
-        headline, articleBody: body,
+        "@context": "https://schema.org",
+        "@type": "NewsArticle",
+        headline,
+        articleBody: body,
         datePublished: url.pathname.endsWith("ai-fixture")
-          ? "2026-09-28T16:20:00Z" : "2026-09-28T15:30:00Z",
+          ? "2026-09-28T16:20:00Z"
+          : "2026-09-28T15:30:00Z",
         author: { "@type": "Organization", name: "MSO24 isolated fixture" },
       });
       const html = `<!doctype html><html lang="en"><head><title>Isolated D1 fixture</title>
         <script type="application/ld+json">${structured}</script></head><body>
         <article><h1>${headline}</h1>
         <p>${body}</p></article></body></html>`;
-      return new Response(html, { headers: { ...headers, "content-type": "text/html; charset=utf-8" } });
+      return new Response(html, {
+        headers: { ...headers, "content-type": "text/html; charset=utf-8" },
+      });
     }
     return new Response("Not found", { status: 404, headers });
   },

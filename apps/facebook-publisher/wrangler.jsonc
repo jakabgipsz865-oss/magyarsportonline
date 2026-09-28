@@ -5,11 +5,13 @@
   "compatibility_date": "2026-09-12",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "workers_dev": false,
-  "d1_databases": [{
-    "binding": "DB",
-    "database_name": "mso-remediation-staging-20260928",
-    "database_id": "eb02f98e-fd89-4277-94be-0f763056b91e"
-  }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mso-remediation-staging-20260928",
+      "database_id": "eb02f98e-fd89-4277-94be-0f763056b91e",
+    },
+  ],
   "vars": {
     "META_GRAPH_API_VERSION": "v26.0",
     "PUBLIC_SITE_ORIGIN": "https://mso24.hu",

@@ -25,8 +25,8 @@ export default function ImpresszumPage(): ReactNode {
 
         <h2>Az oldal működése</h2>
         <p>
-          Az MSO24 magánszemélyként működtetett, nem üzletszerű, bevételt nem termelő
-          hobbioldal. Az oldalon nincs hirdetés, előfizetés vagy értékesítés.
+          Az MSO24 magánszemélyként működtetett, nem üzletszerű, bevételt nem termelő hobbioldal. Az
+          oldalon nincs hirdetés, előfizetés vagy értékesítés.
         </p>
         <p>
           A cikkek előállításában automatizált, mesterséges intelligenciát használó rendszer vesz

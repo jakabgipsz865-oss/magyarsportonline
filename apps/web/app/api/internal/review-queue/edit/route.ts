@@ -69,7 +69,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       bodyHu: body.bodyHu,
     };
     const d1 = d1Binding();
-    const result = d1 ? await editD1Review(d1, body.itemId, content)
+    const result = d1
+      ? await editD1Review(d1, body.itemId, content)
       : await editReviewItemContent(body.itemId, content);
     if (!result.ok) {
       const status =
@@ -77,7 +78,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           ? 409
           : result.error === "already_published"
             ? 422
-            : result.error === "quality_blocked" ? 422 : 404;
+            : result.error === "quality_blocked"
+              ? 422
+              : 404;
       return NextResponse.json({ error: result.error }, { status });
     }
     return NextResponse.json({ edited: true, itemId: body.itemId });

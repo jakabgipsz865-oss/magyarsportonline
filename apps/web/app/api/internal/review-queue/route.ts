@@ -28,7 +28,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (d1) {
     const items = await listD1ReviewItems(d1);
     const requested = request.nextUrl.searchParams.get("itemId");
-    const selected = requested ? items.filter(item => item.id === requested) : items;
+    const selected = requested ? items.filter((item) => item.id === requested) : items;
     return NextResponse.json({ total: selected.length, items: selected });
   }
 

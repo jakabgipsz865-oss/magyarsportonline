@@ -26,8 +26,10 @@ describe("ArticleFetcher", () => {
 
     expect(result).toBeNull();
     expect(htmlFetcher.fetch).not.toHaveBeenCalled();
-    expect(await fetcher.fetchWithMediaDetailed("https://unsupported.example.com/1"))
-      .toEqual({ page: null, failure: "unsupported_domain" });
+    expect(await fetcher.fetchWithMediaDetailed("https://unsupported.example.com/1")).toEqual({
+      page: null,
+      failure: "unsupported_domain",
+    });
   });
 
   it("downloads the HTML and returns the extractor's result when supported", async () => {
@@ -65,15 +67,21 @@ describe("ArticleFetcher", () => {
     const result = await fetcher.fetch("https://example.com/article-1");
 
     expect(result).toBeNull();
-    expect((await fetcher.fetchWithMediaDetailed("https://example.com/article-1")).failure)
-      .toBe("extractor_empty_or_insufficient_text");
+    expect((await fetcher.fetchWithMediaDetailed("https://example.com/article-1")).failure).toBe(
+      "extractor_empty_or_insufficient_text",
+    );
   });
 
   it("records HTTP blocking separately from an empty extractor", async () => {
-    const htmlFetcher: HtmlFetcher = { fetch: vi.fn(async () => { throw new Error("HTTP 403 fetching page"); }) };
+    const htmlFetcher: HtmlFetcher = {
+      fetch: vi.fn(async () => {
+        throw new Error("HTTP 403 fetching page");
+      }),
+    };
     const fetcher = new ArticleFetcher(htmlFetcher, [fakeExtractor()]);
-    expect((await fetcher.fetchWithMediaDetailed("https://example.com/article-1")).failure)
-      .toBe("http_403");
+    expect((await fetcher.fetchWithMediaDetailed("https://example.com/article-1")).failure).toBe(
+      "http_403",
+    );
   });
 
   it("returns null (never throws) when the HTML download fails, after retrying once", async () => {

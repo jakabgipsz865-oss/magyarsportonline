@@ -64,15 +64,21 @@ export class TabloidWriterBusyError extends Error {
 }
 
 function e2eFeedBinding(): { fetch(request: Request): Promise<Response> } {
-  if (!env.D1_TEST_SOURCE_ORIGIN || !d1Binding() ||
-      !new URL(env.SITE_URL).hostname.endsWith(".workers.dev") ||
-      !new URL(env.D1_TEST_SOURCE_ORIGIN).hostname.endsWith(".workers.dev") ||
-      env.FACEBOOK_AUTO_PUBLISH || env.DATABASE_URL) {
+  if (
+    !env.D1_TEST_SOURCE_ORIGIN ||
+    !d1Binding() ||
+    !new URL(env.SITE_URL).hostname.endsWith(".workers.dev") ||
+    !new URL(env.D1_TEST_SOURCE_ORIGIN).hostname.endsWith(".workers.dev") ||
+    env.FACEBOOK_AUTO_PUBLISH ||
+    env.DATABASE_URL
+  ) {
     throw new Error("D1 E2E feed is only allowed in D1-only workers.dev staging");
   }
-  const binding = (getCloudflareContext().env as unknown as {
-    E2E_FEED?: { fetch(request: Request): Promise<Response> };
-  }).E2E_FEED;
+  const binding = (
+    getCloudflareContext().env as unknown as {
+      E2E_FEED?: { fetch(request: Request): Promise<Response> };
+    }
+  ).E2E_FEED;
   if (!binding) throw new Error("D1 E2E feed service binding is missing");
   return binding;
 }
@@ -98,12 +104,14 @@ function articleFetcherForActiveRuntime() {
   if (!env.D1_TEST_SOURCE_ORIGIN) return new sourceIngest.ArticleFetcher();
   const feed = e2eFeedBinding();
   const allowedHost = new URL(env.D1_TEST_SOURCE_ORIGIN!).hostname;
-  const htmlFetcher = { fetch: async (url: string) => {
-    if (new URL(url).hostname !== allowedHost) throw new Error("D1 E2E article origin mismatch");
-    const response = await feed.fetch(new Request(url));
-    if (!response.ok) throw new Error(`D1 E2E article HTTP ${response.status}`);
-    return response.text();
-  } };
+  const htmlFetcher = {
+    fetch: async (url: string) => {
+      if (new URL(url).hostname !== allowedHost) throw new Error("D1 E2E article origin mismatch");
+      const response = await feed.fetch(new Request(url));
+      if (!response.ok) throw new Error(`D1 E2E article HTTP ${response.status}`);
+      return response.text();
+    },
+  };
   return new sourceIngest.ArticleFetcher(htmlFetcher, [
     ...sourceIngest.ARTICLE_EXTRACTORS,
     {
@@ -159,21 +167,33 @@ export async function refreshPublishedTabloidProjection(
 export async function publishTabloid(
   rawId: string,
   repos: Repositories = createRepositories(),
-  options: { retryFailedWriter?: boolean; forceRewrite?: boolean; jobId?: string; jobOwner?: string } = {},
+  options: {
+    retryFailedWriter?: boolean;
+    forceRewrite?: boolean;
+    jobId?: string;
+    jobOwner?: string;
+  } = {},
 ) {
   if (!env.TABLOID_AUTO_PUBLISH) return { paused: true, llmCalls: 0 };
-  const jobClaim = options.jobId && options.jobOwner
-    ? { jobId: options.jobId, owner: options.jobOwner }
-    : undefined;
+  const jobClaim =
+    options.jobId && options.jobOwner
+      ? { jobId: options.jobId, owner: options.jobOwner }
+      : undefined;
   const timing = { jobId: options.jobId, rawArticleId: rawId, leaseOwner: options.jobOwner };
-  if (jobClaim) await timedPipelineStage("claim_validation", timing, () =>
-    repos.pipelineJobRepository.assertActiveClaim(jobClaim.jobId, jobClaim.owner));
+  if (jobClaim)
+    await timedPipelineStage("claim_validation", timing, () =>
+      repos.pipelineJobRepository.assertActiveClaim(jobClaim.jobId, jobClaim.owner),
+    );
   const saveDraft = (
     versionId: string,
     content: Parameters<Repositories["storyVersionRepository"]["updateDraftContent"]>[1],
-  ) => timedPipelineStage("draft_save", timing, () =>
-    repos.storyVersionRepository.updateDraftContent(versionId, content, jobClaim));
-  let raw = await timedPipelineStage("raw_load", timing, () => repos.rawArticleRepository.getById(rawId));
+  ) =>
+    timedPipelineStage("draft_save", timing, () =>
+      repos.storyVersionRepository.updateDraftContent(versionId, content, jobClaim),
+    );
+  let raw = await timedPipelineStage("raw_load", timing, () =>
+    repos.rawArticleRepository.getById(rawId),
+  );
   if (!raw) throw new Error("Tabloid source article missing");
   const source = await repos.sourceRepository.getById(raw.sourceId);
   if (!source) throw new Error("Tabloid source missing");
@@ -190,7 +210,8 @@ export async function publishTabloid(
     if (!config.url) throw new Error("Tabloid source page configuration is missing");
     const sourceUrl = raw.sourceUrl;
     const page = await timedPipelineStage("full_article_fetch", timing, () =>
-      new sourceIngest.ArticleFetcher().fetchWithMedia(sourceUrl, config.url));
+      new sourceIngest.ArticleFetcher().fetchWithMedia(sourceUrl, config.url),
+    );
     if (!page) throw new Error("Complete tabloid source page unavailable");
     await repos.rawArticleRepository.upgradeFromFullArticle(raw.id, {
       sourceUrl: raw.sourceUrl,
@@ -249,7 +270,8 @@ export async function publishTabloid(
         raw.id,
         leaseOwner,
         new Date(Date.now() + TABLOID_WRITER_LEASE_MS),
-      ));
+      ),
+    );
     if (!leaseAcquired) {
       const concurrentlyPersisted = await repos.storyVersionRepository.getLatest(story.id);
       if (options.forceRewrite || !concurrentlyPersisted) throw new TabloidWriterBusyError();
@@ -279,25 +301,32 @@ export async function publishTabloid(
           },
         };
         const result = await timedPipelineStage("writer", storyTiming, () =>
-          tabloid.writeTabloid(getWriterLlmClient(), writerInput));
+          tabloid.writeTabloid(getWriterLlmClient(), writerInput),
+        );
 
         // Persist the successful model response before any quality repair,
         // projection, social enqueue, or publication step can fail. Retries
         // reuse this exact draft and therefore never repeat the primary call.
-        version = await timedPipelineStage("draft_create", storyTiming, () => repos.storyVersionRepository.createNextVersion(story.id, {
-          titleHu: result.title_hu,
-          leadHu: result.lead_hu,
-          bodyHu: result.body_hu,
-          changeSummaryHu: options.forceRewrite
-            ? "A forrás részletesebb feldolgozása és a forrásképek beágyazása."
-            : null,
-          generatedByModel: result.generatedByModel,
-          isAiGenerated: true,
-          promptVersion: tabloid.TABLOID_PROMPT,
-          factConsistencyScore: 0,
-          selfCheckFallback: false,
-          qualityIssues: [WRITER_VALIDATION_PENDING],
-        }, jobClaim));
+        version = await timedPipelineStage("draft_create", storyTiming, () =>
+          repos.storyVersionRepository.createNextVersion(
+            story.id,
+            {
+              titleHu: result.title_hu,
+              leadHu: result.lead_hu,
+              bodyHu: result.body_hu,
+              changeSummaryHu: options.forceRewrite
+                ? "A forrás részletesebb feldolgozása és a forrásképek beágyazása."
+                : null,
+              generatedByModel: result.generatedByModel,
+              isAiGenerated: true,
+              promptVersion: tabloid.TABLOID_PROMPT,
+              factConsistencyScore: 0,
+              selfCheckFallback: false,
+              qualityIssues: [WRITER_VALIDATION_PENDING],
+            },
+            jobClaim,
+          ),
+        );
 
         const forbiddenRules = knowledge;
         const sourceContent = `${raw.titleOriginal}\n${raw.bodyOriginal}`;
@@ -307,7 +336,15 @@ export async function publishTabloid(
           output: result,
           forbiddenRules,
         });
-        getLogger().info({ ...storyTiming, stage: "initial_validation", durationMs: Date.now() - validationStartedAt, issueCount: initialFlags.length }, "pipeline stage completed");
+        getLogger().info(
+          {
+            ...storyTiming,
+            stage: "initial_validation",
+            durationMs: Date.now() - validationStartedAt,
+            issueCount: initialFlags.length,
+          },
+          "pipeline stage completed",
+        );
         let finalResult = result;
         let repairStatus: "not_needed" | "success" | "failed" = "not_needed";
 
@@ -335,16 +372,24 @@ export async function publishTabloid(
                 repairStatus: "not_applicable",
               })),
             });
-            await repos.reviewQueueRepository.ensureContentQualityReview(story.id, version.id, jobClaim);
-            return { skipped: true, reason: "quality-review", qualityCodes: initialFlags.map((flag) => flag.code) };
+            await repos.reviewQueueRepository.ensureContentQualityReview(
+              story.id,
+              version.id,
+              jobClaim,
+            );
+            return {
+              skipped: true,
+              reason: "quality-review",
+              qualityCodes: initialFlags.map((flag) => flag.code),
+            };
           }
           try {
-            finalResult = await timedPipelineStage("targeted_repair", storyTiming, () => tabloid.repairTabloid(
-              getWriterRepairLlmClient(),
-              result,
-              initialFlags,
-              { ...writerInput.usageContext, role: "targeted_repair" },
-            ));
+            finalResult = await timedPipelineStage("targeted_repair", storyTiming, () =>
+              tabloid.repairTabloid(getWriterRepairLlmClient(), result, initialFlags, {
+                ...writerInput.usageContext,
+                role: "targeted_repair",
+              }),
+            );
             repairStatus = "success";
           } catch (error) {
             repairStatus = "failed";
@@ -384,8 +429,16 @@ export async function publishTabloid(
               repairStatus: "failed",
             })),
           });
-          await repos.reviewQueueRepository.ensureContentQualityReview(story.id, version.id, jobClaim);
-          return { skipped: true, reason: "quality-review", qualityCodes: finalFlags.map((flag) => flag.code) };
+          await repos.reviewQueueRepository.ensureContentQualityReview(
+            story.id,
+            version.id,
+            jobClaim,
+          );
+          return {
+            skipped: true,
+            reason: "quality-review",
+            qualityCodes: finalFlags.map((flag) => flag.code),
+          };
         }
 
         await saveDraft(version.id, {
@@ -405,7 +458,8 @@ export async function publishTabloid(
       } finally {
         try {
           await timedPipelineStage("writer_lease_release", storyTiming, () =>
-            repos.rawArticleRepository.releaseTabloidWriter(raw.id, leaseOwner));
+            repos.rawArticleRepository.releaseTabloidWriter(raw.id, leaseOwner),
+          );
         } catch (error) {
           getLogger().error(
             { rawArticleId: raw.id, storyId: story.id, error },
@@ -465,54 +519,80 @@ export async function publishTabloid(
   const now = Date.now();
   const firstSeen = raw.firstSeenAt?.getTime();
   const sourcePublished = raw.publishedAtSource?.getTime();
-  const freshForSocial = env.FACEBOOK_AUTO_PUBLISH && !options.forceRewrite &&
+  const freshForSocial =
+    env.FACEBOOK_AUTO_PUBLISH &&
+    !options.forceRewrite &&
     publishedAt >= env.FACEBOOK_AUTO_PUBLISH_START_AT &&
-    firstSeen !== undefined && firstSeen >= env.FACEBOOK_AUTO_PUBLISH_START_AT.getTime() &&
-    firstSeen <= now && now - firstSeen <= 24 * 60 * 60_000 &&
-    sourcePublished !== undefined && sourcePublished <= now &&
+    firstSeen !== undefined &&
+    firstSeen >= env.FACEBOOK_AUTO_PUBLISH_START_AT.getTime() &&
+    firstSeen <= now &&
+    now - firstSeen <= 24 * 60 * 60_000 &&
+    sourcePublished !== undefined &&
+    sourcePublished <= now &&
     now - sourcePublished <= 48 * 60 * 60_000;
   const canonicalUrl = freshForSocial
     ? new URL(`/hir/${encodeURIComponent(slug)}`, env.SITE_URL).toString()
     : null;
   if (jobClaim) {
-    if (!(await timedPipelineStage("publication", storyTiming, () =>
-      repos.storyRepository.publishVersionIfClaim(story.id, version.id, publishedAt, jobClaim,
-        canonicalUrl ? {
-          canonicalUrl,
-          postText: buildFacebookPostText({ titleHu: version.titleHu, leadHu: version.leadHu, canonicalUrl }),
-        } : undefined))))
+    if (
+      !(await timedPipelineStage("publication", storyTiming, () =>
+        repos.storyRepository.publishVersionIfClaim(
+          story.id,
+          version.id,
+          publishedAt,
+          jobClaim,
+          canonicalUrl
+            ? {
+                canonicalUrl,
+                postText: buildFacebookPostText({
+                  titleHu: version.titleHu,
+                  leadHu: version.leadHu,
+                  canonicalUrl,
+                }),
+              }
+            : undefined,
+        ),
+      ))
+    )
       return { skipped: true, reason: "already-published" };
   } else {
     await repos.storyVersionRepository.markPublished(version.id);
     await repos.storyRepository.publish(story.id, version.id, publishedAt);
   }
-  await timedPipelineStage("read_model_projection", storyTiming, () => readModelProjector.handleStoryPublished(
-    {
-      storyRepository: repos.storyRepository,
-      storyVersionRepository: repos.storyVersionRepository,
-      storySourceRepository: repos.storySourceRepository,
-      storyCredibilityHistoryRepository: { listByStoryId: async () => [] },
-      storyReadModelRepository: repos.storyReadModelRepository,
-      logger: getLogger(),
-    },
-    {
-      ...createEventEnvelope({ correlationId: crypto.randomUUID() }),
-      type: "story/published",
-      payload: { story_id: story.id, story_version_id: version.id },
-    },
-  ));
+  await timedPipelineStage("read_model_projection", storyTiming, () =>
+    readModelProjector.handleStoryPublished(
+      {
+        storyRepository: repos.storyRepository,
+        storyVersionRepository: repos.storyVersionRepository,
+        storySourceRepository: repos.storySourceRepository,
+        storyCredibilityHistoryRepository: { listByStoryId: async () => [] },
+        storyReadModelRepository: repos.storyReadModelRepository,
+        logger: getLogger(),
+      },
+      {
+        ...createEventEnvelope({ correlationId: crypto.randomUUID() }),
+        type: "story/published",
+        payload: { story_id: story.id, story_version_id: version.id },
+      },
+    ),
+  );
   if (freshForSocial) {
-    await timedPipelineStage("social_enqueue", storyTiming, () => enqueueFacebookPublicationSafely({
-      storyId: story.id,
-      storyVersionId: version.id,
-      slug,
-      titleHu: version.titleHu,
-      leadHu: version.leadHu,
-      publishedAt,
-      status: "published",
-    }));
+    await timedPipelineStage("social_enqueue", storyTiming, () =>
+      enqueueFacebookPublicationSafely({
+        storyId: story.id,
+        storyVersionId: version.id,
+        slug,
+        titleHu: version.titleHu,
+        leadHu: version.leadHu,
+        publishedAt,
+        status: "published",
+      }),
+    );
   } else {
-    getLogger().info(storyTiming, "Historical or undated article excluded from automatic social enqueue");
+    getLogger().info(
+      storyTiming,
+      "Historical or undated article excluded from automatic social enqueue",
+    );
   }
   revalidatePath("/");
   revalidatePath(`/hir/${slug}`);
@@ -526,9 +606,17 @@ export async function publishTabloid(
 }
 
 type IngestSource = Pick<Source, "id" | "name" | "language" | "fetchConfig">;
-type FetchCandidate = Pick<RawArticle,
-  "id" | "sourceId" | "sourceUrl" | "titleOriginal" | "publishedAtSource" |
-  "imageUrl" | "processingOwner" | "processingAttempts">;
+type FetchCandidate = Pick<
+  RawArticle,
+  | "id"
+  | "sourceId"
+  | "sourceUrl"
+  | "titleOriginal"
+  | "publishedAtSource"
+  | "imageUrl"
+  | "processingOwner"
+  | "processingAttempts"
+>;
 
 interface TabloidIngestRepositories {
   pipelineJobRepository: Pick<Repositories["pipelineJobRepository"], "getStatusCounts">;
@@ -539,7 +627,10 @@ interface TabloidIngestRepositories {
   rawArticleRepository: {
     insertTabloid(data: NewRawArticle, enqueue: boolean): Promise<{ id: string } | null>;
     claimTabloidFetchBatch(
-      sourceIds: string[], limit: number, staleLockMs: number, now?: Date,
+      sourceIds: string[],
+      limit: number,
+      staleLockMs: number,
+      now?: Date,
     ): Promise<FetchCandidate[]>;
     deferTabloidFetch: Repositories["rawArticleRepository"]["deferTabloidFetch"];
     upgradeAndEnqueueTabloid: Repositories["rawArticleRepository"]["upgradeAndEnqueueTabloid"];
@@ -588,25 +679,37 @@ export async function ingestTabloid(repos: TabloidIngestRepositories = createIng
             feedUrls?: string[];
             url: string;
           };
-          const feeds = await timedPipelineStage("rss_fetch", { sourceId: source.id }, () => Promise.allSettled(
-            (config.feedUrls ?? [config.url]).map((url) => adapter.fetch({ url })),
-          ));
+          const feeds = await timedPipelineStage("rss_fetch", { sourceId: source.id }, () =>
+            Promise.allSettled(
+              (config.feedUrls ?? [config.url]).map((url) => adapter.fetch({ url })),
+            ),
+          );
           const firstSeenAt = new Date();
           const articles = feeds.flatMap((result) =>
             result.status === "fulfilled" ? result.value : [],
           );
           if (source.id === "98941b64-9c63-4996-a4da-c5a02a1f2de3") {
-            getLogger().info({
-              sourceId: source.id,
-              observedAt: firstSeenAt.toISOString(),
-              itemUrlHashes: articles.map((article) => createHash("sha256")
-                .update(article.sourceUrl).digest("hex").slice(0, 16)),
-            }, "RSS item observation for Gazzetta timing verification");
+            getLogger().info(
+              {
+                sourceId: source.id,
+                observedAt: firstSeenAt.toISOString(),
+                itemUrlHashes: articles.map((article) =>
+                  createHash("sha256").update(article.sourceUrl).digest("hex").slice(0, 16),
+                ),
+              },
+              "RSS item observation for Gazzetta timing verification",
+            );
           }
           if (feeds.every((result) => result.status === "rejected")) {
-            const reasons = feeds.map((result) => result.status === "rejected"
-              ? result.reason instanceof Error ? result.reason.message : String(result.reason)
-              : "ok").join("; ");
+            const reasons = feeds
+              .map((result) =>
+                result.status === "rejected"
+                  ? result.reason instanceof Error
+                    ? result.reason.message
+                    : String(result.reason)
+                  : "ok",
+              )
+              .join("; ");
             throw new Error(`RSS fetch failed: ${reasons}`);
           }
           const persistStartedAt = Date.now();
@@ -619,8 +722,9 @@ export async function ingestTabloid(repos: TabloidIngestRepositories = createIng
               config.mode,
               article.sourceUrl,
             );
-            const historical = Boolean(activationAt && article.publishedAtSource &&
-              article.publishedAtSource < activationAt);
+            const historical = Boolean(
+              activationAt && article.publishedAtSource && article.publishedAtSource < activationAt,
+            );
             const unknownDate = Boolean(activationAt && !article.publishedAtSource);
             if (!accepted) rejectedCount++;
             const raw = await repos.rawArticleRepository.insertTabloid(
@@ -641,19 +745,37 @@ export async function ingestTabloid(repos: TabloidIngestRepositories = createIng
                 rssDescription: article.bodyOriginal,
                 rssGuid: article.guid ?? article.sourceUrl,
                 firstSeenAt,
-                processingStatus: !accepted ? "rejected_topic" : historical ?
-                  "historical_before_activation" : unknownDate ? "review_unknown_source_date" :
-                    "awaiting_full_article",
-                decisionReason: !accepted ? "topic_filter" : historical ?
-                  "source_published_before_activation" : unknownDate ?
-                    "source_publication_time_unverified" : "awaiting_processing_capacity",
+                processingStatus: !accepted
+                  ? "rejected_topic"
+                  : historical
+                    ? "historical_before_activation"
+                    : unknownDate
+                      ? "review_unknown_source_date"
+                      : "awaiting_full_article",
+                decisionReason: !accepted
+                  ? "topic_filter"
+                  : historical
+                    ? "source_published_before_activation"
+                    : unknownDate
+                      ? "source_publication_time_unverified"
+                      : "awaiting_processing_capacity",
                 processingAvailableAt: accepted && !historical && !unknownDate ? new Date() : null,
               },
               false,
             );
             if (raw) persistedCount++;
           }
-          getLogger().info({ sourceId: source.id, stage: "rss_receipt_persist", durationMs: Date.now() - persistStartedAt, seenCount, persistedCount, rejectedCount }, "pipeline stage completed");
+          getLogger().info(
+            {
+              sourceId: source.id,
+              stage: "rss_receipt_persist",
+              durationMs: Date.now() - persistStartedAt,
+              seenCount,
+              persistedCount,
+              rejectedCount,
+            },
+            "pipeline stage completed",
+          );
           await repos.sourceRepository.recordFetchResult(source.id, { status: "ok" });
           results.push({
             sourceId: source.id,
@@ -666,10 +788,13 @@ export async function ingestTabloid(repos: TabloidIngestRepositories = createIng
             status: "ok",
           });
         } catch (error) {
-          getLogger().warn({
-            sourceId: source.id,
-            error: error instanceof Error ? error.message : String(error),
-          }, "RSS feed fetch or receipt persistence failed");
+          getLogger().warn(
+            {
+              sourceId: source.id,
+              error: error instanceof Error ? error.message : String(error),
+            },
+            "RSS feed fetch or receipt persistence failed",
+          );
           await repos.sourceRepository.recordFetchResult(source.id, { status: "error" });
           results.push({
             sourceId: source.id,
@@ -689,33 +814,59 @@ export async function ingestTabloid(repos: TabloidIngestRepositories = createIng
   let queuedCount = 0;
   let deferredWithoutFullArticle = 0;
   const candidates = await timedPipelineStage("full_article_claim", {}, () =>
-    repos.rawArticleRepository.claimTabloidFetchBatch(
-      [...byId.keys()], ingestBudget, 5 * 60_000,
-    ));
+    repos.rawArticleRepository.claimTabloidFetchBatch([...byId.keys()], ingestBudget, 5 * 60_000),
+  );
   for (const raw of candidates) {
     const source = byId.get(raw.sourceId);
     const owner = raw.processingOwner;
     if (!source || !owner) continue;
     const config = source.fetchConfig as { url: string };
     try {
-      const outcome = await timedPipelineStage("full_article_fetch", { sourceId: source.id, rawArticleId: raw.id, attempt: raw.processingAttempts, leaseOwner: owner }, () =>
-        articleFetcherForActiveRuntime().fetchWithMediaDetailed(raw.sourceUrl, config.url));
+      const outcome = await timedPipelineStage(
+        "full_article_fetch",
+        {
+          sourceId: source.id,
+          rawArticleId: raw.id,
+          attempt: raw.processingAttempts,
+          leaseOwner: owner,
+        },
+        () => articleFetcherForActiveRuntime().fetchWithMediaDetailed(raw.sourceUrl, config.url),
+      );
       if (!outcome.page) {
         deferredWithoutFullArticle++;
-        await repos.rawArticleRepository.deferTabloidFetch(raw.id, owner, outcome.failure ?? "full_article_unavailable", raw.processingAttempts);
+        await repos.rawArticleRepository.deferTabloidFetch(
+          raw.id,
+          owner,
+          outcome.failure ?? "full_article_unavailable",
+          raw.processingAttempts,
+        );
         continue;
       }
       const page = outcome.page;
-      const queued = await timedPipelineStage("raw_upgrade_and_enqueue", { sourceId: source.id, rawArticleId: raw.id, attempt: raw.processingAttempts, leaseOwner: owner }, () => repos.rawArticleRepository.upgradeAndEnqueueTabloid(raw.id, {
-        sourceUrl: raw.sourceUrl,
-        titleOriginal: page.article.titleOriginal || raw.titleOriginal,
-        subtitleOriginal: page.article.subtitleOriginal,
-        bodyOriginal: page.article.bodyOriginal,
-        authorOriginal: page.article.authorOriginal,
-        publishedAtSource: page.article.publishedAtSource ?? raw.publishedAtSource,
-        imageUrl: raw.imageUrl ?? page.media.primary?.url ?? null,
-        inlineImages: mergeInlineImages(page.media.inlineImages),
-      }, owner));
+      const queued = await timedPipelineStage(
+        "raw_upgrade_and_enqueue",
+        {
+          sourceId: source.id,
+          rawArticleId: raw.id,
+          attempt: raw.processingAttempts,
+          leaseOwner: owner,
+        },
+        () =>
+          repos.rawArticleRepository.upgradeAndEnqueueTabloid(
+            raw.id,
+            {
+              sourceUrl: raw.sourceUrl,
+              titleOriginal: page.article.titleOriginal || raw.titleOriginal,
+              subtitleOriginal: page.article.subtitleOriginal,
+              bodyOriginal: page.article.bodyOriginal,
+              authorOriginal: page.article.authorOriginal,
+              publishedAtSource: page.article.publishedAtSource ?? raw.publishedAtSource,
+              imageUrl: raw.imageUrl ?? page.media.primary?.url ?? null,
+              inlineImages: mergeInlineImages(page.media.inlineImages),
+            },
+            owner,
+          ),
+      );
       if (queued) {
         queuedCount++;
         const result = results.find((item) => item.sourceId === raw.sourceId);
@@ -724,7 +875,8 @@ export async function ingestTabloid(repos: TabloidIngestRepositories = createIng
     } catch (error) {
       deferredWithoutFullArticle++;
       await repos.rawArticleRepository.deferTabloidFetch(
-        raw.id, owner,
+        raw.id,
+        owner,
         error instanceof Error ? `full_article_error:${error.name}` : "full_article_error",
         raw.processingAttempts,
       );

@@ -80,10 +80,14 @@ describe("Facebook queue consumer", () => {
   it("never posts a historical intent from before the activation boundary", async () => {
     const fixture = setup({ createdAt: new Date("2026-09-15T20:29:59.000Z") });
     await processFacebookMessage(fixture.message, fixture.env, {
-      repository: fixture.repository, fetch: fixture.fetchMock, logger: fixture.logger,
+      repository: fixture.repository,
+      fetch: fixture.fetchMock,
+      logger: fixture.logger,
     });
     expect(fixture.repository.markFailed).toHaveBeenCalledWith(
-      "social-1", "facebook_before_activation", expect.any(String),
+      "social-1",
+      "facebook_before_activation",
+      expect.any(String),
     );
     expect(fixture.fetchMock).not.toHaveBeenCalled();
     expect(fixture.ack).toHaveBeenCalledOnce();
@@ -93,7 +97,9 @@ describe("Facebook queue consumer", () => {
     const fixture = setup();
     delete (fixture.env as Partial<typeof fixture.env>).FACEBOOK_AUTO_PUBLISH_START_AT;
     await processFacebookMessage(fixture.message, fixture.env, {
-      repository: fixture.repository, fetch: fixture.fetchMock, logger: fixture.logger,
+      repository: fixture.repository,
+      fetch: fixture.fetchMock,
+      logger: fixture.logger,
     });
     expect(fixture.fetchMock).not.toHaveBeenCalled();
     expect(fixture.retry).toHaveBeenCalledWith({ delaySeconds: 900 });
@@ -109,11 +115,15 @@ describe("Facebook queue consumer", () => {
     const fixture = setup({ canonicalUrl });
     fixture.message.body.canonicalUrl = canonicalUrl;
     await processFacebookMessage(fixture.message, fixture.env, {
-      repository: fixture.repository, fetch: fixture.fetchMock, logger: fixture.logger,
+      repository: fixture.repository,
+      fetch: fixture.fetchMock,
+      logger: fixture.logger,
     });
     expect(fixture.fetchMock).not.toHaveBeenCalled();
     expect(fixture.repository.markFailed).toHaveBeenCalledWith(
-      "social-1", "facebook_invalid_response", expect.any(String),
+      "social-1",
+      "facebook_invalid_response",
+      expect.any(String),
     );
   });
 
@@ -179,13 +189,19 @@ describe("Facebook queue consumer", () => {
 
   it("retries a definite HTTP 500 as a temporary Meta failure", async () => {
     const fixture = setup();
-    fixture.fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: { message: "Temporary error" } }), { status: 500 }));
+    fixture.fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: { message: "Temporary error" } }), { status: 500 }),
+    );
     await processFacebookMessage(fixture.message, fixture.env, {
       repository: fixture.repository,
       fetch: fixture.fetchMock,
       logger: fixture.logger,
     });
-    expect(fixture.repository.markFailed).toHaveBeenCalledWith("social-1", "facebook_temporary_error", "Temporary error");
+    expect(fixture.repository.markFailed).toHaveBeenCalledWith(
+      "social-1",
+      "facebook_temporary_error",
+      "Temporary error",
+    );
     expect(fixture.retry).toHaveBeenCalledOnce();
   });
 
@@ -212,10 +228,14 @@ describe("Facebook queue consumer", () => {
     const fixture = setup();
     fixture.fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
     await processFacebookMessage(fixture.message, fixture.env, {
-      repository: fixture.repository, fetch: fixture.fetchMock, logger: fixture.logger,
+      repository: fixture.repository,
+      fetch: fixture.fetchMock,
+      logger: fixture.logger,
     });
     expect(fixture.repository.markFailed).toHaveBeenCalledWith(
-      "social-1", "facebook_network_ambiguous", expect.any(String),
+      "social-1",
+      "facebook_network_ambiguous",
+      expect.any(String),
     );
     expect(fixture.retry).not.toHaveBeenCalled();
   });

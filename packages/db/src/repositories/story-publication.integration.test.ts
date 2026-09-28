@@ -56,35 +56,70 @@ describe.skipIf(!url)("fenced Story publication", () => {
   beforeEach(async () => {
     await client.unsafe("TRUNCATE social_posts, story_versions, stories, pipeline_jobs");
   });
-  afterAll(async () => { await client?.end(); });
+  afterAll(async () => {
+    await client?.end();
+  });
 
   it("rejects a late owner and publishes one version exactly once", async () => {
-    const [job] = await client.unsafe<{ id: string }[]>(`INSERT INTO pipeline_jobs (event,status,locked_at,claim_owner,claim_version)
+    const [job] = await client.unsafe<
+      { id: string }[]
+    >(`INSERT INTO pipeline_jobs (event,status,locked_at,claim_owner,claim_version)
       VALUES ('{}','in_progress',now() - interval '20 minutes','old-owner',1) RETURNING id`);
-    const [story] = await client.unsafe<{ id: string }[]>("INSERT INTO stories DEFAULT VALUES RETURNING id");
-    const [version] = await client.unsafe<{ id: string }[]>("INSERT INTO story_versions (story_id) VALUES ($1) RETURNING id", [story!.id]);
+    const [story] = await client.unsafe<{ id: string }[]>(
+      "INSERT INTO stories DEFAULT VALUES RETURNING id",
+    );
+    const [version] = await client.unsafe<{ id: string }[]>(
+      "INSERT INTO story_versions (story_id) VALUES ($1) RETURNING id",
+      [story!.id],
+    );
     const [reclaimed] = await jobs.claimBatch(1, 1000, new Date(0));
     expect(reclaimed?.id).toBe(job!.id);
     expect(reclaimed?.claimOwner).not.toBe("old-owner");
     const intent = { postText: "Magyar hír", canonicalUrl: "https://mso24.hu/hir/proba" };
-    await expect(stories.publishVersionIfClaim(story!.id, version!.id, new Date(), {
-      jobId: job!.id, owner: "old-owner",
-    }, intent)).rejects.toBeInstanceOf(LostJobClaimError);
+    await expect(
+      stories.publishVersionIfClaim(
+        story!.id,
+        version!.id,
+        new Date(),
+        {
+          jobId: job!.id,
+          owner: "old-owner",
+        },
+        intent,
+      ),
+    ).rejects.toBeInstanceOf(LostJobClaimError);
     const claim = { jobId: job!.id, owner: reclaimed!.claimOwner! };
-    expect((await client.unsafe("SELECT count(*)::int AS count FROM social_posts"))[0]?.["count"]).toBe(0);
-    expect(await stories.publishVersionIfClaim(story!.id, version!.id, new Date(), claim, intent)).toBe(true);
-    expect(await stories.publishVersionIfClaim(story!.id, version!.id, new Date(), claim, intent)).toBe(true);
+    expect(
+      (await client.unsafe("SELECT count(*)::int AS count FROM social_posts"))[0]?.["count"],
+    ).toBe(0);
+    expect(
+      await stories.publishVersionIfClaim(story!.id, version!.id, new Date(), claim, intent),
+    ).toBe(true);
+    expect(
+      await stories.publishVersionIfClaim(story!.id, version!.id, new Date(), claim, intent),
+    ).toBe(true);
     expect(await jobs.complete(job!.id, "old-owner")).toBe(false);
     expect(await jobs.complete(job!.id, claim.owner)).toBe(true);
     const [savedStory] = await client.unsafe<{ status: string; current_version_id: string }[]>(
-      "SELECT status,current_version_id FROM stories WHERE id=$1", [story!.id]);
+      "SELECT status,current_version_id FROM stories WHERE id=$1",
+      [story!.id],
+    );
     const [savedVersion] = await client.unsafe<{ is_published: boolean }[]>(
-      "SELECT is_published FROM story_versions WHERE id=$1", [version!.id]);
+      "SELECT is_published FROM story_versions WHERE id=$1",
+      [version!.id],
+    );
     expect(savedStory).toMatchObject({ status: "published", current_version_id: version!.id });
     expect(savedVersion?.is_published).toBe(true);
-    expect((await client.unsafe("SELECT count(*)::int AS count FROM story_versions"))[0]?.["count"]).toBe(1);
-    const [social] = await client.unsafe<{ status: string; canonical_url: string }[]>("SELECT status, canonical_url FROM social_posts WHERE story_id=$1", [story!.id]);
+    expect(
+      (await client.unsafe("SELECT count(*)::int AS count FROM story_versions"))[0]?.["count"],
+    ).toBe(1);
+    const [social] = await client.unsafe<{ status: string; canonical_url: string }[]>(
+      "SELECT status, canonical_url FROM social_posts WHERE story_id=$1",
+      [story!.id],
+    );
     expect(social).toMatchObject({ status: "queued", canonical_url: intent.canonicalUrl });
-    expect((await client.unsafe("SELECT count(*)::int AS count FROM social_posts"))[0]?.["count"]).toBe(1);
+    expect(
+      (await client.unsafe("SELECT count(*)::int AS count FROM social_posts"))[0]?.["count"],
+    ).toBe(1);
   });
 });

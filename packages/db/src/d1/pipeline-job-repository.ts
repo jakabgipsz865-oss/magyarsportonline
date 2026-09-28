@@ -54,15 +54,22 @@ export class D1PipelineJobRepository {
     const eventJson = JSON.stringify(event);
     const identity = queueEventIdentity(event);
     if (!identity) {
-      await this.db.prepare(`
+      await this.db
+        .prepare(
+          `
         INSERT INTO pipeline_jobs (id, event, status, attempts, max_attempts,
           available_at, claim_version, created_at, updated_at)
         VALUES (?, ?, 'pending', 0, 5, ?, 0, ?, ?)
-      `).bind(id, eventJson, now, now, now).run();
+      `,
+        )
+        .bind(id, eventJson, now, now, now)
+        .run();
       return;
     }
     const shape = event as { type: string; payload: Record<string, unknown> };
-    await this.db.prepare(`
+    await this.db
+      .prepare(
+        `
       INSERT INTO pipeline_jobs (id, event, status, attempts, max_attempts,
         available_at, claim_version, created_at, updated_at)
       SELECT ?, ?, 'pending', 0, 5, ?, 0, ?, ?
@@ -72,14 +79,18 @@ export class D1PipelineJobRepository {
           AND json_extract(event, '$.type') = ?
           AND json_extract(event, '$.payload') = json(?)
       )
-    `).bind(id, eventJson, now, now, now, shape.type,
-      JSON.stringify(shape.payload)).run();
+    `,
+      )
+      .bind(id, eventJson, now, now, now, shape.type, JSON.stringify(shape.payload))
+      .run();
   }
 
   async getStatusCounts(now = new Date(), since = new Date(0)): Promise<PipelineQueueStatusCounts> {
     const staleAt = d1Timestamp(new Date(now.getTime() - 10 * 60_000));
     const sinceAt = d1Timestamp(since);
-    const row = await this.db.prepare(`
+    const row = await this.db
+      .prepare(
+        `
       SELECT
         sum(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pending,
         sum(CASE WHEN status='in_progress' THEN 1 ELSE 0 END) AS in_progress,
@@ -88,10 +99,17 @@ export class D1PipelineJobRepository {
         sum(CASE WHEN status='in_progress' AND locked_at < ? THEN 1 ELSE 0 END) AS stale,
         max(CASE WHEN status='completed' THEN updated_at END) AS last_completed_at
       FROM pipeline_jobs WHERE created_at >= ?
-    `).bind(staleAt, sinceAt).first<{
-      pending: number | null; in_progress: number | null; completed: number | null;
-      dead_letter: number | null; stale: number | null; last_completed_at: string | null;
-    }>();
+    `,
+      )
+      .bind(staleAt, sinceAt)
+      .first<{
+        pending: number | null;
+        in_progress: number | null;
+        completed: number | null;
+        dead_letter: number | null;
+        stale: number | null;
+        last_completed_at: string | null;
+      }>();
     return {
       pending: row?.pending ?? 0,
       inProgress: row?.in_progress ?? 0,
@@ -103,22 +121,34 @@ export class D1PipelineJobRepository {
   }
 
   async getDeadLetterSummary(limit = 20, since = new Date(0)): Promise<DeadLetterSummary[]> {
-    const result = await this.db.prepare(`
+    const result = await this.db
+      .prepare(
+        `
       SELECT coalesce(json_extract(event, '$.type'), 'unknown') AS event_type,
         last_error, count(*) AS count
       FROM pipeline_jobs WHERE status = 'dead_letter' AND created_at >= ?
       GROUP BY json_extract(event, '$.type'), last_error
       ORDER BY count(*) DESC, event_type LIMIT ?
-    `).bind(d1Timestamp(since), Math.max(1, Math.min(limit, 100))).all<{
-      event_type: string; last_error: string | null; count: number;
-    }>();
-    return result.results.map(row => ({ eventType: row.event_type,
-      lastError: row.last_error, count: row.count }));
+    `,
+      )
+      .bind(d1Timestamp(since), Math.max(1, Math.min(limit, 100)))
+      .all<{
+        event_type: string;
+        last_error: string | null;
+        count: number;
+      }>();
+    return result.results.map((row) => ({
+      eventType: row.event_type,
+      lastError: row.last_error,
+      count: row.count,
+    }));
   }
 
   async requeueDeadLetters(limit: number, since = new Date(0)): Promise<number> {
     const now = d1Timestamp(new Date());
-    const result = await this.db.prepare(`
+    const result = await this.db
+      .prepare(
+        `
       UPDATE pipeline_jobs
       SET status='pending', attempts=0, available_at=?, locked_at=NULL,
         claim_owner=NULL,
@@ -128,12 +158,18 @@ export class D1PipelineJobRepository {
         SELECT id FROM pipeline_jobs WHERE status='dead_letter' AND created_at >= ?
         ORDER BY created_at ASC LIMIT ?
       ) RETURNING id
-    `).bind(now, now, d1Timestamp(since), Math.max(1, Math.min(limit, 500))).all<{ id: string }>();
+    `,
+      )
+      .bind(now, now, d1Timestamp(since), Math.max(1, Math.min(limit, 500)))
+      .all<{ id: string }>();
     return result.results.length;
   }
 
   async claimBatch(
-    limit: number, staleLockMs: number, now = new Date(), since = new Date(0),
+    limit: number,
+    staleLockMs: number,
+    now = new Date(),
+    since = new Date(0),
   ): Promise<PipelineJobRow[]> {
     if (limit <= 0) return [];
     const recoveryLane = Math.floor(now.getTime() / 30_000) % 4 === 0;
@@ -141,7 +177,9 @@ export class D1PipelineJobRepository {
     const nowIso = d1Timestamp(now);
     const staleAt = d1Timestamp(new Date(now.getTime() - staleLockMs));
     const sinceAt = d1Timestamp(since);
-    const result = await this.db.prepare(`
+    const result = await this.db
+      .prepare(
+        `
       UPDATE pipeline_jobs
       SET status='in_progress', locked_at=?, claim_owner=?,
         claim_version=claim_version+1, attempts=attempts+1, updated_at=?
@@ -157,17 +195,34 @@ export class D1PipelineJobRepository {
           CASE WHEN ?=0 THEN created_at END DESC
         LIMIT ?
       ) RETURNING *
-    `).bind(nowIso, owner, nowIso, sinceAt, nowIso, staleAt,
-      Number(recoveryLane), Number(recoveryLane), Number(recoveryLane),
-      Math.min(limit, 20)).all<JobRow>();
+    `,
+      )
+      .bind(
+        nowIso,
+        owner,
+        nowIso,
+        sinceAt,
+        nowIso,
+        staleAt,
+        Number(recoveryLane),
+        Number(recoveryLane),
+        Number(recoveryLane),
+        Math.min(limit, 20),
+      )
+      .all<JobRow>();
     return result.results.map(hydrate);
   }
 
   async hasActiveClaim(jobId: string, owner: string): Promise<boolean> {
-    const row = await this.db.prepare(`
+    const row = await this.db
+      .prepare(
+        `
       SELECT id FROM pipeline_jobs
       WHERE id=? AND status='in_progress' AND claim_owner=? LIMIT 1
-    `).bind(jobId, owner).first<{ id: string }>();
+    `,
+      )
+      .bind(jobId, owner)
+      .first<{ id: string }>();
     return row !== null;
   }
 
@@ -176,45 +231,67 @@ export class D1PipelineJobRepository {
   }
 
   async complete(jobId: string, owner: string): Promise<boolean> {
-    const row = await this.db.prepare(`
+    const row = await this.db
+      .prepare(
+        `
       UPDATE pipeline_jobs SET status='completed', locked_at=NULL,
         claim_owner=NULL, updated_at=?
       WHERE id=? AND status='in_progress' AND claim_owner=? RETURNING id
-    `).bind(d1Timestamp(new Date()), jobId, owner).first<{ id: string }>();
+    `,
+      )
+      .bind(d1Timestamp(new Date()), jobId, owner)
+      .first<{ id: string }>();
     return row !== null;
   }
 
   async fail(jobId: string, owner: string, error: string, backoffMs: number): Promise<boolean> {
     const now = new Date();
-    const row = await this.db.prepare(`
+    const row = await this.db
+      .prepare(
+        `
       UPDATE pipeline_jobs
       SET status=CASE WHEN attempts < max_attempts THEN 'pending' ELSE 'dead_letter' END,
         available_at=?, last_error=?, locked_at=NULL, claim_owner=NULL, updated_at=?
       WHERE id=? AND status='in_progress' AND claim_owner=? RETURNING id
-    `).bind(d1Timestamp(new Date(now.getTime() + backoffMs)), error,
-      d1Timestamp(now), jobId, owner).first<{ id: string }>();
+    `,
+      )
+      .bind(d1Timestamp(new Date(now.getTime() + backoffMs)), error, d1Timestamp(now), jobId, owner)
+      .first<{ id: string }>();
     return row !== null;
   }
 
-  async deferWithoutAttempt(jobId: string, owner: string, reason: string, delayMs: number): Promise<boolean> {
+  async deferWithoutAttempt(
+    jobId: string,
+    owner: string,
+    reason: string,
+    delayMs: number,
+  ): Promise<boolean> {
     const now = new Date();
-    const row = await this.db.prepare(`
+    const row = await this.db
+      .prepare(
+        `
       UPDATE pipeline_jobs
       SET status='pending', attempts=max(attempts-1, 0), available_at=?,
         last_error=?, locked_at=NULL, claim_owner=NULL, updated_at=?
       WHERE id=? AND status='in_progress' AND claim_owner=? RETURNING id
-    `).bind(d1Timestamp(new Date(now.getTime() + delayMs)), reason,
-      d1Timestamp(now), jobId, owner).first<{ id: string }>();
+    `,
+      )
+      .bind(d1Timestamp(new Date(now.getTime() + delayMs)), reason, d1Timestamp(now), jobId, owner)
+      .first<{ id: string }>();
     return row !== null;
   }
 
   async findActiveDeferral(errorPrefix: string, since = new Date(0)): Promise<Date | null> {
-    const row = await this.db.prepare(`
+    const row = await this.db
+      .prepare(
+        `
       SELECT available_at FROM pipeline_jobs
       WHERE status='pending' AND available_at > ? AND last_error LIKE ?
         AND created_at >= ?
       ORDER BY available_at DESC LIMIT 1
-    `).bind(d1Timestamp(new Date()), `${errorPrefix}%`, d1Timestamp(since))
+    `,
+      )
+      .bind(d1Timestamp(new Date()), `${errorPrefix}%`, d1Timestamp(since))
       .first<{ available_at: string }>();
     return d1Date(row?.available_at ?? null);
   }

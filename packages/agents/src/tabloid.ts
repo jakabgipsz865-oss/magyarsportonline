@@ -137,7 +137,12 @@ function forbiddenInField(
   const direct = flatTerms.find((term) => safeTerm(term) && containsExpression(text, term));
   if (direct) return direct;
   for (const rule of rules) {
-    if (rule.contexts?.length && !rule.contexts.includes(field) && !rule.contexts.includes("tabloid") && !(field === "title" && rule.contexts.includes("headline")))
+    if (
+      rule.contexts?.length &&
+      !rule.contexts.includes(field) &&
+      !rule.contexts.includes("tabloid") &&
+      !(field === "title" && rule.contexts.includes("headline"))
+    )
       continue;
     const triggers = [rule.source_phrase, ...(rule.match_terms ?? [])].filter(
       (value): value is string => typeof value === "string" && value.trim().length > 1,
@@ -189,8 +194,8 @@ export function assessTabloidQuality(input: {
     );
     if (forbidden)
       flags.push({ kind: "hard", code: "forbidden_terminology", field, detail: forbidden });
-    const unrecognizedMixedCase = [...text.matchAll(/[\p{L}]+/gu)].some(([word]) =>
-      /\p{Ll}{3,}\p{Lu}/u.test(word) && !input.sourceContent.includes(word),
+    const unrecognizedMixedCase = [...text.matchAll(/[\p{L}]+/gu)].some(
+      ([word]) => /\p{Ll}{3,}\p{Lu}/u.test(word) && !input.sourceContent.includes(word),
     );
     if (
       unrecognizedMixedCase ||
@@ -341,8 +346,12 @@ export async function writeTabloid(
       ...(input.usageContext ? { usageContext: input.usageContext } : {}),
     });
   } catch (error) {
-    if (isDailyLlmQuotaError(error) || isGeminiDailyQuotaError(error) ||
-      error instanceof MonthlyLlmBudgetError) throw error;
+    if (
+      isDailyLlmQuotaError(error) ||
+      isGeminiDailyQuotaError(error) ||
+      error instanceof MonthlyLlmBudgetError
+    )
+      throw error;
     throw new TabloidTechnicalError("Tabloid writer provider or schema failure", { cause: error });
   }
   if (result.isFallback) throw new TabloidTechnicalError("Tabloid writer returned a fallback");
@@ -379,18 +388,25 @@ export async function repairTabloid(
   usageContext: LlmUsageContext,
 ): Promise<TabloidOutput> {
   const fields = new Set(flags.map((flag) => flag.field));
-  const paragraphs = output.body_hu.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean);
-  const bodyFlags = flags.filter(flag => flag.field === "body");
-  const bodyIndices = bodyFlags.map(flag => {
+  const paragraphs = output.body_hu
+    .split(/\n\s*\n/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const bodyFlags = flags.filter((flag) => flag.field === "body");
+  const bodyIndices = bodyFlags.map((flag) => {
     if (!flag.detail || paragraphs.length < 2) return -1;
     const matches = paragraphs.flatMap((part, index) =>
       part.toLocaleLowerCase("hu-HU").includes(flag.detail!.toLocaleLowerCase("hu-HU"))
-        ? [index] : []);
+        ? [index]
+        : [],
+    );
     return matches.length === 1 ? matches[0]! : -1;
   });
   const bodyIndex = bodyIndices[0];
-  if (bodyFlags.length && (bodyIndex === undefined || bodyIndex < 0 ||
-    bodyIndices.some(index => index !== bodyIndex)))
+  if (
+    bodyFlags.length &&
+    (bodyIndex === undefined || bodyIndex < 0 || bodyIndices.some((index) => index !== bodyIndex))
+  )
     throw new Error("Targeted repair requires one identifiable body paragraph");
   const fragments = {
     ...(fields.has("title") ? { title_hu: output.title_hu } : {}),
@@ -432,8 +448,12 @@ export async function repairTabloid(
     ...output,
     title_hu: repaired.title_hu ?? output.title_hu,
     lead_hu: repaired.lead_hu ?? output.lead_hu,
-    body_hu: bodyIndex === undefined ? output.body_hu :
-      paragraphs.map((part, index) => index === bodyIndex ? repaired.body_hu! : part).join("\n\n"),
+    body_hu:
+      bodyIndex === undefined
+        ? output.body_hu
+        : paragraphs
+            .map((part, index) => (index === bodyIndex ? repaired.body_hu! : part))
+            .join("\n\n"),
     language_warnings: [],
     generatedByModel: output.generatedByModel,
   };

@@ -101,12 +101,19 @@ function toFetchedArticle(candidate: JsonObject): FetchedArticle | null {
   };
 }
 
-function semanticArticle(html: string, url: string, headlineHint: string | null): FetchedArticle | null {
+function semanticArticle(
+  html: string,
+  url: string,
+  headlineHint: string | null,
+): FetchedArticle | null {
   const $ = cheerio.load(html);
-  const titleOriginal = headlineHint ??
+  const titleOriginal =
+    headlineHint ??
     textOrNull($("h1").first().text()) ??
     textOrNull($('meta[property="og:title"]').attr("content"));
-  $("script,style,noscript,nav,footer,aside,form,svg,.related,[class*=recommend],[class*=comment]").remove();
+  $(
+    "script,style,noscript,nav,footer,aside,form,svg,.related,[class*=recommend],[class*=comment]",
+  ).remove();
   const paragraphs = (elements: ReturnType<typeof $>) => {
     const seen = new Set<string>();
     const parts: string[] = [];
@@ -120,26 +127,49 @@ function semanticArticle(html: string, url: string, headlineHint: string | null)
   };
   const hostname = new URL(url).hostname.toLowerCase();
   let bodyOriginal: string;
-  if (hostname === "dailymail.com" || hostname.endsWith(".dailymail.com") || hostname === "dailymail.co.uk" || hostname.endsWith(".dailymail.co.uk")) {
+  if (
+    hostname === "dailymail.com" ||
+    hostname.endsWith(".dailymail.com") ||
+    hostname === "dailymail.co.uk" ||
+    hostname.endsWith(".dailymail.co.uk")
+  ) {
     const root = $('[itemprop="articleBody"]').first();
     bodyOriginal = paragraphs(root.find("p"));
   } else if (hostname === "krone.at" || hostname.endsWith(".krone.at")) {
     bodyOriginal = paragraphs($(".box.c_tinymce_lead p, .box.c_tinymce p"));
   } else {
     const roots = $("article").length ? $("article").toArray() : $("main").toArray();
-    const titleKey = (titleOriginal ?? "").toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-    const candidates = roots.map((root) => {
-      const node = $(root);
-      const heading = (textOrNull(node.find("h1").first().text()) ?? "")
-        .toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-      const body = paragraphs(node.find("p"));
-      const score = (heading && (heading === titleKey || titleKey.includes(heading) || heading.includes(titleKey)) ? 100 : 0)
-        + (heading ? 20 : 0) + (node.is("article") ? 10 : 0);
-      return { body, score };
-    }).filter((candidate) => candidate.body.length >= 300);
+    const titleKey = (titleOriginal ?? "")
+      .toLocaleLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim();
+    const candidates = roots
+      .map((root) => {
+        const node = $(root);
+        const heading = (textOrNull(node.find("h1").first().text()) ?? "")
+          .toLocaleLowerCase()
+          .replace(/[^\p{L}\p{N}]+/gu, " ")
+          .trim();
+        const body = paragraphs(node.find("p"));
+        const score =
+          (heading &&
+          (heading === titleKey || titleKey.includes(heading) || heading.includes(titleKey))
+            ? 100
+            : 0) +
+          (heading ? 20 : 0) +
+          (node.is("article") ? 10 : 0);
+        return { body, score };
+      })
+      .filter((candidate) => candidate.body.length >= 300);
     bodyOriginal = candidates.sort((a, b) => b.score - a.score)[0]?.body ?? "";
   }
-  if (!titleOriginal || titleOriginal.length < 10 || bodyOriginal.length < 300 || bodyOriginal.split(/\s+/).length < 40) return null;
+  if (
+    !titleOriginal ||
+    titleOriginal.length < 10 ||
+    bodyOriginal.length < 300 ||
+    bodyOriginal.split(/\s+/).length < 40
+  )
+    return null;
   const rawDate =
     $('meta[property="article:published_time"]').attr("content") ??
     $("time[datetime]").first().attr("datetime");
@@ -155,25 +185,30 @@ function semanticArticle(html: string, url: string, headlineHint: string | null)
 
 /** Extraction logic shared with an explicitly host-gated staging fixture. */
 export function extractStructuredNewsArticle(html: string, url: string): FetchedArticle | null {
-    try {
-      const $ = cheerio.load(html);
-      const candidates: JsonObject[] = [];
-      $('script[type="application/ld+json"]').each((_, element) => {
-        try {
-          collectArticles(JSON.parse($(element).text()) as unknown, candidates);
-        } catch {
-          // Egy hibás JSON-LD blokk nem teszi használhatatlanná a többit.
-        }
-      });
-      const headlineHint = candidates.map((candidate) => cleanText(candidate["headline"]))
+  try {
+    const $ = cheerio.load(html);
+    const candidates: JsonObject[] = [];
+    $('script[type="application/ld+json"]').each((_, element) => {
+      try {
+        collectArticles(JSON.parse($(element).text()) as unknown, candidates);
+      } catch {
+        // Egy hibás JSON-LD blokk nem teszi használhatatlanná a többit.
+      }
+    });
+    const headlineHint =
+      candidates
+        .map((candidate) => cleanText(candidate["headline"]))
         .find((headline): headline is string => Boolean(headline && headline.length >= 10)) ?? null;
-      const semantic = semanticArticle(html, url, headlineHint);
-      if (semantic) return semantic;
-      return candidates.map(toFetchedArticle)
-        .find((article): article is FetchedArticle => article !== null) ?? null;
-    } catch {
-      return null;
-    }
+    const semantic = semanticArticle(html, url, headlineHint);
+    if (semantic) return semantic;
+    return (
+      candidates
+        .map(toFetchedArticle)
+        .find((article): article is FetchedArticle => article !== null) ?? null
+    );
+  } catch {
+    return null;
+  }
 }
 
 export const structuredNewsArticleExtractor: ArticleExtractor = {

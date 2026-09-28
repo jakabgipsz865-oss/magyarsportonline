@@ -20,12 +20,27 @@ it("keeps the Cloudflare global fetch receiver when passed to the publisher", as
     await detached("https://graph.facebook.com/v26.0/me");
   });
 
-  await worker.queue({ messages: [{
-    body: { socialPostId: "post-1", storyId: "story-1", storyVersionId: "version-1",
-      canonicalUrl: "https://mso24.hu/hir/example" },
-    attempts: 1, ack() {}, retry() {},
-  }] }, { DB: {} as NonNullable<Parameters<typeof worker.queue>[1]["DB"]>,
-    META_GRAPH_API_VERSION: "v26.0" });
+  await worker.queue(
+    {
+      messages: [
+        {
+          body: {
+            socialPostId: "post-1",
+            storyId: "story-1",
+            storyVersionId: "version-1",
+            canonicalUrl: "https://mso24.hu/hir/example",
+          },
+          attempts: 1,
+          ack() {},
+          retry() {},
+        },
+      ],
+    },
+    {
+      DB: {} as NonNullable<Parameters<typeof worker.queue>[1]["DB"]>,
+      META_GRAPH_API_VERSION: "v26.0",
+    },
+  );
 
   expect(runtimeFetch).toHaveBeenCalledOnce();
 });

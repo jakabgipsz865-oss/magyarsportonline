@@ -1,4 +1,14 @@
-import { integer, jsonb, pgTable, text, timestamp, uuid, vector, uniqueIndex, index } from "drizzle-orm/pg-core";
+import {
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  vector,
+  uniqueIndex,
+  index,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { SourceInlineImage } from "@magyarsportonline/shared";
 import { ingestStatusEnum } from "./enums";
@@ -67,6 +77,9 @@ export const rawArticles = pgTable(
       table.sourceId,
       sql`(${table.extractedEntities}->>'rssGuid')`,
     ),
-    index("raw_articles_processing_due_idx").on(table.processingStatus, table.processingAvailableAt),
+    index("raw_articles_processing_due_idx").on(
+      table.processingStatus,
+      table.processingAvailableAt,
+    ),
   ],
 );

@@ -4,8 +4,7 @@ import { articleMediaFromHtml, type PublisherArticleMedia } from "../remote-imag
 import { ARTICLE_EXTRACTORS } from "./extractors/index";
 import type { ArticleExtractor, FetchedArticle, FetchedArticlePage, HtmlFetcher } from "./types";
 
-const DEFAULT_USER_AGENT =
-  "Mozilla/5.0 (compatible; MagyarSportOnlineBot/1.0; +https://mso24.hu)";
+const DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; MagyarSportOnlineBot/1.0; +https://mso24.hu)";
 const FETCH_TIMEOUT_MS = 15_000;
 
 /**
@@ -62,7 +61,10 @@ export class ArticleFetcher {
     return result.page;
   }
 
-  async fetchWithMediaDetailed(url: string, _publisherUrl?: string): Promise<{
+  async fetchWithMediaDetailed(
+    url: string,
+    _publisherUrl?: string,
+  ): Promise<{
     page: { article: FetchedArticle; media: PublisherArticleMedia } | null;
     failure: string | null;
   }> {
@@ -80,7 +82,9 @@ export class ArticleFetcher {
     return (await this.fetchPageDetailed(url)).page;
   }
 
-  async fetchPageDetailed(url: string): Promise<{ page: FetchedArticlePage | null; failure: string | null }> {
+  async fetchPageDetailed(
+    url: string,
+  ): Promise<{ page: FetchedArticlePage | null; failure: string | null }> {
     const extractor = this.extractors.find((candidate) => candidate.supports(url));
     if (!extractor) {
       return { page: null, failure: "unsupported_domain" };
@@ -96,11 +100,14 @@ export class ArticleFetcher {
           });
           const resolvedResult = extractor.extract(resolvedHtml, resolvedUrl);
           if (resolvedResult) {
-            return { page: {
-              article: { ...resolvedResult, resolvedUrl },
-              html: resolvedHtml,
-              articleUrl: resolvedUrl,
-            }, failure: null };
+            return {
+              page: {
+                article: { ...resolvedResult, resolvedUrl },
+                html: resolvedHtml,
+                articleUrl: resolvedUrl,
+              },
+              failure: null,
+            };
           }
         } catch (error) {
           this.logger?.warn(
@@ -135,7 +142,14 @@ export class ArticleFetcher {
       );
       const message = error instanceof Error ? error.message : String(error);
       const status = /HTTP (\d{3}) fetching/u.exec(message)?.[1];
-      return { page: null, failure: status ? `http_${status}` : error instanceof Error && error.name === "AbortError" ? "timeout" : "network_error" };
+      return {
+        page: null,
+        failure: status
+          ? `http_${status}`
+          : error instanceof Error && error.name === "AbortError"
+            ? "timeout"
+            : "network_error",
+      };
     }
   }
 }

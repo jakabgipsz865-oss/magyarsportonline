@@ -38,7 +38,9 @@ export function getFactLlmClient(): LlmClient {
       );
     }
     if (d1Binding() && env.GEMINI_MONTHLY_EXTERNAL_SPEND_USD === undefined)
-      throw new Error("D1 paid AI requires GEMINI_MONTHLY_EXTERNAL_SPEND_USD from verified pre-cutover billing");
+      throw new Error(
+        "D1 paid AI requires GEMINI_MONTHLY_EXTERNAL_SPEND_USD from verified pre-cutover billing",
+      );
     const factClient = new ProviderFallbackLlmClient({
       inner: new CloudflareWorkersAiLlmClient({
         accountId: env.CLOUDFLARE_ACCOUNT_ID,
@@ -52,10 +54,16 @@ export function getFactLlmClient(): LlmClient {
       failClosed: true,
     });
     cachedFactClient = new DailyRequestCappedLlmClient(
-      factClient, "cloudflare", env.GEMINI_DAILY_REQUEST_CAP,
-      createLlmUsageRepository(), () => false, estimateCloudflareCostUsd,
-      { capUsd: env.GEMINI_MONTHLY_BUDGET_USD,
-        externalSpentUsd: env.GEMINI_MONTHLY_EXTERNAL_SPEND_USD ?? 0 },
+      factClient,
+      "cloudflare",
+      env.GEMINI_DAILY_REQUEST_CAP,
+      createLlmUsageRepository(),
+      () => false,
+      estimateCloudflareCostUsd,
+      {
+        capUsd: env.GEMINI_MONTHLY_BUDGET_USD,
+        externalSpentUsd: env.GEMINI_MONTHLY_EXTERNAL_SPEND_USD ?? 0,
+      },
     );
   } else {
     cachedFactClient = new NoLlmClient();
@@ -67,7 +75,9 @@ export function getFactLlmClient(): LlmClient {
 function createGeminiWriter(model: string): LlmClient {
   if (env.LLM_PROVIDER === "none") return new NoLlmClient();
   if (d1Binding() && env.GEMINI_MONTHLY_EXTERNAL_SPEND_USD === undefined)
-    throw new Error("D1 paid AI requires GEMINI_MONTHLY_EXTERNAL_SPEND_USD from verified pre-cutover billing");
+    throw new Error(
+      "D1 paid AI requires GEMINI_MONTHLY_EXTERNAL_SPEND_USD from verified pre-cutover billing",
+    );
   const geminiApiKey = env.GEMINI_BILLING_MODE === "byok" ? env.GEMINI_API_KEY : undefined;
   if (
     env.GEMINI_BILLING_MODE === "byok" &&
@@ -114,8 +124,10 @@ function createGeminiWriter(model: string): LlmClient {
     usage,
     isGeminiDefinitelyUnmeteredError,
     estimateGeminiCostUsd,
-    { capUsd: env.GEMINI_MONTHLY_BUDGET_USD,
-      externalSpentUsd: env.GEMINI_MONTHLY_EXTERNAL_SPEND_USD ?? 0 },
+    {
+      capUsd: env.GEMINI_MONTHLY_BUDGET_USD,
+      externalSpentUsd: env.GEMINI_MONTHLY_EXTERNAL_SPEND_USD ?? 0,
+    },
   );
   return cappedGemini;
 }

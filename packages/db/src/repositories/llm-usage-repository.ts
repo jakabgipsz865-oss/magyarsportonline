@@ -88,13 +88,21 @@ export class LlmUsageRepository {
         .where(and(eq(llmUsage.provider, provider), gte(llmUsage.occurredAt, since)));
       if ((count?.total ?? 0) >= cap) return null;
       if (budget) {
-        if (!Number.isFinite(budget.capUsd) || !Number.isFinite(budget.externalSpentUsd) ||
-          !Number.isFinite(budget.reserveUsd) || budget.capUsd <= 0 ||
-          budget.externalSpentUsd < 0 || budget.reserveUsd <= 0)
+        if (
+          !Number.isFinite(budget.capUsd) ||
+          !Number.isFinite(budget.externalSpentUsd) ||
+          !Number.isFinite(budget.reserveUsd) ||
+          budget.capUsd <= 0 ||
+          budget.externalSpentUsd < 0 ||
+          budget.reserveUsd <= 0
+        )
           throw new Error("Invalid monthly AI budget reservation");
-        const [spent] = await tx.select({
-          total: sql<string>`coalesce(sum(${llmUsage.costUsd}), 0)`,
-        }).from(llmUsage).where(gte(llmUsage.occurredAt, budget.since));
+        const [spent] = await tx
+          .select({
+            total: sql<string>`coalesce(sum(${llmUsage.costUsd}), 0)`,
+          })
+          .from(llmUsage)
+          .where(gte(llmUsage.occurredAt, budget.since));
         if (Number(spent?.total ?? 0) + budget.externalSpentUsd + budget.reserveUsd > budget.capUsd)
           return null;
       }

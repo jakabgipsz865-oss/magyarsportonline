@@ -85,7 +85,8 @@ export function isGeminiDailyQuotaError(error: unknown): boolean {
 function retryAfterMs(value: string | null): number | null {
   if (!value) return null;
   const seconds = Number(value);
-  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(Math.ceil(seconds * 1000), 30 * 60_000);
+  if (Number.isFinite(seconds) && seconds >= 0)
+    return Math.min(Math.ceil(seconds * 1000), 30 * 60_000);
   const date = Date.parse(value);
   return Number.isFinite(date) ? Math.min(Math.max(0, date - Date.now()), 30 * 60_000) : null;
 }
@@ -109,15 +110,19 @@ async function timedGeminiPhase<T>(
   console.info(JSON.stringify({ ...context, status: "started" }));
   try {
     const result = await run();
-    console.info(JSON.stringify({ ...context, status: "completed", durationMs: Date.now() - startedAt }));
+    console.info(
+      JSON.stringify({ ...context, status: "completed", durationMs: Date.now() - startedAt }),
+    );
     return result;
   } catch (error) {
-    console.error(JSON.stringify({
-      ...context,
-      status: "failed",
-      durationMs: Date.now() - startedAt,
-      errorName: error instanceof Error ? error.name : "unknown",
-    }));
+    console.error(
+      JSON.stringify({
+        ...context,
+        status: "failed",
+        durationMs: Date.now() - startedAt,
+        errorName: error instanceof Error ? error.name : "unknown",
+      }),
+    );
     throw error;
   }
 }
@@ -177,8 +182,7 @@ function parseApiStatus(errorBody: string): string | null {
       error?: { status?: string };
       errors?: Array<{ code?: number }>;
     };
-    if (parsed.errors?.some((entry) => entry.code === 2018))
-      return "CLOUDFLARE_GATEWAY_RATE_LIMIT";
+    if (parsed.errors?.some((entry) => entry.code === 2018)) return "CLOUDFLARE_GATEWAY_RATE_LIMIT";
     return parsed.error?.status ?? null;
   } catch {
     return null;
@@ -337,32 +341,30 @@ export class GeminiLlmClient implements LlmClient {
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       try {
-        httpResponse = await timedGeminiPhase("request_headers", request, this.model, () => this.fetchImpl(url, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            ...(this.unifiedBilling
-              ? {
-                  authorization: `Bearer ${this.unifiedBilling.apiToken}`,
-                  "cf-aig-gateway-id": this.unifiedBilling.gatewayId,
-                }
-              : {
-                  ...(this.apiKey ? { "x-goog-api-key": this.apiKey } : {}),
-                  ...(this.gatewayToken
-                    ? { "cf-aig-authorization": `Bearer ${this.gatewayToken}` }
-                    : {}),
-                }),
-          },
-          body: JSON.stringify(body),
-          signal: controller.signal,
-        }));
+        httpResponse = await timedGeminiPhase("request_headers", request, this.model, () =>
+          this.fetchImpl(url, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              ...(this.unifiedBilling
+                ? {
+                    authorization: `Bearer ${this.unifiedBilling.apiToken}`,
+                    "cf-aig-gateway-id": this.unifiedBilling.gatewayId,
+                  }
+                : {
+                    ...(this.apiKey ? { "x-goog-api-key": this.apiKey } : {}),
+                    ...(this.gatewayToken
+                      ? { "cf-aig-authorization": `Bearer ${this.gatewayToken}` }
+                      : {}),
+                  }),
+            },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          }),
+        );
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") {
-          throw new GeminiApiError(
-            0,
-            "TIMEOUT",
-            `Gemini API timed out after ${this.timeoutMs}ms`,
-          );
+          throw new GeminiApiError(0, "TIMEOUT", `Gemini API timed out after ${this.timeoutMs}ms`);
         }
         throw new GeminiApiError(
           0,
@@ -374,10 +376,16 @@ export class GeminiLlmClient implements LlmClient {
       if (!httpResponse.ok) {
         let errorBody: string;
         try {
-          errorBody = await timedGeminiPhase("response_body", request, this.model, () => httpResponse.text());
+          errorBody = await timedGeminiPhase("response_body", request, this.model, () =>
+            httpResponse.text(),
+          );
         } catch (error) {
           if (controller.signal.aborted)
-            throw new GeminiApiError(0, "TIMEOUT", `Gemini API timed out after ${this.timeoutMs}ms`);
+            throw new GeminiApiError(
+              0,
+              "TIMEOUT",
+              `Gemini API timed out after ${this.timeoutMs}ms`,
+            );
           throw error;
         }
         if (controller.signal.aborted)
@@ -392,7 +400,9 @@ export class GeminiLlmClient implements LlmClient {
         );
       }
 
-      const payload = (await timedGeminiPhase("response_body", request, this.model, () => httpResponse.json())) as unknown;
+      const payload = (await timedGeminiPhase("response_body", request, this.model, () =>
+        httpResponse.json(),
+      )) as unknown;
       const parsed = this.unifiedBilling
         ? unwrapCloudflareAiRunResponse(payload)
         : (payload as GeminiGenerateContentResponse);

@@ -13,7 +13,9 @@ describe.skipIf(!url)("database statement deadline", () => {
     });
     try {
       const startedAt = Date.now();
-      await expect(db.execute(sql`SELECT pg_sleep(2)`)).rejects.toThrow(/statement timeout|canceling statement/iu);
+      await expect(db.execute(sql`SELECT pg_sleep(2)`)).rejects.toThrow(
+        /statement timeout|canceling statement/iu,
+      );
       expect(Date.now() - startedAt).toBeLessThan(1500);
     } finally {
       await db.$client.end();

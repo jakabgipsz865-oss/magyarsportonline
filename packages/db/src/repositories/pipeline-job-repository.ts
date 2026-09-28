@@ -3,7 +3,10 @@ import type { Database } from "../client";
 import { pipelineJobs } from "../schema/index";
 
 export type PipelineJobRow = typeof pipelineJobs.$inferSelect;
-export interface JobClaim { jobId: string; owner: string }
+export interface JobClaim {
+  jobId: string;
+  owner: string;
+}
 export interface PipelineQueueStatusCounts {
   pending: number;
   inProgress: number;
@@ -186,7 +189,11 @@ export class PipelineJobRepository {
    * lanes favor fresh pending news. This reserves recovery capacity while
    * admitting new stories under a sustained backlog.
    */
-  async claimBatch(limit: number, staleLockMs: number, now = new Date()): Promise<PipelineJobRow[]> {
+  async claimBatch(
+    limit: number,
+    staleLockMs: number,
+    now = new Date(),
+  ): Promise<PipelineJobRow[]> {
     if (limit <= 0) return [];
     // One in four 30-second lanes claims the oldest eligible job (including
     // stale locks); the other lanes admit fresh pending news first. The old
@@ -214,7 +221,15 @@ export class PipelineJobRepository {
         RETURNING id
       `);
       if (rows.length === 0) return [];
-      return tx.select().from(pipelineJobs).where(inArray(pipelineJobs.id, rows.map((row) => row.id)));
+      return tx
+        .select()
+        .from(pipelineJobs)
+        .where(
+          inArray(
+            pipelineJobs.id,
+            rows.map((row) => row.id),
+          ),
+        );
     });
   }
 
@@ -270,7 +285,12 @@ export class PipelineJobRepository {
    * without consuming an attempt, and persist a recognizable error marker
    * that acts as a durable circuit breaker for later worker invocations.
    */
-  async deferWithoutAttempt(jobId: string, owner: string, reason: string, delayMs: number): Promise<boolean> {
+  async deferWithoutAttempt(
+    jobId: string,
+    owner: string,
+    reason: string,
+    delayMs: number,
+  ): Promise<boolean> {
     const rows = await this.db.execute<{ id: string }>(sql`
       UPDATE ${pipelineJobs}
       SET status = 'pending',

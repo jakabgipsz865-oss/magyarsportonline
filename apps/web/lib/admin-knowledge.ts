@@ -12,8 +12,9 @@ export { MAX_KNOWLEDGE_IMPORT_BYTES, parseAdminKnowledgePackage } from "./admin-
 
 export async function buildAdminKnowledgePackage() {
   const d1 = d1Binding();
-  const records = d1 ? await listD1Knowledge(d1) :
-    await createRepositories().editorialKnowledgeRepository.listAllRecords();
+  const records = d1
+    ? await listD1Knowledge(d1)
+    : await createRepositories().editorialKnowledgeRepository.listAllRecords();
   const createdAt = new Date();
   const knowledgePackage = createEditorialKnowledgePackage({
     format: EDITORIAL_KNOWLEDGE_FORMAT,
@@ -38,8 +39,9 @@ export async function previewAdminKnowledgeImport(
   knowledgePackage: unknown,
 ): Promise<EditorialKnowledgeImportPreview> {
   const d1 = d1Binding();
-  return d1 ? previewD1KnowledgeImport(d1, knowledgePackage) :
-    createRepositories().editorialKnowledgeRepository.previewImport(knowledgePackage);
+  return d1
+    ? previewD1KnowledgeImport(d1, knowledgePackage)
+    : createRepositories().editorialKnowledgeRepository.previewImport(knowledgePackage);
 }
 
 export async function applyAdminKnowledgeImport(
@@ -47,7 +49,10 @@ export async function applyAdminKnowledgeImport(
   expectedDigest: string,
 ): Promise<EditorialKnowledgeApplyResult> {
   const d1 = d1Binding();
-  return d1 ? applyD1KnowledgeImport(d1, knowledgePackage, expectedDigest) :
-    createRepositories().editorialKnowledgeRepository.applyImport(
-      knowledgePackage, expectedDigest);
+  return d1
+    ? applyD1KnowledgeImport(d1, knowledgePackage, expectedDigest)
+    : createRepositories().editorialKnowledgeRepository.applyImport(
+        knowledgePackage,
+        expectedDigest,
+      );
 }

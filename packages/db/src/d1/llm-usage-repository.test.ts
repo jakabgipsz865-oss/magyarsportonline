@@ -23,12 +23,18 @@ function fixture(): { db: DatabaseSyncType; d1: D1Client } {
       let values: (string | number | null)[] = [];
       return {
         bind(...input) {
-          values = input.map(value => typeof value === "boolean" ? Number(value) : value);
+          values = input.map((value) => (typeof value === "boolean" ? Number(value) : value));
           return this;
         },
-        async first<T>() { return (statement.get(...values) as T | undefined) ?? null; },
-        async all<T>() { return { results: statement.all(...values) as T[] }; },
-        async run() { return { meta: { changes: Number(statement.run(...values).changes) } }; },
+        async first<T>() {
+          return (statement.get(...values) as T | undefined) ?? null;
+        },
+        async all<T>() {
+          return { results: statement.all(...values) as T[] };
+        },
+        async run() {
+          return { meta: { changes: Number(statement.run(...values).changes) } };
+        },
       };
     },
   };
@@ -41,15 +47,32 @@ describe("D1 LLM usage guard", () => {
     try {
       const usage = new D1LlmUsageRepository(d1);
       const since = new Date(Date.now() - 60_000);
-      await usage.insert({ provider: "cloudflare", model: "fact", inputTokens: 1,
-        outputTokens: 1, costUsd: 0.003, occurredAt: new Date() });
-      const budget = { since, capUsd: 0.015, externalSpentUsd: 0.005,
-        reserveUsd: 0.004 };
+      await usage.insert({
+        provider: "cloudflare",
+        model: "fact",
+        inputTokens: 1,
+        outputTokens: 1,
+        costUsd: 0.003,
+        occurredAt: new Date(),
+      });
+      const budget = { since, capUsd: 0.015, externalSpentUsd: 0.005, reserveUsd: 0.004 };
       const [primary, repair] = await Promise.all([
-        usage.reserveRequest("gemini", "gemini-3.5-flash-lite", since, 10,
-          { role: "primary" }, budget),
-        usage.reserveRequest("gemini", "gemini-3.5-flash", since, 10,
-          { role: "targeted_repair" }, budget),
+        usage.reserveRequest(
+          "gemini",
+          "gemini-3.5-flash-lite",
+          since,
+          10,
+          { role: "primary" },
+          budget,
+        ),
+        usage.reserveRequest(
+          "gemini",
+          "gemini-3.5-flash",
+          since,
+          10,
+          { role: "targeted_repair" },
+          budget,
+        ),
       ]);
       expect([primary, repair].filter(Boolean)).toHaveLength(1);
       expect(await usage.sumCostUsdSince(since)).toBeCloseTo(0.007);
@@ -57,8 +80,16 @@ describe("D1 LLM usage guard", () => {
       if (!held) throw new Error("Expected one reservation");
       await usage.finalizeRequest(held, 100, 50, 0.002);
       expect(await usage.sumCostUsdSince(since)).toBeCloseTo(0.005);
-      expect(await usage.reserveRequest("gemini", "gemini-3.5-flash", since, 10,
-        { role: "targeted_repair" }, budget)).toBeTruthy();
+      expect(
+        await usage.reserveRequest(
+          "gemini",
+          "gemini-3.5-flash",
+          since,
+          10,
+          { role: "targeted_repair" },
+          budget,
+        ),
+      ).toBeTruthy();
     } finally {
       db.close();
     }
@@ -69,8 +100,10 @@ describe("D1 LLM usage guard", () => {
     try {
       const usage = new D1LlmUsageRepository(d1);
       const since = new Date(Date.now() - 60_000);
-      const first = await usage.reserveRequest("gemini", "writer", since, 2,
-        { role: "primary", rawArticleId: "raw-1" });
+      const first = await usage.reserveRequest("gemini", "writer", since, 2, {
+        role: "primary",
+        rawArticleId: "raw-1",
+      });
       expect(first).toBeTruthy();
       if (!first) throw new Error("Expected a reservation");
       const second = await usage.reserveRequest("gemini", "writer", since, 2);
@@ -89,10 +122,15 @@ describe("D1 LLM usage guard", () => {
       await usage.failRequest(third, "provider_timeout");
       await usage.releaseRequest(third);
       expect(await usage.countSince("gemini", since)).toBe(2);
-      expect((db.prepare("SELECT role, raw_article_id FROM llm_usage WHERE id=?")
-        .get(first) as { role: string; raw_article_id: string })).toEqual({
-          role: "primary", raw_article_id: "raw-1",
-        });
+      expect(
+        db.prepare("SELECT role, raw_article_id FROM llm_usage WHERE id=?").get(first) as {
+          role: string;
+          raw_article_id: string;
+        },
+      ).toEqual({
+        role: "primary",
+        raw_article_id: "raw-1",
+      });
     } finally {
       db.close();
     }

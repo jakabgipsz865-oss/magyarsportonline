@@ -45,13 +45,21 @@ export class RawArticleRepository {
   }
 
   /** Claim bounded old and fresh RSS receipts without holding a lock during HTTP. */
-  async claimTabloidFetchBatch(sourceIds: string[], limit: number, staleLockMs: number, now = new Date()): Promise<RawArticle[]> {
+  async claimTabloidFetchBatch(
+    sourceIds: string[],
+    limit: number,
+    staleLockMs: number,
+    now = new Date(),
+  ): Promise<RawArticle[]> {
     if (sourceIds.length === 0 || limit <= 0) return [];
     const bounded = Math.min(limit, 4);
     const oldSlots = bounded === 1 ? (Math.floor(now.getTime() / 60_000) % 4 === 0 ? 1 : 0) : 1;
     return this.db.transaction(async (tx) => {
       const claimedIds: string[] = [];
-      for (const [slots, direction] of [[oldSlots, "ASC"], [bounded - oldSlots, "DESC"]] as const) {
+      for (const [slots, direction] of [
+        [oldSlots, "ASC"],
+        [bounded - oldSlots, "DESC"],
+      ] as const) {
         if (slots <= 0) continue;
         const owner = crypto.randomUUID();
         const rows = await tx.execute<{ id: string }>(sql`
@@ -81,16 +89,31 @@ export class RawArticleRepository {
     });
   }
 
-  async deferTabloidFetch(id: string, owner: string, reason: string, attempts: number): Promise<boolean> {
+  async deferTabloidFetch(
+    id: string,
+    owner: string,
+    reason: string,
+    attempts: number,
+  ): Promise<boolean> {
     const exhausted = attempts >= 5;
     const delayMs = Math.min(30_000 * 2 ** Math.max(0, attempts - 1), 30 * 60_000);
-    const rows = await this.db.update(rawArticles).set({
-      processingStatus: exhausted ? "review_unavailable" : "fetch_retry",
-      decisionReason: reason,
-      processingAvailableAt: exhausted ? null : new Date(Date.now() + delayMs),
-      processingOwner: null,
-      processingLockedAt: null,
-    }).where(and(eq(rawArticles.id, id), eq(rawArticles.processingOwner, owner), eq(rawArticles.processingStatus, "fetching"))).returning({ id: rawArticles.id });
+    const rows = await this.db
+      .update(rawArticles)
+      .set({
+        processingStatus: exhausted ? "review_unavailable" : "fetch_retry",
+        decisionReason: reason,
+        processingAvailableAt: exhausted ? null : new Date(Date.now() + delayMs),
+        processingOwner: null,
+        processingLockedAt: null,
+      })
+      .where(
+        and(
+          eq(rawArticles.id, id),
+          eq(rawArticles.processingOwner, owner),
+          eq(rawArticles.processingStatus, "fetching"),
+        ),
+      )
+      .returning({ id: rawArticles.id });
     return rows.length > 0;
   }
 
@@ -141,7 +164,15 @@ export class RawArticleRepository {
       const [raw] = await tx
         .select({ id: rawArticles.id, sourceId: rawArticles.sourceId })
         .from(rawArticles)
-        .where(owner ? and(eq(rawArticles.id, id), eq(rawArticles.processingOwner, owner), eq(rawArticles.processingStatus, "fetching")) : eq(rawArticles.id, id))
+        .where(
+          owner
+            ? and(
+                eq(rawArticles.id, id),
+                eq(rawArticles.processingOwner, owner),
+                eq(rawArticles.processingStatus, "fetching"),
+              )
+            : eq(rawArticles.id, id),
+        )
         .limit(1);
       if (!raw) return false;
       const [existing] = await tx
@@ -153,13 +184,33 @@ export class RawArticleRepository {
         )
         .limit(1);
       if (existing) {
-        if (owner) await tx.update(rawArticles).set({ processingStatus: "queued", decisionReason: null, processingOwner: null, processingLockedAt: null }).where(and(eq(rawArticles.id, id), eq(rawArticles.processingOwner, owner)));
+        if (owner)
+          await tx
+            .update(rawArticles)
+            .set({
+              processingStatus: "queued",
+              decisionReason: null,
+              processingOwner: null,
+              processingLockedAt: null,
+            })
+            .where(and(eq(rawArticles.id, id), eq(rawArticles.processingOwner, owner)));
         return false;
       }
       await tx
         .update(rawArticles)
-        .set({ ...data, contentOrigin: "full_article", processingStatus: "queued", decisionReason: null, processingOwner: null, processingLockedAt: null })
-        .where(owner ? and(eq(rawArticles.id, id), eq(rawArticles.processingOwner, owner)) : eq(rawArticles.id, id));
+        .set({
+          ...data,
+          contentOrigin: "full_article",
+          processingStatus: "queued",
+          decisionReason: null,
+          processingOwner: null,
+          processingLockedAt: null,
+        })
+        .where(
+          owner
+            ? and(eq(rawArticles.id, id), eq(rawArticles.processingOwner, owner))
+            : eq(rawArticles.id, id),
+        );
       await tx.insert(pipelineJobs).values({
         event: {
           id: crypto.randomUUID(),

@@ -8,11 +8,13 @@
   "compatibility_date": "2026-09-12",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
-  "d1_databases": [{
-    "binding": "DB",
-    "database_name": "mso-remediation-e2e-20260928",
-    "database_id": "9fa9cb85-c8f2-49a9-aa80-a0cc47335c27"
-  }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mso-remediation-e2e-20260928",
+      "database_id": "9fa9cb85-c8f2-49a9-aa80-a0cc47335c27",
+    },
+  ],
   "services": [{ "binding": "E2E_FEED", "service": "mso-d1-e2e-feed" }],
   "vars": {
     "SITE_URL": "https://mso-d1-ai-rehearsal.footballinvestmentkft.workers.dev",
@@ -27,6 +29,6 @@
     "FORCE_REVIEW_MODE": "false",
     "FACEBOOK_AUTO_PUBLISH": "false",
     "D1_PIPELINE_START_AT": "2026-09-28T16:20:00.000Z",
-    "D1_TEST_SOURCE_ORIGIN": "https://mso-d1-e2e-feed.footballinvestmentkft.workers.dev"
-  }
+    "D1_TEST_SOURCE_ORIGIN": "https://mso-d1-e2e-feed.footballinvestmentkft.workers.dev",
+  },
 }

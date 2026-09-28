@@ -15,10 +15,19 @@ function localD1(db: DatabaseSyncType): D1Client {
       const statement = db.prepare(query);
       let values: (string | number | null)[] = [];
       return {
-        bind(...input) { values = input.map(value => typeof value === "boolean" ? Number(value) : value); return this; },
-        async first<T>() { return (statement.get(...values) as T | undefined) ?? null; },
-        async all<T>() { return { results: statement.all(...values) as T[] }; },
-        async run() { return { meta: { changes: Number(statement.run(...values).changes) } }; },
+        bind(...input) {
+          values = input.map((value) => (typeof value === "boolean" ? Number(value) : value));
+          return this;
+        },
+        async first<T>() {
+          return (statement.get(...values) as T | undefined) ?? null;
+        },
+        async all<T>() {
+          return { results: statement.all(...values) as T[] };
+        },
+        async run() {
+          return { meta: { changes: Number(statement.run(...values).changes) } };
+        },
       };
     },
   };
@@ -46,14 +55,18 @@ describe("D1 social post idempotency", () => {
     try {
       const repository = new D1SocialPostRepository(localD1(db));
       const input = {
-        storyId: "story-1", storyVersionId: "version-1", postText: "Fresh article",
+        storyId: "story-1",
+        storyVersionId: "version-1",
+        postText: "Fresh article",
         canonicalUrl: "https://mso24.hu/hir/fresh-article",
       };
       const first = await repository.createFacebookQueued(input);
       const duplicate = await repository.createFacebookQueued(input);
       expect(first.created).toBe(true);
       expect(duplicate).toEqual({ post: first.post, created: false });
-      expect((db.prepare("SELECT count(*) AS n FROM social_posts").get() as { n: number }).n).toBe(1);
+      expect((db.prepare("SELECT count(*) AS n FROM social_posts").get() as { n: number }).n).toBe(
+        1,
+      );
 
       const claimed = await repository.claimFacebookForPosting(first.post.id);
       expect(claimed?.attemptCount).toBe(1);
@@ -71,7 +84,9 @@ describe("D1 social post idempotency", () => {
     try {
       const repository = new D1SocialPostRepository(localD1(db));
       const { post } = await repository.createFacebookQueued({
-        storyId: "story-2", storyVersionId: "version-2", postText: "Fresh article",
+        storyId: "story-2",
+        storyVersionId: "version-2",
+        postText: "Fresh article",
         canonicalUrl: "https://mso24.hu/hir/fresh-article-2",
       });
       await repository.claimFacebookForPosting(post.id);
@@ -93,17 +108,26 @@ describe("D1 social post idempotency", () => {
     try {
       const repository = new D1SocialPostRepository(localD1(db));
       const old = await repository.createFacebookQueued({
-        storyId: "old", storyVersionId: "old-version", postText: "Old",
+        storyId: "old",
+        storyVersionId: "old-version",
+        postText: "Old",
         canonicalUrl: "https://mso24.hu/hir/old",
       });
-      db.prepare("UPDATE social_posts SET created_at = ? WHERE id = ?")
-        .run("2026-09-15T20:29:59.000000+00:00", old.post.id);
+      db.prepare("UPDATE social_posts SET created_at = ? WHERE id = ?").run(
+        "2026-09-15T20:29:59.000000+00:00",
+        old.post.id,
+      );
       const fresh = await repository.createFacebookQueued({
-        storyId: "fresh", storyVersionId: "fresh-version", postText: "Fresh",
+        storyId: "fresh",
+        storyVersionId: "fresh-version",
+        postText: "Fresh",
         canonicalUrl: "https://mso24.hu/hir/fresh",
       });
-      expect((await repository.listPendingFacebookEnqueue(1,
-        new Date("2026-09-15T20:30:00.000Z"))).map(post => post.id)).toEqual([fresh.post.id]);
+      expect(
+        (await repository.listPendingFacebookEnqueue(1, new Date("2026-09-15T20:30:00.000Z"))).map(
+          (post) => post.id,
+        ),
+      ).toEqual([fresh.post.id]);
     } finally {
       db.close();
     }

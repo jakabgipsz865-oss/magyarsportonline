@@ -80,13 +80,18 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "D1_PIPELINE_START_AT is required" }, { status: 503 });
     }
     const mockWriter = getD1StagingWriter();
-    const result = await processOneD1Job(d1, {
-      activationAt: env.D1_PIPELINE_START_AT,
-      siteUrl: env.SITE_URL,
-      forceReviewMode: env.FORCE_REVIEW_MODE,
-      facebookEnabled: env.FACEBOOK_AUTO_PUBLISH,
-      facebookStartAt: env.FACEBOOK_AUTO_PUBLISH_START_AT,
-    }, mockWriter ?? getWriterLlmClient(), mockWriter ?? getWriterRepairLlmClient());
+    const result = await processOneD1Job(
+      d1,
+      {
+        activationAt: env.D1_PIPELINE_START_AT,
+        siteUrl: env.SITE_URL,
+        forceReviewMode: env.FORCE_REVIEW_MODE,
+        facebookEnabled: env.FACEBOOK_AUTO_PUBLISH,
+        facebookStartAt: env.FACEBOOK_AUTO_PUBLISH_START_AT,
+      },
+      mockWriter ?? getWriterLlmClient(),
+      mockWriter ?? getWriterRepairLlmClient(),
+    );
     return NextResponse.json(result);
   }
 
@@ -137,11 +142,18 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
 
     try {
       const event = parseEvent(job.event);
-      await timedPipelineStage("job_dispatch", { jobId: job.id, attempt: job.attempts, leaseOwner: owner }, () =>
-        dispatchJobToHandler(event, repos, emitter, job.id, owner),
+      await timedPipelineStage(
+        "job_dispatch",
+        { jobId: job.id, attempt: job.attempts, leaseOwner: owner },
+        () => dispatchJobToHandler(event, repos, emitter, job.id, owner),
       );
-      if (!(await timedPipelineStage("job_complete", { jobId: job.id, attempt: job.attempts, leaseOwner: owner }, () =>
-        repos.pipelineJobRepository.complete(job.id, owner))))
+      if (
+        !(await timedPipelineStage(
+          "job_complete",
+          { jobId: job.id, attempt: job.attempts, leaseOwner: owner },
+          () => repos.pipelineJobRepository.complete(job.id, owner),
+        ))
+      )
         throw new Error("Job claim expired before completion");
       succeeded += 1;
     } catch (error) {
@@ -181,9 +193,11 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
         break;
       }
       const exhausted = job.attempts >= job.maxAttempts;
-      const backoffMs = Math.min(MAX_BACKOFF_MS, Math.max(backoffFor(job.attempts), retryAfterFromError(error)));
-      if (!(await repos.pipelineJobRepository.fail(job.id, owner, message, backoffMs)))
-        continue;
+      const backoffMs = Math.min(
+        MAX_BACKOFF_MS,
+        Math.max(backoffFor(job.attempts), retryAfterFromError(error)),
+      );
+      if (!(await repos.pipelineJobRepository.fail(job.id, owner, message, backoffMs))) continue;
       if (exhausted) {
         deadLettered += 1;
       } else {

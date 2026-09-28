@@ -9,11 +9,13 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS",
   },
-  "d1_databases": [{
-    "binding": "DB",
-    "database_name": "mso-remediation-staging-20260928",
-    "database_id": "eb02f98e-fd89-4277-94be-0f763056b91e"
-  }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mso-remediation-staging-20260928",
+      "database_id": "eb02f98e-fd89-4277-94be-0f763056b91e",
+    },
+  ],
   "routes": [
     {
       "pattern": "mso24.hu",

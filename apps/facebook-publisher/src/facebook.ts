@@ -88,10 +88,17 @@ function validArticleUrl(value: string, siteOrigin: string): boolean {
   try {
     const url = new URL(value);
     const allowed = new URL(siteOrigin);
-    return url.protocol === "https:" && allowed.protocol === "https:" &&
-      url.origin === allowed.origin && !url.username && !url.password &&
-      !url.search && !url.hash && /^\/hir\/[^/]+$/u.test(url.pathname) &&
-      !/%(?:2f|5c)/iu.test(url.pathname);
+    return (
+      url.protocol === "https:" &&
+      allowed.protocol === "https:" &&
+      url.origin === allowed.origin &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      /^\/hir\/[^/]+$/u.test(url.pathname) &&
+      !/%(?:2f|5c)/iu.test(url.pathname)
+    );
   } catch {
     return false;
   }
@@ -155,16 +162,22 @@ export async function processFacebookMessage(
     return;
   }
   const activationStart = env.FACEBOOK_AUTO_PUBLISH_START_AT
-    ? new Date(env.FACEBOOK_AUTO_PUBLISH_START_AT) : null;
+    ? new Date(env.FACEBOOK_AUTO_PUBLISH_START_AT)
+    : null;
   if (!activationStart || Number.isNaN(activationStart.getTime())) {
-    deps.logger.error({ reasonCode: "facebook_activation_boundary_missing" },
-      "Facebook activation boundary is not configured");
+    deps.logger.error(
+      { reasonCode: "facebook_activation_boundary_missing" },
+      "Facebook activation boundary is not configured",
+    );
     message.retry({ delaySeconds: 900 });
     return;
   }
   if (post.createdAt < activationStart) {
-    await deps.repository.markFailed(post.id, "facebook_before_activation",
-      "Durable post intent predates Facebook activation boundary");
+    await deps.repository.markFailed(
+      post.id,
+      "facebook_before_activation",
+      "Durable post intent predates Facebook activation boundary",
+    );
     message.ack();
     return;
   }
@@ -204,11 +217,14 @@ export async function processFacebookMessage(
     );
   } catch (error) {
     const detail = error instanceof Error ? `${error.name}: ${error.message}` : typeof error;
-    deps.logger.error({
-      reasonCode: "facebook_network_ambiguous",
-      // The token is sent only as an Authorization header and is never logged.
-      fetchError: detail.replace(/[A-Za-z0-9_-]{40,}/gu, "[redacted]").slice(0, 200),
-    }, "Facebook Graph request ended without a response");
+    deps.logger.error(
+      {
+        reasonCode: "facebook_network_ambiguous",
+        // The token is sent only as an Authorization header and is never logged.
+        fetchError: detail.replace(/[A-Za-z0-9_-]{40,}/gu, "[redacted]").slice(0, 200),
+      },
+      "Facebook Graph request ended without a response",
+    );
     await deps.repository.markFailed(
       claimed.id,
       "facebook_network_ambiguous",

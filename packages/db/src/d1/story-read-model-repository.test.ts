@@ -14,10 +14,19 @@ function localD1(db: DatabaseSyncType): D1Client {
       const statement = db.prepare(query);
       let values: (string | number | null)[] = [];
       return {
-        bind(...input) { values = input.map(value => typeof value === "boolean" ? Number(value) : value); return this; },
-        async first<T>() { return (statement.get(...values) as T | undefined) ?? null; },
-        async all<T>() { return { results: statement.all(...values) as T[] }; },
-        async run() { return { meta: { changes: Number(statement.run(...values).changes) } }; },
+        bind(...input) {
+          values = input.map((value) => (typeof value === "boolean" ? Number(value) : value));
+          return this;
+        },
+        async first<T>() {
+          return (statement.get(...values) as T | undefined) ?? null;
+        },
+        async all<T>() {
+          return { results: statement.all(...values) as T[] };
+        },
+        async run() {
+          return { meta: { changes: Number(statement.run(...values).changes) } };
+        },
       };
     },
   };
@@ -39,11 +48,23 @@ function fixture(): DatabaseSyncType {
 }
 
 const row = {
-  storyId: "story-1", slug: "friss-hir", titleHu: "Friss hír", leadHu: "Bevezető",
-  bodyHtml: "<p>Törzs</p>", imageUrl: null, inlineImages: [], isAiGenerated: true,
-  metaDescription: null, structuredData: { headline: "Friss hír" },
-  sourcesSummary: [{ name: "Source", url: "https://example.com", firstSeenAt: "2026-09-27T18:00:00Z" }],
-  tags: [], category: null, confidenceScore: "0.880", isDeveloping: false,
+  storyId: "story-1",
+  slug: "friss-hir",
+  titleHu: "Friss hír",
+  leadHu: "Bevezető",
+  bodyHtml: "<p>Törzs</p>",
+  imageUrl: null,
+  inlineImages: [],
+  isAiGenerated: true,
+  metaDescription: null,
+  structuredData: { headline: "Friss hír" },
+  sourcesSummary: [
+    { name: "Source", url: "https://example.com", firstSeenAt: "2026-09-27T18:00:00Z" },
+  ],
+  tags: [],
+  category: null,
+  confidenceScore: "0.880",
+  isDeveloping: false,
   publishedAt: new Date("2026-09-27T18:25:35Z"),
   lastUpdatedAt: new Date("2026-09-27T18:25:35Z"),
   versionHistorySummary: [{ prompt_version: "tabloid-hu@2", is_current: true }],
@@ -57,18 +78,27 @@ describe("D1 public read model", () => {
       const repository = new D1StoryReadModelRepository(localD1(db));
       await repository.upsert(row);
       await repository.upsert({ ...row, titleHu: "Módosított cím" });
-      expect((db.prepare("SELECT count(*) AS n FROM story_read_model").get() as { n: number }).n).toBe(1);
+      expect(
+        (db.prepare("SELECT count(*) AS n FROM story_read_model").get() as { n: number }).n,
+      ).toBe(1);
       const found = await repository.getBySlug(row.slug);
       expect(found?.titleHu).toBe("Módosított cím");
       expect(found?.publishedAt.toISOString()).toBe(row.publishedAt.toISOString());
       expect(found?.sourcesSummary).toEqual(row.sourcesSummary);
-      expect((await repository.listPublished({ limit: 10, offset: 0 })).map(item => item.storyId)).toEqual([row.storyId]);
+      expect(
+        (await repository.listPublished({ limit: 10, offset: 0 })).map((item) => item.storyId),
+      ).toEqual([row.storyId]);
 
-      await repository.upsert({ ...row, versionHistorySummary: [{ prompt_version: "other", is_current: true }] });
+      await repository.upsert({
+        ...row,
+        versionHistorySummary: [{ prompt_version: "other", is_current: true }],
+      });
       expect(await repository.getBySlug(row.slug)).toBeNull();
       expect(await repository.listPublished({ limit: 10, offset: 0 })).toEqual([]);
       await repository.deleteByStoryId(row.storyId);
-      expect((db.prepare("SELECT count(*) AS n FROM story_read_model").get() as { n: number }).n).toBe(0);
+      expect(
+        (db.prepare("SELECT count(*) AS n FROM story_read_model").get() as { n: number }).n,
+      ).toBe(0);
     } finally {
       db.close();
     }
