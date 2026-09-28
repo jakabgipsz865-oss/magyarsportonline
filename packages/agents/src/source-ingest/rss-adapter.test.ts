@@ -21,6 +21,67 @@ describe("RssSourceAdapter", () => {
       vi.unstubAllGlobals();
     }
   });
+  it.each([
+    ["The Sun", "https://www.thesun.co.uk/sport/football/feed/"],
+    ["talkSPORT", "https://talksport.com/football/feed"],
+  ])("reports a %s HTML verification page as a response-type error", async (_, url) => {
+    const fetcher = vi.fn(
+      async () =>
+        new Response(
+          '<!DOCTYPE html><html lang="en"><head><title>Verifying Device</title></head><body>Verifying your device, please wait</body></html>',
+          { status: 200, headers: { "content-type": "text/html; charset=UTF-8" } },
+        ),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    try {
+      await expect(
+        new RssSourceAdapter(createDefaultParser(), false).fetch({ url }),
+      ).rejects.toThrow(
+        `RSS response is HTML (HTTP 200, Content-Type text/html; charset=UTF-8) from ${url}`,
+      );
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("retains the HTTP 403 error for the Daily Express feed", async () => {
+    const url = "https://www.express.co.uk/posts/rss/67/football";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("<html>Request blocked</html>", { status: 403 })),
+    );
+    try {
+      await expect(
+        new RssSourceAdapter(createDefaultParser(), false).fetch({ url }),
+      ).rejects.toThrow(`RSS HTTP 403 from ${url}`);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("still parses real RSS even when its Content-Type is text/html", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            '<rss version="2.0"><channel><title>Football</title><item><title>Football story</title><link>https://example.com/story</link></item></channel></rss>',
+            { status: 200, headers: { "content-type": "text/html" } },
+          ),
+      ),
+    );
+    try {
+      const articles = await new RssSourceAdapter(createDefaultParser(), false).fetch({
+        url: "https://example.com/feed",
+      });
+      expect(articles).toHaveLength(1);
+      expect(articles[0]?.sourceUrl).toBe("https://example.com/story");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("normalizes RSS items into NormalizedArticle, stripping HTML", async () => {
     const fakeParser: RssParserLike = {
       parseURL: async (url) => {
