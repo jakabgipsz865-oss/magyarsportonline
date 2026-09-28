@@ -216,6 +216,10 @@ describe("one-call Hungarian writer", () => {
     ["Kickoff is at 18:30.", "A kezdés 18.30-kor lesz.", false],
     ["Kickoff is at 18:30.", "A kezdés 19.30-kor lesz.", true],
     ["Ronaldo scored 2 and Messi scored 3.", "Ronaldo 3, Messi 2 gólt szerzett.", true],
+    ["Luca Bolay (24) is worth 500.000 Euro.", "A 24 éves Luca Bolay értékét 500.000 eurónak tartják.", false],
+    ["Haaland faced 114 charges. Roberto Mancini denied wrongdoing.", "A 114 vád után Roberto Mancini tagadta a szabálytalanságot.", false],
+    ["The match is on October 11.", "Október 11-én lesz a mérkőzés a Premier League-ben.", false],
+    ["Haaland equalised in the 51st minute.", "Haaland az 51. percben egyenlített.", false],
   ])("checks numeric meaning: %s => %s", (sourceContent, body_hu, rejected) => {
     const flags = assessTabloidQuality({
       sourceContent,
@@ -260,6 +264,18 @@ describe("one-call Hungarian writer", () => {
         body_hu:
           "A játékos az iPhone készülékével készült videót a LaLiga illetékeseinek is megmutatta.",
         language_warnings: [],
+      },
+    });
+    expect(flags.some((flag) => flag.code === "malformed_hungarian")).toBe(false);
+  });
+
+  it("accepts a source-attributed mixed-case broadcaster name", () => {
+    const flags = assessTabloidQuality({
+      sourceContent: "He told TalkTV that the appeal was likely.",
+      output: {
+        title_hu: "Fellebbezést terveznek",
+        lead_hu: "Sajtóhír érkezett.",
+        body_hu: "A szakértő a TalkTV-nek nyilatkozott a várható fellebbezésről.",
       },
     });
     expect(flags.some((flag) => flag.code === "malformed_hungarian")).toBe(false);

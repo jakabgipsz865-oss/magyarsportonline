@@ -189,8 +189,11 @@ export function assessTabloidQuality(input: {
     );
     if (forbidden)
       flags.push({ kind: "hard", code: "forbidden_terminology", field, detail: forbidden });
+    const unrecognizedMixedCase = [...text.matchAll(/[\p{L}]+/gu)].some(([word]) =>
+      /\p{Ll}{3,}\p{Lu}/u.test(word) && !input.sourceContent.includes(word),
+    );
     if (
-      /\p{Ll}{3,}\p{Lu}/u.test(text) ||
+      unrecognizedMixedCase ||
       /(?<!\p{L})([\p{L}]{2,})\s+\1(?!\p{L})/iu.test(text) ||
       /\b\p{L}{28,}\b/u.test(text)
     )
