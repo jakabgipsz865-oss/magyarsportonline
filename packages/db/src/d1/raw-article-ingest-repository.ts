@@ -1,6 +1,9 @@
 import type { NewRawArticle, RawArticle } from "../repositories/raw-article-repository";
 import { d1Date, d1Timestamp, type D1Client } from "./client";
 
+// D1 allows 100 bound parameters per query; source_id uses one of them.
+const EXISTING_SOURCE_URL_BATCH_SIZE = 99;
+
 type FetchCandidate = Pick<
   RawArticle,
   | "id"
@@ -54,8 +57,8 @@ export class D1RawArticleIngestRepository {
   /** Avoid one D1 INSERT round trip for every unchanged item in a polled feed. */
   async existingSourceUrls(sourceId: string, urls: string[]): Promise<Set<string>> {
     const existing = new Set<string>();
-    for (let offset = 0; offset < urls.length; offset += 200) {
-      const batch = urls.slice(offset, offset + 200);
+    for (let offset = 0; offset < urls.length; offset += EXISTING_SOURCE_URL_BATCH_SIZE) {
+      const batch = urls.slice(offset, offset + EXISTING_SOURCE_URL_BATCH_SIZE);
       if (batch.length === 0) continue;
       const rows = await this.db
         .prepare(

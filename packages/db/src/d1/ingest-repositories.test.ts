@@ -10,7 +10,10 @@ const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as {
   DatabaseSync: typeof DatabaseSyncType;
 };
 
-function localD1(db: DatabaseSyncType): D1Client {
+function localD1(
+  db: DatabaseSyncType,
+  onBind?: (query: string, values: readonly unknown[]) => void,
+): D1Client {
   const batched = new WeakMap<D1Statement, () => { meta: { changes: number } }>();
   return {
     prepare(query): D1Statement {
@@ -18,6 +21,7 @@ function localD1(db: DatabaseSyncType): D1Client {
       let values: (string | number | null)[] = [];
       const bound: D1Statement = {
         bind(...input) {
+          onBind?.(query, input);
           values = input.map((value) => (typeof value === "boolean" ? Number(value) : value));
           return this;
         },
@@ -53,6 +57,74 @@ function localD1(db: DatabaseSyncType): D1Client {
 }
 
 describe("D1 RSS receipt and full-article job", () => {
+  it.each([0, 30, 99, 100, 150, 200, 201])(
+    "keeps every URL and the D1 parameter limit for a %i-item feed",
+    async (size) => {
+      const db = new DatabaseSync(":memory:");
+      try {
+        db.exec(readFileSync(new URL("../../d1/0001_initial.sql", import.meta.url), "utf8"));
+        const sourceId = crypto.randomUUID();
+        db.prepare(
+          `INSERT INTO sources (id,name,base_url,type,language,license_type,
+          reliability_tier,fetch_config,is_active,polling_frequency_minutes)
+          VALUES (?,?,?,'rss','en','public_rss','C',?,1,1)`,
+        ).run(sourceId, "Boundary feed", "https://example.com", JSON.stringify({ tabloid: true }));
+        const binds: Array<{ query: string; values: readonly unknown[] }> = [];
+        const raw = new D1RawArticleIngestRepository(
+          localD1(db, (query, values) => {
+            if (query.includes("SELECT source_url FROM raw_articles")) {
+              binds.push({ query, values });
+            }
+          }),
+        );
+        const urls = Array.from({ length: size }, (_, index) => `https://example.com/${index}`);
+        const receiptFor = (sourceUrl: string) => ({
+          sourceId,
+          sourceUrl,
+          titleOriginal: "Football story",
+          bodyOriginal: "RSS summary",
+          language: "en",
+          contentOrigin: "rss_snippet" as const,
+        });
+        const seeded = new Set<string>();
+        for (let index = 0; index < urls.length; index += 2) {
+          const url = urls[index]!;
+          expect((await raw.insertTabloid(receiptFor(url), false))?.id).toBeTruthy();
+          seeded.add(url);
+        }
+
+        expect(await raw.existingSourceUrls(sourceId, urls)).toEqual(seeded);
+        expect(binds).toHaveLength(Math.ceil(size / 99));
+        expect(binds.flatMap(({ values }) => values.slice(1))).toEqual(urls);
+        for (const { query, values } of binds) {
+          expect(values[0]).toBe(sourceId);
+          expect(values.length).toBeLessThanOrEqual(100);
+          expect(query.match(/\?/g)).toHaveLength(values.length);
+        }
+
+        for (const url of urls) {
+          if (!seeded.has(url)) {
+            expect((await raw.insertTabloid(receiptFor(url), false))?.id).toBeTruthy();
+          }
+        }
+        expect(await raw.existingSourceUrls(sourceId, urls)).toEqual(new Set(urls));
+        expect(
+          (db.prepare("SELECT COUNT(*) AS count FROM raw_articles").get() as { count: number })
+            .count,
+        ).toBe(size);
+        if (urls.length > 0) {
+          expect(await raw.insertTabloid(receiptFor(urls.at(-1)!), false)).toBeNull();
+          expect(
+            (db.prepare("SELECT COUNT(*) AS count FROM raw_articles").get() as { count: number })
+              .count,
+          ).toBe(size);
+        }
+      } finally {
+        db.close();
+      }
+    },
+  );
+
   it("deduplicates feed receipts and atomically upgrades only the current fetch claim", async () => {
     const db = new DatabaseSync(":memory:");
     try {
