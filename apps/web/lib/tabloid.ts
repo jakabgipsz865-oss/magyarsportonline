@@ -549,6 +549,7 @@ interface TabloidIngestRepositories {
 /** Persist every observed feed item before admitting any full-page fetch. */
 export async function ingestTabloid(repos: TabloidIngestRepositories = createIngestRepositories()) {
   if (!env.TABLOID_AUTO_PUBLISH) return { paused: true, llmCalls: 0 };
+  const activationAt = d1Binding() ? env.D1_PIPELINE_START_AT : null;
   const queueBefore = await repos.pipelineJobRepository.getStatusCounts();
   const ingestBudget = Math.min(4, Math.max(0, 36 - queueBefore.pending - queueBefore.inProgress));
   const sources = (await repos.sourceRepository.listActive())
@@ -610,6 +611,9 @@ export async function ingestTabloid(repos: TabloidIngestRepositories = createIng
               config.mode,
               article.sourceUrl,
             );
+            const historical = Boolean(activationAt && article.publishedAtSource &&
+              article.publishedAtSource < activationAt);
+            const unknownDate = Boolean(activationAt && !article.publishedAtSource);
             if (!accepted) rejectedCount++;
             const raw = await repos.rawArticleRepository.insertTabloid(
               {
@@ -629,9 +633,13 @@ export async function ingestTabloid(repos: TabloidIngestRepositories = createIng
                 rssDescription: article.bodyOriginal,
                 rssGuid: article.guid ?? article.sourceUrl,
                 firstSeenAt,
-                processingStatus: accepted ? "awaiting_full_article" : "rejected_topic",
-                decisionReason: accepted ? "awaiting_processing_capacity" : "topic_filter",
-                processingAvailableAt: accepted ? new Date() : null,
+                processingStatus: !accepted ? "rejected_topic" : historical ?
+                  "historical_before_activation" : unknownDate ? "review_unknown_source_date" :
+                    "awaiting_full_article",
+                decisionReason: !accepted ? "topic_filter" : historical ?
+                  "source_published_before_activation" : unknownDate ?
+                    "source_publication_time_unverified" : "awaiting_processing_capacity",
+                processingAvailableAt: accepted && !historical && !unknownDate ? new Date() : null,
               },
               false,
             );

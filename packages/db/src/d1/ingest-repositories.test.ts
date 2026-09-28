@@ -62,6 +62,7 @@ describe("D1 RSS receipt and full-article job", () => {
         sourceId, sourceUrl: "https://example.com/story-1", titleOriginal: "Football story",
         bodyOriginal: "RSS summary", language: "en", extractedEntities: { rssGuid: "guid-1" },
         rssGuid: "guid-1", contentOrigin: "rss_snippet" as const,
+        publishedAtSource: new Date("2026-09-28T11:59:00Z"),
         firstSeenAt: new Date("2026-09-28T12:00:00Z"),
         processingStatus: "awaiting_full_article",
         processingAvailableAt: new Date("2026-09-28T12:00:00Z"),
@@ -75,6 +76,12 @@ describe("D1 RSS receipt and full-article job", () => {
         firstSeenAt: new Date("2026-09-01T12:00:00Z"),
       }, false);
       expect(historical?.id).toBeTruthy();
+      const staleOnFirstFetch = await raw.insertTabloid({
+        ...receipt, sourceUrl: "https://example.com/stale-feed-item", rssGuid: "stale-guid",
+        extractedEntities: { rssGuid: "stale-guid" },
+        publishedAtSource: new Date("2026-09-27T10:00:00Z"),
+      }, false);
+      expect(staleOnFirstFetch?.id).toBeTruthy();
       const [claim] = await raw.claimTabloidFetchBatch([sourceId], 1, 300_000,
         new Date("2026-09-28T12:01:00Z"), new Date("2026-09-28T00:00:00Z"));
       expect(claim?.id).toBe(inserted?.id);
@@ -82,6 +89,9 @@ describe("D1 RSS receipt and full-article job", () => {
       if (!claim) throw new Error("Expected an RSS receipt claim");
       expect((db.prepare("SELECT processing_status FROM raw_articles WHERE id=?")
         .get(historical!.id) as { processing_status: string }).processing_status)
+        .toBe("awaiting_full_article");
+      expect((db.prepare("SELECT processing_status FROM raw_articles WHERE id=?")
+        .get(staleOnFirstFetch!.id) as { processing_status: string }).processing_status)
         .toBe("awaiting_full_article");
 
       const complete = {

@@ -189,6 +189,8 @@ export async function publishD1Tabloid(
   if (new Date(raw.ingested_at) < new Date(TABLOID_PUBLIC_START) ||
       !raw.first_seen_at || new Date(raw.first_seen_at) < options.activationAt)
     return { status: "skipped" };
+  if (raw.published_at_source && new Date(raw.published_at_source) < options.activationAt)
+    return { status: "skipped" };
   const source = await db.prepare("SELECT id,name,fetch_config FROM sources WHERE id=?")
     .bind(raw.source_id).first<SourceRow>();
   if (!source) throw new Error("D1 source missing");

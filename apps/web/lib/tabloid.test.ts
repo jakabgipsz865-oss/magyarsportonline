@@ -9,16 +9,17 @@ const mocks = vi.hoisted(() => ({
   project: vi.fn(),
   revalidate: vi.fn(),
   llm: {},
-  env: { TABLOID_AUTO_PUBLISH: true, FACEBOOK_AUTO_PUBLISH: true, FACEBOOK_AUTO_PUBLISH_START_AT: new Date("2026-09-15T20:30:00Z"), SITE_URL: "https://mso24.hu" },
+  env: { TABLOID_AUTO_PUBLISH: true, FACEBOOK_AUTO_PUBLISH: true, FACEBOOK_AUTO_PUBLISH_START_AT: new Date("2026-09-15T20:30:00Z"), D1_PIPELINE_START_AT: undefined as Date | undefined, SITE_URL: "https://mso24.hu" },
   accepted: vi.fn((_title: string) => true),
   fetchFullArticle: vi.fn(),
   fetchImages: vi.fn(),
   fetchRss: vi.fn(),
   enqueueFacebook: vi.fn(),
+  d1Binding: vi.fn(() => undefined),
 }));
 vi.mock("./env", () => ({ env: mocks.env }));
 vi.mock("./tabloid-sources.json", () => ({ default: [{ id: "source-0" }, { id: "source-1" }] }));
-vi.mock("./db", () => ({ createRepositories: vi.fn() }));
+vi.mock("./db", () => ({ createRepositories: vi.fn(), d1Binding: mocks.d1Binding }));
 vi.mock("./facebook-publication", () => ({
   buildFacebookPostText: ({ titleHu, canonicalUrl }: { titleHu: string; canonicalUrl: string }) => `${titleHu} ${canonicalUrl}`,
   enqueueFacebookPublicationSafely: mocks.enqueueFacebook,
@@ -154,6 +155,8 @@ describe("tabloid publication", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.env.TABLOID_AUTO_PUBLISH = true;
+    mocks.env.D1_PIPELINE_START_AT = undefined;
+    mocks.d1Binding.mockReturnValue(undefined);
     mocks.accepted.mockReturnValue(true);
     mocks.write.mockResolvedValue({
       title_hu: "Magyar hír",
@@ -176,6 +179,30 @@ describe("tabloid publication", () => {
     expect(await ingestTabloid(repos)).toEqual({ paused: true, llmCalls: 0 });
     expect(mocks.write).not.toHaveBeenCalled();
     expect(mocks.project).not.toHaveBeenCalled();
+  });
+  it("records preactivation and undated D1 RSS items without queueing them", async () => {
+    mocks.d1Binding.mockReturnValue({} as never);
+    mocks.env.D1_PIPELINE_START_AT = new Date("2026-09-28T17:30:00Z");
+    mocks.fetchRss.mockResolvedValue([
+      { titleOriginal: "old", bodyOriginal: "football news", sourceUrl: "https://publisher.test/old", publishedAtSource: new Date("2026-09-28T17:29:59Z") },
+      { titleOriginal: "undated", bodyOriginal: "football news", sourceUrl: "https://publisher.test/undated", publishedAtSource: null },
+      { titleOriginal: "fresh", bodyOriginal: "football news", sourceUrl: "https://publisher.test/fresh", publishedAtSource: new Date("2026-09-28T17:30:01Z") },
+    ]);
+    const insert = vi.fn(async () => null);
+    const claim = vi.fn(async () => []);
+    const repos = {
+      pipelineJobRepository: { getStatusCounts: async () => ({ pending: 0, inProgress: 0 }) },
+      sourceRepository: {
+        listActive: async () => [{ id: "source-0", name: "Publisher", language: "en", fetchConfig: { tabloid: true, footballFeed: true, url: "https://publisher.test/feed" } }],
+        recordFetchResult: vi.fn(),
+      },
+      rawArticleRepository: { insertTabloid: insert, claimTabloidFetchBatch: claim },
+    } as unknown as Repositories;
+    await ingestTabloid(repos);
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ sourceUrl: "https://publisher.test/old", processingStatus: "historical_before_activation", decisionReason: "source_published_before_activation", processingAvailableAt: null }), false);
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ sourceUrl: "https://publisher.test/undated", processingStatus: "review_unknown_source_date", processingAvailableAt: null }), false);
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ sourceUrl: "https://publisher.test/fresh", processingStatus: "awaiting_full_article" }), false);
+    expect(claim).toHaveBeenCalledOnce();
   });
   it("never republishes a persisted v1 draft", async () => {
     const { repos, versions } = fixtures();

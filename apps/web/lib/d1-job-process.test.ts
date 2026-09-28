@@ -85,7 +85,8 @@ describe("D1 full article publication", () => {
         titleOriginal: "Arsenal announces football signing",
         bodyOriginal: "Arsenal announced a new football signing. The club said the player joined the team.",
         language: "en", extractedEntities: { rssGuid: "fixture-1" }, rssGuid: "fixture-1",
-        firstSeenAt: now, contentOrigin: "rss_snippet",
+        firstSeenAt: now, publishedAtSource: new Date(now.getTime() - 30_000),
+        contentOrigin: "rss_snippet",
         processingStatus: "awaiting_full_article", processingAvailableAt: now,
       }, false);
       expect(receipt?.id).toBeTruthy();
@@ -99,7 +100,7 @@ describe("D1 full article publication", () => {
         titleOriginal: "Arsenal announces football signing",
         bodyOriginal: "Arsenal announced a new football signing. The club said the player joined the team.",
         subtitleOriginal: null, authorOriginal: null,
-        publishedAtSource: new Date(now.getTime() - 120_000),
+        publishedAtSource: new Date(now.getTime() - 30_000),
         imageUrl: null, inlineImages: [],
       }, fetch.processingOwner)).toBe(true);
       const mock = writer();
