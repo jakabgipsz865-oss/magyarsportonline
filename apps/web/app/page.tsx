@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { MediaThumb } from "../components/media-thumb";
 import { SiteFooter } from "../components/site-footer";
-import { createRepositories } from "../lib/db";
+import { createPublicRepositories } from "../lib/db";
 import { toStorySummaryView, type StorySummaryView } from "../lib/story-view";
 
 // Render against Hyperdrive at request time. This keeps deployment builds
@@ -49,7 +49,7 @@ function NewsCard({ story }: { story: StorySummaryView }): ReactNode {
 }
 
 export default async function HomePage(): Promise<ReactNode> {
-  const { storyReadModelRepository } = createRepositories();
+  const { storyReadModelRepository } = createPublicRepositories();
   const rows = await storyReadModelRepository.listPublished({
     limit: HOMEPAGE_STORY_LIMIT,
     offset: 0,

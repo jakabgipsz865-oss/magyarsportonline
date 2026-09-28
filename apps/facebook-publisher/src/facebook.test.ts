@@ -47,6 +47,7 @@ function setup(overrides: Partial<SocialPost> = {}) {
   const fetchMock = vi.fn();
   const env = {
     FACEBOOK_AUTO_PUBLISH: "true",
+    FACEBOOK_AUTO_PUBLISH_START_AT: "2026-09-15T20:30:00.000Z",
     FACEBOOK_PAGE_ID: "110048870526768",
     FACEBOOK_PAGE_ACCESS_TOKEN: TOKEN,
     META_GRAPH_API_VERSION: "v26.0",
@@ -74,6 +75,28 @@ describe("Facebook queue consumer", () => {
     expect(fixture.repository.markPosted).toHaveBeenCalledWith("social-1", "110048870526768_123");
     expect(fixture.ack).toHaveBeenCalledOnce();
     expect(fixture.retry).not.toHaveBeenCalled();
+  });
+
+  it("never posts a historical intent from before the activation boundary", async () => {
+    const fixture = setup({ createdAt: new Date("2026-09-15T20:29:59.000Z") });
+    await processFacebookMessage(fixture.message, fixture.env, {
+      repository: fixture.repository, fetch: fixture.fetchMock, logger: fixture.logger,
+    });
+    expect(fixture.repository.markFailed).toHaveBeenCalledWith(
+      "social-1", "facebook_before_activation", expect.any(String),
+    );
+    expect(fixture.fetchMock).not.toHaveBeenCalled();
+    expect(fixture.ack).toHaveBeenCalledOnce();
+  });
+
+  it("fails closed when the activation boundary is missing", async () => {
+    const fixture = setup();
+    delete (fixture.env as Partial<typeof fixture.env>).FACEBOOK_AUTO_PUBLISH_START_AT;
+    await processFacebookMessage(fixture.message, fixture.env, {
+      repository: fixture.repository, fetch: fixture.fetchMock, logger: fixture.logger,
+    });
+    expect(fixture.fetchMock).not.toHaveBeenCalled();
+    expect(fixture.retry).toHaveBeenCalledWith({ delaySeconds: 900 });
   });
 
   it.each([

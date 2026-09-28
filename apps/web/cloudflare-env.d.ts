@@ -1,4 +1,5 @@
 interface CloudflareEnv {
+  DB?: import("@magyarsportonline/db/d1").D1Client;
   SITE_URL: string;
   LLM_PROVIDER: "cloudflare";
   CLOUDFLARE_ACCOUNT_ID: string;

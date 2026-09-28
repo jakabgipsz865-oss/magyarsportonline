@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createRepositories } from "../../../../lib/db";
+import { createPublicRepositories } from "../../../../lib/db";
 import { allowPublicApiRequest } from "../../../../lib/rate-limit";
 import { toStorySummaryView } from "../../../../lib/story-view";
 
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     Math.max(1, Number(url.searchParams.get("limit")) || DEFAULT_LIMIT),
   );
 
-  const { storyReadModelRepository } = createRepositories();
+  const { storyReadModelRepository } = createPublicRepositories();
   const rows = await storyReadModelRepository.listPublished({
     limit,
     offset: (page - 1) * limit,

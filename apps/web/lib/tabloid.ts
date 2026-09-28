@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readModelProjector, seo, sourceIngest, tabloid } from "@magyarsportonline/agents";
 import { createEventEnvelope } from "@magyarsportonline/events";
+import type { NewRawArticle, RawArticle, Source } from "@magyarsportonline/db";
 import {
   TABLOID_PUBLIC_START,
   deduplicateSourceImages,
@@ -8,7 +9,7 @@ import {
   type TabloidSourceMode,
 } from "@magyarsportonline/shared";
 import { revalidatePath } from "next/cache";
-import { createRepositories, type Repositories } from "./db";
+import { createIngestRepositories, createRepositories, type Repositories } from "./db";
 import { env } from "./env";
 import { getWriterLlmClient, getWriterRepairLlmClient } from "./llm";
 import { getLogger } from "./logger";
@@ -488,8 +489,29 @@ export async function publishTabloid(
   };
 }
 
+type IngestSource = Pick<Source, "id" | "name" | "language" | "fetchConfig">;
+type FetchCandidate = Pick<RawArticle,
+  "id" | "sourceId" | "sourceUrl" | "titleOriginal" | "publishedAtSource" |
+  "imageUrl" | "processingOwner" | "processingAttempts">;
+
+interface TabloidIngestRepositories {
+  pipelineJobRepository: Pick<Repositories["pipelineJobRepository"], "getStatusCounts">;
+  sourceRepository: {
+    listActive(): Promise<IngestSource[]>;
+    recordFetchResult: Repositories["sourceRepository"]["recordFetchResult"];
+  };
+  rawArticleRepository: {
+    insertTabloid(data: NewRawArticle, enqueue: boolean): Promise<{ id: string } | null>;
+    claimTabloidFetchBatch(
+      sourceIds: string[], limit: number, staleLockMs: number, now?: Date,
+    ): Promise<FetchCandidate[]>;
+    deferTabloidFetch: Repositories["rawArticleRepository"]["deferTabloidFetch"];
+    upgradeAndEnqueueTabloid: Repositories["rawArticleRepository"]["upgradeAndEnqueueTabloid"];
+  };
+}
+
 /** Persist every observed feed item before admitting any full-page fetch. */
-export async function ingestTabloid(repos: Repositories = createRepositories()) {
+export async function ingestTabloid(repos: TabloidIngestRepositories = createIngestRepositories()) {
   if (!env.TABLOID_AUTO_PUBLISH) return { paused: true, llmCalls: 0 };
   const queueBefore = await repos.pipelineJobRepository.getStatusCounts();
   const ingestBudget = Math.min(4, Math.max(0, 36 - queueBefore.pending - queueBefore.inProgress));

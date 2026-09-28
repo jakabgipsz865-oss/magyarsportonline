@@ -79,12 +79,14 @@ export class D1SocialPostRepository {
     return row ? hydrate(row) : null;
   }
 
-  async listPendingFacebookEnqueue(limit = 25): Promise<SocialPost[]> {
+  async listPendingFacebookEnqueue(limit = 25, since?: Date): Promise<SocialPost[]> {
     const rows = await this.db.prepare(`
       SELECT * FROM social_posts
       WHERE platform = 'facebook' AND status = 'queued' AND enqueued_at IS NULL
+        AND created_at >= ?
       ORDER BY created_at LIMIT ?
-    `).bind(Math.max(1, Math.min(limit, 100))).all<SocialPostRow>();
+    `).bind(d1Timestamp(since ?? new Date(0)), Math.max(1, Math.min(limit, 100)))
+      .all<SocialPostRow>();
     return rows.results.map(hydrate);
   }
 

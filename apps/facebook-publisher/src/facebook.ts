@@ -1,4 +1,5 @@
 import type { SocialPost, SocialPostRepository } from "@magyarsportonline/db";
+import type { D1SocialPostRepository } from "@magyarsportonline/db/d1";
 
 export interface FacebookQueueMessage {
   socialPostId: string;
@@ -16,6 +17,7 @@ export interface QueueMessage<T> {
 
 interface FacebookPublisherEnv {
   FACEBOOK_AUTO_PUBLISH?: string;
+  FACEBOOK_AUTO_PUBLISH_START_AT?: string;
   FACEBOOK_PAGE_ID?: string;
   FACEBOOK_PAGE_ACCESS_TOKEN?: string;
   META_GRAPH_API_VERSION: string;
@@ -29,7 +31,7 @@ interface Logger {
 
 interface PublisherDeps {
   repository: Pick<
-    SocialPostRepository,
+    SocialPostRepository | D1SocialPostRepository,
     "getById" | "claimFacebookForPosting" | "markPosted" | "markFailed"
   >;
   fetch: typeof fetch;
@@ -149,6 +151,20 @@ export async function processFacebookMessage(
     return;
   }
   if (env.FACEBOOK_AUTO_PUBLISH !== "true") {
+    message.ack();
+    return;
+  }
+  const activationStart = env.FACEBOOK_AUTO_PUBLISH_START_AT
+    ? new Date(env.FACEBOOK_AUTO_PUBLISH_START_AT) : null;
+  if (!activationStart || Number.isNaN(activationStart.getTime())) {
+    deps.logger.error({ reasonCode: "facebook_activation_boundary_missing" },
+      "Facebook activation boundary is not configured");
+    message.retry({ delaySeconds: 900 });
+    return;
+  }
+  if (post.createdAt < activationStart) {
+    await deps.repository.markFailed(post.id, "facebook_before_activation",
+      "Durable post intent predates Facebook activation boundary");
     message.ack();
     return;
   }

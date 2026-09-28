@@ -87,4 +87,25 @@ describe("D1 social post idempotency", () => {
       db.close();
     }
   });
+
+  it("filters old pending intents in SQL so they cannot starve new posts", async () => {
+    const db = fixture();
+    try {
+      const repository = new D1SocialPostRepository(localD1(db));
+      const old = await repository.createFacebookQueued({
+        storyId: "old", storyVersionId: "old-version", postText: "Old",
+        canonicalUrl: "https://mso24.hu/hir/old",
+      });
+      db.prepare("UPDATE social_posts SET created_at = ? WHERE id = ?")
+        .run("2026-09-15T20:29:59.000000+00:00", old.post.id);
+      const fresh = await repository.createFacebookQueued({
+        storyId: "fresh", storyVersionId: "fresh-version", postText: "Fresh",
+        canonicalUrl: "https://mso24.hu/hir/fresh",
+      });
+      expect((await repository.listPendingFacebookEnqueue(1,
+        new Date("2026-09-15T20:30:00.000Z"))).map(post => post.id)).toEqual([fresh.post.id]);
+    } finally {
+      db.close();
+    }
+  });
 });

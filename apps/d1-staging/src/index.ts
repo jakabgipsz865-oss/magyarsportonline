@@ -1,5 +1,7 @@
 import {
   D1PipelineJobRepository,
+  D1PublicCategoryRepository,
+  D1PublicEntityRepository,
   D1StoryReadModelRepository,
   type D1Client,
 } from "../../../packages/db/src/d1/index";
@@ -8,7 +10,11 @@ interface Env {
   DB: D1Client;
 }
 
-const jsonHeaders = { "cache-control": "no-store", "content-type": "application/json; charset=utf-8" };
+const jsonHeaders = {
+  "cache-control": "no-store",
+  "content-type": "application/json; charset=utf-8",
+  "x-robots-tag": "noindex, nofollow",
+};
 
 /**
  * Read-only D1-only test Worker. No cron, Queues, Hyperdrive, AI, or Facebook
@@ -24,6 +30,14 @@ export default {
       const queue = await new D1PipelineJobRepository(env.DB).getStatusCounts();
       return new Response(JSON.stringify({ database: "d1", storyReadModelRows: row?.total ?? 0,
         queue }), { headers: jsonHeaders });
+    }
+    if (url.pathname === "/taxonomy") {
+      const [categories, entities] = await Promise.all([
+        new D1PublicCategoryRepository(env.DB).listAll(),
+        new D1PublicEntityRepository(env.DB).listAll(),
+      ]);
+      return new Response(JSON.stringify({ database: "d1", categories, entities }),
+        { headers: jsonHeaders });
     }
     const stories = new D1StoryReadModelRepository(env.DB);
     if (url.pathname === "/api/v1/stories") {

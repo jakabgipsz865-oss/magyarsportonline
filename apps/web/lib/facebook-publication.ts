@@ -1,5 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare/cloudflare-context";
-import { createRepositories } from "./db";
+import { createSocialPostRepository } from "./db";
 import { env } from "./env";
 import { getLogger } from "./logger";
 
@@ -33,6 +33,7 @@ interface FacebookPostRecord {
   canonicalUrl: string | null;
   status: string;
   enqueuedAt: Date | null;
+  createdAt: Date;
 }
 
 interface FacebookSocialPostStore {
@@ -43,7 +44,7 @@ interface FacebookSocialPostStore {
     canonicalUrl: string;
   }): Promise<{ post: FacebookPostRecord; created: boolean }>;
   markEnqueued(id: string): Promise<void>;
-  listPendingFacebookEnqueue(limit?: number): Promise<FacebookPostRecord[]>;
+  listPendingFacebookEnqueue(limit?: number, since?: Date): Promise<FacebookPostRecord[]>;
 }
 
 interface FacebookPublicationDeps {
@@ -81,7 +82,7 @@ function defaultDeps(): FacebookPublicationDeps {
     enabled: env.FACEBOOK_AUTO_PUBLISH,
     activationStart: env.FACEBOOK_AUTO_PUBLISH_START_AT,
     siteUrl: env.SITE_URL,
-    socialPostRepository: createRepositories().socialPostRepository,
+    socialPostRepository: createSocialPostRepository(),
     // Resolve the queue only after the durable social_posts intent is saved.
     // A temporarily missing binding must remain recoverable by enqueue-pending.
     queue: { send: (message) => queueBinding().send(message) },
@@ -148,9 +149,10 @@ export async function enqueuePendingFacebookPosts(
   deps: FacebookPublicationDeps = defaultDeps(),
 ): Promise<{ disabled: boolean; enqueued: number }> {
   if (!deps.enabled) return { disabled: true, enqueued: 0 };
-  const pending = await deps.socialPostRepository.listPendingFacebookEnqueue(25);
+  const pending = await deps.socialPostRepository.listPendingFacebookEnqueue(25, deps.activationStart);
   let enqueued = 0;
   for (const post of pending) {
+    if (post.createdAt < deps.activationStart) continue;
     if (!post.canonicalUrl) continue;
     await deps.queue.send({
       socialPostId: post.id,

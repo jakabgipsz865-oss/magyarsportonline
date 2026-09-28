@@ -14,6 +14,7 @@ import {
   buildFacebookPostText,
   enqueueFacebookPublication,
   enqueueFacebookPublicationSafely,
+  enqueuePendingFacebookPosts,
 } from "./facebook-publication";
 
 function setup(options: { enabled?: boolean; created?: boolean; status?: string; enqueuedAt?: Date | null } = {}) {
@@ -24,6 +25,7 @@ function setup(options: { enabled?: boolean; created?: boolean; status?: string;
     canonicalUrl: "https://mso24.hu/hir/uj-hir",
     status: options.status ?? "queued",
     enqueuedAt: options.enqueuedAt ?? null,
+    createdAt: new Date("2026-09-15T20:31:00.000Z"),
   };
   const createFacebookQueued = vi.fn(async () => ({
     post,
@@ -38,7 +40,7 @@ function setup(options: { enabled?: boolean; created?: boolean; status?: string;
     socialPostRepository: {
       createFacebookQueued,
       markEnqueued,
-      listPendingFacebookEnqueue: vi.fn(async () => []),
+      listPendingFacebookEnqueue: vi.fn(async () => [] as Array<typeof post>),
     },
     queue: { send },
   };
@@ -134,5 +136,22 @@ describe("Facebook publication hook", () => {
       undefined,
     );
     expect(logger.error).toHaveBeenCalledOnce();
+  });
+
+  it("does not backfill a durable Facebook intent created before activation", async () => {
+    const fixture = setup();
+    fixture.deps.socialPostRepository.listPendingFacebookEnqueue.mockResolvedValueOnce([
+      {
+        id: "old-social", storyId: "old-story", storyVersionId: "old-version",
+        canonicalUrl: "https://mso24.hu/hir/old-story", status: "queued",
+        enqueuedAt: null, createdAt: new Date("2026-09-15T20:29:59.000Z"),
+      },
+    ]);
+    await expect(enqueuePendingFacebookPosts(fixture.deps)).resolves.toEqual({
+      disabled: false, enqueued: 0,
+    });
+    expect(fixture.deps.socialPostRepository.listPendingFacebookEnqueue)
+      .toHaveBeenCalledWith(25, fixture.deps.activationStart);
+    expect(fixture.send).not.toHaveBeenCalled();
   });
 });

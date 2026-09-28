@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { createRepositories } from "../../lib/db";
+import { createPublicRepositories } from "../../lib/db";
 import { entitySlug } from "../../lib/entity-slug";
 import { SiteFooter } from "../../components/site-footer";
 
@@ -18,7 +18,7 @@ const TYPE_LABELS_HU: Record<string, string> = {
 };
 
 export default async function TeamsIndexPage(): Promise<ReactNode> {
-  const { entityRepository } = createRepositories();
+  const { entityRepository } = createPublicRepositories();
   const entities = await entityRepository.listAll();
 
   return (

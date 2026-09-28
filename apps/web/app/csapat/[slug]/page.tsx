@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { deduplication } from "@magyarsportonline/agents";
 import { StoryRiver } from "../../../components/story-river";
 import { SiteFooter } from "../../../components/site-footer";
-import { createRepositories } from "../../../lib/db";
+import { createPublicRepositories } from "../../../lib/db";
 import { entitySlug } from "../../../lib/entity-slug";
 import { toStorySummaryView } from "../../../lib/story-view";
 
@@ -19,7 +19,7 @@ interface PageProps {
 }
 
 async function findEntity(slug: string) {
-  const { entityRepository } = createRepositories();
+  const { entityRepository } = createPublicRepositories();
   const entities = await entityRepository.listAll();
   return entities.find((entity) => entitySlug(entity) === slug) ?? null;
 }
@@ -46,7 +46,7 @@ export default async function EntityPage({ params }: PageProps): Promise<ReactNo
     notFound();
   }
 
-  const { storyReadModelRepository } = createRepositories();
+  const { storyReadModelRepository } = createPublicRepositories();
   const rows = await storyReadModelRepository.listPublished({
     limit: ENTITY_STORY_SCAN_LIMIT,
     offset: 0,

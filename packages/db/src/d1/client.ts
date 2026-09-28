@@ -8,6 +8,8 @@ export interface D1Statement {
 
 export interface D1Client {
   prepare(query: string): D1Statement;
+  /** D1 executes a batch transactionally; required by multi-row ingest writes. */
+  batch?(statements: D1Statement[]): Promise<Array<{ meta: { changes: number } }>>;
 }
 
 /** PostgreSQL exports use six fractional digits and +00:00 UTC. */

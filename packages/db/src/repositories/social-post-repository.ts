@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "../client";
 import { socialPosts } from "../schema/index";
 
@@ -58,7 +58,7 @@ export class SocialPostRepository {
     return row ?? null;
   }
 
-  async listPendingFacebookEnqueue(limit = 25): Promise<SocialPost[]> {
+  async listPendingFacebookEnqueue(limit = 25, since?: Date): Promise<SocialPost[]> {
     return this.db
       .select()
       .from(socialPosts)
@@ -67,6 +67,7 @@ export class SocialPostRepository {
           eq(socialPosts.platform, "facebook"),
           eq(socialPosts.status, "queued"),
           isNull(socialPosts.enqueuedAt),
+          since ? gte(socialPosts.createdAt, since) : undefined,
         ),
       )
       .orderBy(socialPosts.createdAt)
