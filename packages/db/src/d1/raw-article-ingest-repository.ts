@@ -65,7 +65,8 @@ export class D1RawArticleIngestRepository {
   }
 
   async claimTabloidFetchBatch(
-    sourceIds: string[], limit: number, staleLockMs: number, now = new Date(),
+    sourceIds: string[], limit: number, staleLockMs: number,
+    now = new Date(), since = new Date(0),
   ): Promise<FetchCandidate[]> {
     if (sourceIds.length === 0 || limit <= 0) return [];
     const bounded = Math.min(limit, 4);
@@ -81,7 +82,8 @@ export class D1RawArticleIngestRepository {
         UPDATE raw_articles SET processing_status='fetching', processing_owner=?,
           processing_locked_at=?, processing_attempts=processing_attempts+1
         WHERE id IN (
-          SELECT id FROM raw_articles WHERE source_id IN (${placeholders}) AND (
+          SELECT id FROM raw_articles WHERE source_id IN (${placeholders})
+            AND first_seen_at >= ? AND (
             (processing_status IN ('awaiting_full_article','fetch_retry')
               AND processing_available_at <= ?)
             OR (processing_status='fetching' AND processing_locked_at < ?)
@@ -89,7 +91,7 @@ export class D1RawArticleIngestRepository {
           ORDER BY julianday(first_seen_at) ${direction}, id LIMIT ?
         ) RETURNING id, source_id, source_url, title_original,
           published_at_source, image_url, processing_owner, processing_attempts
-      `).bind(owner, nowIso, ...sourceIds, nowIso, staleAt, slots).all<FetchRow>();
+      `).bind(owner, nowIso, ...sourceIds, d1Timestamp(since), nowIso, staleAt, slots).all<FetchRow>();
       claimed.push(...rows.results.map(candidate));
     }
     return claimed;

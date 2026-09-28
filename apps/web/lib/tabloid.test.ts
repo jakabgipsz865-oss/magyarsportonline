@@ -45,6 +45,7 @@ vi.mock("@magyarsportonline/agents", () => ({
   seo: { slugify: () => "magyar-hir" },
   readModelProjector: { handleStoryPublished: mocks.project },
   sourceIngest: {
+    createDefaultParser: () => ({ parseURL: mocks.fetchRss }),
     ArticleFetcher: class {
       fetch = mocks.fetchFullArticle;
       fetchWithMedia = async (...args: unknown[]) => {

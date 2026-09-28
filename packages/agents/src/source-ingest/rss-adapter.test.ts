@@ -1,7 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { RssSourceAdapter, createDefaultParser, type RssParserLike } from "./rss-adapter";
 
 describe("RssSourceAdapter", () => {
+  it("uses runtime fetch for the default parser in Workers", async () => {
+    const fetcher = vi.fn(async () => new Response(
+      `<rss version="2.0"><channel><title>Football</title><item><title>Arsenal football</title><link>https://example.com/article</link></item></channel></rss>`,
+      { status: 200, headers: { "content-type": "application/rss+xml" } },
+    ));
+    vi.stubGlobal("fetch", fetcher);
+    try {
+      const result = await new RssSourceAdapter(createDefaultParser(), false)
+        .fetch({ url: "https://example.com/feed.xml" });
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(result[0]?.sourceUrl).toBe("https://example.com/article");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
   it("normalizes RSS items into NormalizedArticle, stripping HTML", async () => {
     const fakeParser: RssParserLike = {
       parseURL: async (url) => {

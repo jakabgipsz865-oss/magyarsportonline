@@ -15,6 +15,8 @@ import { getWriterLlmClient, getWriterRepairLlmClient } from "./llm";
 import { getLogger } from "./logger";
 import { buildFacebookPostText, enqueueFacebookPublicationSafely } from "./facebook-publication";
 import { timedPipelineStage } from "./pipeline-timing";
+import { getD1StagingWriter } from "./d1-staging-writer";
+import { getCloudflareContext } from "@opennextjs/cloudflare/cloudflare-context";
 import registry from "./tabloid-sources.json";
 
 export function mergeInlineImages(
@@ -60,6 +62,52 @@ export class TabloidWriterBusyError extends Error {
     super("Tabloid writer lease is active; retry after the current Writer invocation finishes");
     this.name = "TabloidWriterBusyError";
   }
+}
+
+function e2eFeedBinding(): { fetch(request: Request): Promise<Response> } {
+  getD1StagingWriter(); // validates the D1-only workers.dev staging boundary
+  const binding = (getCloudflareContext().env as unknown as {
+    E2E_FEED?: { fetch(request: Request): Promise<Response> };
+  }).E2E_FEED;
+  if (!binding) throw new Error("D1 E2E feed service binding is missing");
+  return binding;
+}
+
+function feedParserForActiveRuntime(): sourceIngest.RssParserLike {
+  if (!env.D1_TEST_WRITER_OUTPUT) return sourceIngest.createDefaultParser();
+  const feed = e2eFeedBinding();
+  const parser = sourceIngest.createDefaultParser() as sourceIngest.RssParserLike & {
+    parseString(xml: string): ReturnType<sourceIngest.RssParserLike["parseURL"]>;
+  };
+  return {
+    async parseURL(url) {
+      if (new URL(url).origin !== env.D1_TEST_SOURCE_ORIGIN)
+        throw new Error("D1 E2E feed origin mismatch");
+      const response = await feed.fetch(new Request(url));
+      if (!response.ok) throw new Error(`D1 E2E RSS HTTP ${response.status}`);
+      return parser.parseString(await response.text());
+    },
+  };
+}
+
+function articleFetcherForActiveRuntime() {
+  if (!env.D1_TEST_WRITER_OUTPUT) return new sourceIngest.ArticleFetcher();
+  const feed = e2eFeedBinding();
+  const allowedHost = new URL(env.D1_TEST_SOURCE_ORIGIN!).hostname;
+  const htmlFetcher = { fetch: async (url: string) => {
+    if (new URL(url).hostname !== allowedHost) throw new Error("D1 E2E article origin mismatch");
+    const response = await feed.fetch(new Request(url));
+    if (!response.ok) throw new Error(`D1 E2E article HTTP ${response.status}`);
+    return response.text();
+  } };
+  return new sourceIngest.ArticleFetcher(htmlFetcher, [
+    ...sourceIngest.ARTICLE_EXTRACTORS,
+    {
+      ...sourceIngest.structuredNewsArticleExtractor,
+      supports: (url: string) => new URL(url).hostname === allowedHost,
+      extract: sourceIngest.extractStructuredNewsArticle,
+    },
+  ]);
 }
 
 function hasWriterValidationPending(value: unknown): boolean {
@@ -536,7 +584,7 @@ export async function ingestTabloid(repos: TabloidIngestRepositories = createIng
     deferredWithoutFullArticle: number;
     status: "ok" | "error";
   }> = [];
-  const adapter = new sourceIngest.RssSourceAdapter(undefined, false);
+  const adapter = new sourceIngest.RssSourceAdapter(feedParserForActiveRuntime(), false);
   // Eight concurrent feed fetches bound a slow source without serializing all feeds.
   for (let offset = 0; offset < sources.length; offset += 8) {
     await Promise.all(
@@ -557,8 +605,12 @@ export async function ingestTabloid(repos: TabloidIngestRepositories = createIng
           const articles = feeds.flatMap((result) =>
             result.status === "fulfilled" ? result.value : [],
           );
-          if (feeds.every((result) => result.status === "rejected"))
-            throw new Error("RSS fetch failed");
+          if (feeds.every((result) => result.status === "rejected")) {
+            const reasons = feeds.map((result) => result.status === "rejected"
+              ? result.reason instanceof Error ? result.reason.message : String(result.reason)
+              : "ok").join("; ");
+            throw new Error(`RSS fetch failed: ${reasons}`);
+          }
           const persistStartedAt = Date.now();
           for (const article of articles) {
             seenCount++;
@@ -608,7 +660,11 @@ export async function ingestTabloid(repos: TabloidIngestRepositories = createIng
             deferredWithoutFullArticle: 0,
             status: "ok",
           });
-        } catch {
+        } catch (error) {
+          getLogger().warn({
+            sourceId: source.id,
+            error: error instanceof Error ? error.message : String(error),
+          }, "RSS feed fetch or receipt persistence failed");
           await repos.sourceRepository.recordFetchResult(source.id, { status: "error" });
           results.push({
             sourceId: source.id,
@@ -638,7 +694,7 @@ export async function ingestTabloid(repos: TabloidIngestRepositories = createIng
     const config = source.fetchConfig as { url: string };
     try {
       const outcome = await timedPipelineStage("full_article_fetch", { sourceId: source.id, rawArticleId: raw.id, attempt: raw.processingAttempts, leaseOwner: owner }, () =>
-        new sourceIngest.ArticleFetcher().fetchWithMediaDetailed(raw.sourceUrl, config.url));
+        articleFetcherForActiveRuntime().fetchWithMediaDetailed(raw.sourceUrl, config.url));
       if (!outcome.page) {
         deferredWithoutFullArticle++;
         await repos.rawArticleRepository.deferTabloidFetch(raw.id, owner, outcome.failure ?? "full_article_unavailable", raw.processingAttempts);

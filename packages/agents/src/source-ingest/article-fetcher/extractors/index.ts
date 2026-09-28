@@ -14,3 +14,4 @@ export const ARTICLE_EXTRACTORS: ArticleExtractor[] = [
 ];
 
 export { bbcSportExtractor, skySportsExtractor, structuredNewsArticleExtractor };
+export { extractStructuredNewsArticle } from "./structured-news-article";

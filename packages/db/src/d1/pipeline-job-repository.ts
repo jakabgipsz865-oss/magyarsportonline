@@ -208,12 +208,13 @@ export class D1PipelineJobRepository {
     return row !== null;
   }
 
-  async findActiveDeferral(errorPrefix: string): Promise<Date | null> {
+  async findActiveDeferral(errorPrefix: string, since = new Date(0)): Promise<Date | null> {
     const row = await this.db.prepare(`
       SELECT available_at FROM pipeline_jobs
       WHERE status='pending' AND available_at > ? AND last_error LIKE ?
+        AND created_at >= ?
       ORDER BY available_at DESC LIMIT 1
-    `).bind(d1Timestamp(new Date()), `${errorPrefix}%`)
+    `).bind(d1Timestamp(new Date()), `${errorPrefix}%`, d1Timestamp(since))
       .first<{ available_at: string }>();
     return d1Date(row?.available_at ?? null);
   }

@@ -65,7 +65,7 @@ function hyperdriveConnectionString(): string | undefined {
   }
 }
 
-function d1Binding(): D1Client | undefined {
+export function d1Binding(): D1Client | undefined {
   try {
     return getCloudflareContext().env.DB;
   } catch {
@@ -161,18 +161,29 @@ export function createLlmUsageRepository() {
 /** RSS receipt and full-page fetch use D1 without enabling the Writer path. */
 export function createIngestRepositories() {
   const d1 = d1Binding();
-  if (d1) return {
-    pipelineJobRepository: {
-      getStatusCounts: () => {
-        if (!env.D1_PIPELINE_START_AT) {
-          throw new Error("D1_PIPELINE_START_AT is required before D1 ingestion is enabled");
-        }
-        return new D1PipelineJobRepository(d1).getStatusCounts(new Date(), env.D1_PIPELINE_START_AT);
+  if (d1) {
+    const jobs = new D1PipelineJobRepository(d1);
+    const raw = new D1RawArticleIngestRepository(d1);
+    const activationBoundary = () => {
+      if (!env.D1_PIPELINE_START_AT) {
+        throw new Error("D1_PIPELINE_START_AT is required before D1 ingestion is enabled");
+      }
+      return env.D1_PIPELINE_START_AT;
+    };
+    return {
+      pipelineJobRepository: {
+        getStatusCounts: () => jobs.getStatusCounts(new Date(), activationBoundary()),
       },
-    },
-    sourceRepository: new D1SourceIngestRepository(d1),
-    rawArticleRepository: new D1RawArticleIngestRepository(d1),
-  };
+      sourceRepository: new D1SourceIngestRepository(d1),
+      rawArticleRepository: {
+        insertTabloid: raw.insertTabloid.bind(raw),
+        deferTabloidFetch: raw.deferTabloidFetch.bind(raw),
+        upgradeAndEnqueueTabloid: raw.upgradeAndEnqueueTabloid.bind(raw),
+        claimTabloidFetchBatch: (sourceIds: string[], limit: number, staleLockMs: number, now = new Date()) =>
+          raw.claimTabloidFetchBatch(sourceIds, limit, staleLockMs, now, activationBoundary()),
+      },
+    };
+  }
   const repos = createRepositories();
   return {
     pipelineJobRepository: repos.pipelineJobRepository,

@@ -55,6 +55,9 @@ export const env = createEnv({
       .transform((value) => value === "true"),
     // Set at the actual D1 cutover. Imported historical jobs stay dormant.
     D1_PIPELINE_START_AT: z.coerce.date().optional(),
+    // Mock response is permitted only in a D1-only workers.dev staging runtime.
+    D1_TEST_WRITER_OUTPUT: z.string().optional(),
+    D1_TEST_SOURCE_ORIGIN: z.string().url().optional(),
 
     GEMINI_API_KEY: z.string().min(1).optional(),
     GEMINI_MODEL: z.string().min(1).default("gemini-3.5-flash-lite"),

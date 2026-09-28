@@ -7,7 +7,10 @@ import {
   delayUntilNextGeminiQuotaReset,
 } from "@magyarsportonline/llm";
 import { NextResponse, type NextRequest } from "next/server";
-import { createRepositories } from "../../../../../lib/db";
+import { createRepositories, d1Binding } from "../../../../../lib/db";
+import { processOneD1Job } from "../../../../../lib/d1-job-process";
+import { getD1StagingWriter } from "../../../../../lib/d1-staging-writer";
+import { getWriterLlmClient, getWriterRepairLlmClient } from "../../../../../lib/llm";
 import { delayUntilNextCloudflareQuotaReset } from "../../../../../lib/cloudflare-quota";
 import { env } from "../../../../../lib/env";
 import { getLogger } from "../../../../../lib/logger";
@@ -70,6 +73,22 @@ async function handleProcess(request: NextRequest): Promise<NextResponse> {
 
   if (!env.TABLOID_AUTO_PUBLISH)
     return NextResponse.json({ paused: true, processed: 0, llmCalls: 0 });
+
+  const d1 = d1Binding();
+  if (d1) {
+    if (!env.D1_PIPELINE_START_AT) {
+      return NextResponse.json({ error: "D1_PIPELINE_START_AT is required" }, { status: 503 });
+    }
+    const mockWriter = getD1StagingWriter();
+    const result = await processOneD1Job(d1, {
+      activationAt: env.D1_PIPELINE_START_AT,
+      siteUrl: env.SITE_URL,
+      forceReviewMode: env.FORCE_REVIEW_MODE,
+      facebookEnabled: env.FACEBOOK_AUTO_PUBLISH,
+      facebookStartAt: env.FACEBOOK_AUTO_PUBLISH_START_AT,
+    }, mockWriter ?? getWriterLlmClient(), mockWriter ?? getWriterRepairLlmClient());
+    return NextResponse.json(result);
+  }
 
   const repos = createRepositories();
   const emitter = buildQueueingEmitter(repos.pipelineJobRepository);

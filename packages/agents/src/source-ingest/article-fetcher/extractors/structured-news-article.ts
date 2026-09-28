@@ -153,11 +153,8 @@ function semanticArticle(html: string, url: string, headlineHint: string | null)
   };
 }
 
-export const structuredNewsArticleExtractor: ArticleExtractor = {
-  name: "structured-news-article",
-  supports: supportsDomain,
-  extract(html, url) {
-    if (!supportsDomain(url)) return null;
+/** Extraction logic shared with an explicitly host-gated staging fixture. */
+export function extractStructuredNewsArticle(html: string, url: string): FetchedArticle | null {
     try {
       const $ = cheerio.load(html);
       const candidates: JsonObject[] = [];
@@ -177,5 +174,12 @@ export const structuredNewsArticleExtractor: ArticleExtractor = {
     } catch {
       return null;
     }
+}
+
+export const structuredNewsArticleExtractor: ArticleExtractor = {
+  name: "structured-news-article",
+  supports: supportsDomain,
+  extract(html, url) {
+    return supportsDomain(url) ? extractStructuredNewsArticle(html, url) : null;
   },
 };

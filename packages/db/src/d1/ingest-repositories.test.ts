@@ -69,11 +69,20 @@ describe("D1 RSS receipt and full-article job", () => {
       const inserted = await raw.insertTabloid(receipt, false);
       expect(inserted?.id).toBeTruthy();
       expect(await raw.insertTabloid(receipt, false)).toBeNull();
+      const historical = await raw.insertTabloid({
+        ...receipt, sourceUrl: "https://example.com/historical", rssGuid: "old-guid",
+        extractedEntities: { rssGuid: "old-guid" },
+        firstSeenAt: new Date("2026-09-01T12:00:00Z"),
+      }, false);
+      expect(historical?.id).toBeTruthy();
       const [claim] = await raw.claimTabloidFetchBatch([sourceId], 1, 300_000,
-        new Date("2026-09-28T12:01:00Z"));
+        new Date("2026-09-28T12:01:00Z"), new Date("2026-09-28T00:00:00Z"));
       expect(claim?.id).toBe(inserted?.id);
       expect(claim?.processingOwner).toBeTruthy();
       if (!claim) throw new Error("Expected an RSS receipt claim");
+      expect((db.prepare("SELECT processing_status FROM raw_articles WHERE id=?")
+        .get(historical!.id) as { processing_status: string }).processing_status)
+        .toBe("awaiting_full_article");
 
       const complete = {
         sourceUrl: receipt.sourceUrl, titleOriginal: receipt.titleOriginal,
