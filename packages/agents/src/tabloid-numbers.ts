@@ -12,8 +12,8 @@ const MONEY = new RegExp(
   String.raw`(?<![\p{L}\d])(${NUM})\s*(million|millió|milli[oó]n|billion|milliárd)?\s*(euros?|euró|eur|€|dollars?|dollár|usd|\$|pounds?|font|gbp|£)(?:nak|nek|val|vel|ért|ban|ben|ról|ről|ra|re|t)?(?!\p{L})`,
   "giu",
 );
-const DATE_ISO = /(?<!\d)(\d{4})[.\/-](\d{1,2})[.\/-](\d{1,2})(?!\d)/gu;
-const DATE_DMY = /(?<!\d)(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})(?!\d)/gu;
+const DATE_ISO = /(?<!\d)(\d{4})[./-](\d{1,2})[./-](\d{1,2})(?!\d)/gu;
+const DATE_DMY = /(?<!\d)(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?!\d)/gu;
 const TIME = /(?<!\d)(\d{1,2})[:.]([0-5]\d)(?!\d)/gu;
 const SCORE = /(?<!\d)(\d{1,2})\s*[-–—:]\s*(\d{1,2})(?!\d)/gu;
 const NUMBER = /(?<![\p{L}\d])\d+(?:[.,\s]\d+)*(?![\p{L}\d])/gu;
