@@ -462,6 +462,7 @@ describe("tabloid publication", () => {
       },
       rawArticleRepository: {
         insertTabloid: insert,
+        existingSourceUrls: vi.fn(async () => new Set(receipts.keys())),
         claimTabloidFetchBatch: claim,
         upgradeAndEnqueueTabloid: upgrade,
       },
@@ -483,7 +484,7 @@ describe("tabloid publication", () => {
     mocks.fetchImages.mockResolvedValue({ primary: null, inlineImages: [] });
     const resumed = await ingestTabloid(repos);
 
-    expect(insert).toHaveBeenCalledTimes(3);
+    expect(insert).toHaveBeenCalledTimes(1);
     expect(insert).toHaveBeenCalledWith(
       expect.objectContaining({ sourceUrl: "https://publisher.test/saturated" }),
       false,

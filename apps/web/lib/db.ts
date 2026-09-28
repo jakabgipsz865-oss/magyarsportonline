@@ -179,6 +179,7 @@ export function createIngestRepositories() {
       sourceRepository: new D1SourceIngestRepository(d1),
       rawArticleRepository: {
         insertTabloid: raw.insertTabloid.bind(raw),
+        existingSourceUrls: raw.existingSourceUrls.bind(raw),
         deferTabloidFetch: raw.deferTabloidFetch.bind(raw),
         upgradeAndEnqueueTabloid: (
           id: string,

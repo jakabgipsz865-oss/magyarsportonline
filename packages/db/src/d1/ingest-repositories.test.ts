@@ -84,6 +84,9 @@ describe("D1 RSS receipt and full-article job", () => {
       };
       const inserted = await raw.insertTabloid(receipt, false);
       expect(inserted?.id).toBeTruthy();
+      expect(
+        await raw.existingSourceUrls(sourceId, [receipt.sourceUrl, "https://example.com/new"]),
+      ).toEqual(new Set([receipt.sourceUrl]));
       expect(await raw.insertTabloid(receipt, false)).toBeNull();
       const historical = await raw.insertTabloid(
         {
