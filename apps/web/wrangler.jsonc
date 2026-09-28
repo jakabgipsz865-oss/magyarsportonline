@@ -9,12 +9,11 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS",
   },
-  "hyperdrive": [
-    {
-      "binding": "HYPERDRIVE",
-      "id": "3a2967f028b449f7ade610395f6ccfbe",
-    },
-  ],
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "mso-remediation-staging-20260928",
+    "database_id": "eb02f98e-fd89-4277-94be-0f763056b91e"
+  }],
   "routes": [
     {
       "pattern": "mso24.hu",
@@ -39,11 +38,14 @@
     "GEMINI_FREE_ONLY": "false",
     "GEMINI_DAILY_REQUEST_CAP": "450",
     "GEMINI_MONTHLY_BUDGET_USD": "9.5",
+    "GEMINI_MONTHLY_EXTERNAL_SPEND_USD": "1.00",
     "GEMINI_BASE_URL": "https://gateway.ai.cloudflare.com/v1/7a225d650d7e05daba6355e5526a8fb9/magyarsportonline/google-ai-studio/v1",
     "CLOUDFLARE_AI_GATEWAY_ID": "magyarsportonline",
     "TABLOID_AUTO_PUBLISH": "true",
-    "FORCE_REVIEW_MODE": "true",
-    "FACEBOOK_AUTO_PUBLISH_START_AT": "2026-09-15T20:30:00.000Z",
+    "FORCE_REVIEW_MODE": "false",
+    "FACEBOOK_AUTO_PUBLISH": "true",
+    "D1_PIPELINE_START_AT": "2026-09-28T17:30:00.000Z",
+    "FACEBOOK_AUTO_PUBLISH_START_AT": "2026-09-28T17:30:00.000Z",
     "META_GRAPH_API_VERSION": "v26.0",
   },
   "queues": {
