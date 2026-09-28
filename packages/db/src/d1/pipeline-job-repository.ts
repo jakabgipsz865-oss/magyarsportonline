@@ -102,21 +102,21 @@ export class D1PipelineJobRepository {
     };
   }
 
-  async getDeadLetterSummary(limit = 20): Promise<DeadLetterSummary[]> {
+  async getDeadLetterSummary(limit = 20, since = new Date(0)): Promise<DeadLetterSummary[]> {
     const result = await this.db.prepare(`
       SELECT coalesce(json_extract(event, '$.type'), 'unknown') AS event_type,
         last_error, count(*) AS count
-      FROM pipeline_jobs WHERE status = 'dead_letter'
+      FROM pipeline_jobs WHERE status = 'dead_letter' AND created_at >= ?
       GROUP BY json_extract(event, '$.type'), last_error
       ORDER BY count(*) DESC, event_type LIMIT ?
-    `).bind(Math.max(1, Math.min(limit, 100))).all<{
+    `).bind(d1Timestamp(since), Math.max(1, Math.min(limit, 100))).all<{
       event_type: string; last_error: string | null; count: number;
     }>();
     return result.results.map(row => ({ eventType: row.event_type,
       lastError: row.last_error, count: row.count }));
   }
 
-  async requeueDeadLetters(limit: number): Promise<number> {
+  async requeueDeadLetters(limit: number, since = new Date(0)): Promise<number> {
     const now = d1Timestamp(new Date());
     const result = await this.db.prepare(`
       UPDATE pipeline_jobs
@@ -125,10 +125,10 @@ export class D1PipelineJobRepository {
         last_error='[manual_requeue] ' || coalesce(last_error, 'no previous error'),
         updated_at=?
       WHERE id IN (
-        SELECT id FROM pipeline_jobs WHERE status='dead_letter'
+        SELECT id FROM pipeline_jobs WHERE status='dead_letter' AND created_at >= ?
         ORDER BY created_at ASC LIMIT ?
       ) RETURNING id
-    `).bind(now, now, Math.max(1, Math.min(limit, 500))).all<{ id: string }>();
+    `).bind(now, now, d1Timestamp(since), Math.max(1, Math.min(limit, 500))).all<{ id: string }>();
     return result.results.length;
   }
 

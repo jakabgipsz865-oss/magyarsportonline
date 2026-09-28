@@ -97,4 +97,29 @@ describe("D1 pipeline job fencing", () => {
       db.close();
     }
   });
+
+  it("limits dead-letter diagnostics and manual recovery to post-cutover jobs", async () => {
+    const db = fixture();
+    try {
+      const jobs = new D1PipelineJobRepository(localD1(db));
+      await jobs.enqueue({ type: "source/article.ingested", payload: { raw_article_id: "historical" } });
+      await jobs.enqueue({ type: "source/article.ingested", payload: { raw_article_id: "fresh" } });
+      db.prepare(`UPDATE pipeline_jobs SET status='dead_letter', last_error='fixture',
+        created_at='2026-09-01T00:00:00.000000+00:00'
+        WHERE json_extract(event, '$.payload.raw_article_id')='historical'`).run();
+      db.prepare(`UPDATE pipeline_jobs SET status='dead_letter', last_error='fixture'
+        WHERE json_extract(event, '$.payload.raw_article_id')='fresh'`).run();
+      const boundary = new Date(Date.now() - 60_000);
+      expect(await jobs.getDeadLetterSummary(20, boundary)).toMatchObject([
+        { eventType: "source/article.ingested", count: 1 },
+      ]);
+      expect(await jobs.requeueDeadLetters(10, boundary)).toBe(1);
+      expect((db.prepare(`SELECT status FROM pipeline_jobs
+        WHERE json_extract(event, '$.payload.raw_article_id')='historical'`).get() as { status: string }).status)
+        .toBe("dead_letter");
+      expect((await jobs.getStatusCounts(new Date(), boundary)).pending).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
 });

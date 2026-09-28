@@ -51,13 +51,15 @@ RSS-t és Writer-választ használt; nem az éles adatállomány egyeztetése.
 
 ## Helyi regresszió és hibatűrés
 
-- 61/61 adatbázis-, 537/537 agent- és 109/109 webteszt sikeres.
+- 62/62 adatbázis-, 537/537 agent- és 109/109 webteszt sikeres.
   Hat PostgreSQL-integrációs teszt élő Neon-kapcsolat hiányában kihagyva.
 - A D1 teljesfolyamat-tesztek igazolják az egyetlen Facebook social intentet
   `https://mso24.hu/hir/...` linkkel, a megismételt job idempotenciáját,
   a megszakítás után mentett draft AI-hívás nélküli újraellenőrzését,
   a Writer-hiba utáni backoffos újrapróbálást, valamint a nem igazolt számszerű
   állítás kézi review-ba irányítását publikáció és Facebook intent nélkül.
+  A dead-letter ellenőrzés és kézi requeue D1-útvonala kizárja az importált,
+  aktiválási határ előtti jobokat.
 - Az RSS parser natív Workers `fetch` útvonala, a D1 költségnapló/napi
   híváslimit, valamint a DB, agents és web TypeScript ellenőrzése sikeres.
   A web és agent módosított fájlok ESLint-ellenőrzése tiszta.
