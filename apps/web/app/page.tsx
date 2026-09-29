@@ -67,8 +67,8 @@ async function loadTrending(): Promise<{
     if (!hero) return fallback; // withdrawn or unlisted since the last snapshot
     return {
       hero,
-      side: selection.sideIds.flatMap((id) => byId.get(id) ? [byId.get(id)!] : []),
-      topFive: selection.topFiveIds.flatMap((id) => byId.get(id) ? [byId.get(id)!] : []),
+      side: selection.sideIds.flatMap((id) => (byId.get(id) ? [byId.get(id)!] : [])),
+      topFive: selection.topFiveIds.flatMap((id) => (byId.get(id) ? [byId.get(id)!] : [])),
     };
   } catch {
     // Analytics must never prevent the normal chronological homepage.
@@ -76,7 +76,11 @@ async function loadTrending(): Promise<{
   }
 }
 
-function RankedList({ stories, source, className }: {
+function RankedList({
+  stories,
+  source,
+  className,
+}: {
   stories: StorySummaryView[];
   source: "trending_side" | "top5";
   className: string;
@@ -85,8 +89,11 @@ function RankedList({ stories, source, className }: {
     <ol className={className}>
       {stories.map((story, index) => (
         <li key={story.id}>
-          <Link href={`/hir/${story.slug}`} data-read-source={source}
-            aria-label={`${index + 1}. ${story.title}`}>
+          <Link
+            href={`/hir/${story.slug}`}
+            data-read-source={source}
+            aria-label={`${index + 1}. ${story.title}`}
+          >
             <MediaThumb imageUrl={story.imageUrl} title={story.title} seed={story.id} />
             <span className="home-rank-copy">
               <strong>{story.title}</strong>
@@ -132,29 +139,49 @@ export default async function HomePage(): Promise<ReactNode> {
       <main className="home-main">
         <h1 className="sr-only">Friss futballhírek</h1>
         <section className="home-hero-layout home-hero-layout--tabloid" aria-label="Kiemelt hírek">
-          <Link href={`/hir/${hero.slug}`} className="home-hero"
-            data-read-source={trending.hero ? "trending_hero" : "latest"}>
+          <Link
+            href={`/hir/${hero.slug}`}
+            className="home-hero"
+            data-read-source={trending.hero ? "trending_hero" : "latest"}
+          >
             <MediaThumb imageUrl={hero.imageUrl} title={hero.title} seed={hero.id} priority />
             <div className="home-hero__content">
               <span className="home-kicker home-kicker--solid">
-                {trending.hero ? <><span className="home-live-dot" aria-hidden="true" /> NÉPSZERŰ MOST</> : "Top hír"}
+                {trending.hero ? (
+                  <>
+                    <span className="home-live-dot" aria-hidden="true" /> NÉPSZERŰ MOST
+                  </>
+                ) : (
+                  "Top hír"
+                )}
               </span>
               <h2>{hero.title}</h2>
               <p>{hero.lead}</p>
               <StoryMeta story={hero} />
-              {trending.hero ? <span className="home-activity-note">Olvasói aktivitás alapján</span> : null}
+              {trending.hero ? (
+                <span className="home-activity-note">Olvasói aktivitás alapján</span>
+              ) : null}
             </div>
           </Link>
 
           {trending.side.length === 3 ? (
             <aside className="home-trending-side" aria-label="Most pörgő hírek">
               <h2>MOST PÖRÖG</h2>
-              <RankedList stories={trending.side} source="trending_side" className="home-rank-list" />
+              <RankedList
+                stories={trending.side}
+                source="trending_side"
+                className="home-rank-list"
+              />
             </aside>
           ) : (
             <div className="home-featured-stack">
               {featured.map((story) => (
-                <Link key={story.id} href={`/hir/${story.slug}`} className="home-featured-card" data-read-source="latest">
+                <Link
+                  key={story.id}
+                  href={`/hir/${story.slug}`}
+                  className="home-featured-card"
+                  data-read-source="latest"
+                >
                   <MediaThumb imageUrl={story.imageUrl} title={story.title} seed={story.id} />
                   <div>
                     <h3>{story.title}</h3>
@@ -183,7 +210,11 @@ export default async function HomePage(): Promise<ReactNode> {
               <span className="home-kicker">Olvasói aktivitás alapján</span>
               <h2 id="home-top-five-title">MOST EZT OLVASSÁK</h2>
             </div>
-            <RankedList stories={trending.topFive} source="top5" className="home-rank-list home-rank-list--five" />
+            <RankedList
+              stories={trending.topFive}
+              source="top5"
+              className="home-rank-list home-rank-list--five"
+            />
           </section>
         ) : null}
         {stories.length > 6 ? (

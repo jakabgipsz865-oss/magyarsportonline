@@ -2,8 +2,12 @@
 
 import { useEffect } from "react";
 import {
-  classifyReadSource, ensureQualifiedEvent, loadQualifiedEvent,
-  QualifiedReadGate, qualifiedReadKey, type StoredQualifiedEvent,
+  classifyReadSource,
+  ensureQualifiedEvent,
+  loadQualifiedEvent,
+  QualifiedReadGate,
+  qualifiedReadKey,
+  type StoredQualifiedEvent,
 } from "../lib/qualified-read";
 
 function readClickSource(): string | null {
@@ -12,8 +16,11 @@ function readClickSource(): string | null {
     sessionStorage.removeItem("mso:next-read");
     if (!value) return null;
     const marker = JSON.parse(value) as { path?: string; source?: string; at?: number };
-    return marker.path === window.location.pathname && typeof marker.at === "number" &&
-      Date.now() - marker.at <= 15 * 60_000 ? marker.source ?? null : null;
+    return marker.path === window.location.pathname &&
+      typeof marker.at === "number" &&
+      Date.now() - marker.at <= 15 * 60_000
+      ? (marker.source ?? null)
+      : null;
   } catch {
     return null;
   }
@@ -48,11 +55,14 @@ export function QualifiedReadTracker({ storyId }: { storyId: string }): null {
       if (sending || pending?.status === "sent") return;
       sending = true;
       try {
-        if (!pending) persist(ensureQualifiedEvent(sessionStorage, storyId, source, () => crypto.randomUUID()));
+        if (!pending)
+          persist(ensureQualifiedEvent(sessionStorage, storyId, source, () => crypto.randomUUID()));
         const response = await fetch("/api/analytics/qualified-read", {
-          method: "POST", headers: { "content-type": "application/json" },
+          method: "POST",
+          headers: { "content-type": "application/json" },
           body: JSON.stringify({ eventId: pending?.eventId, storyId, source: pending?.source }),
-          keepalive: true, credentials: "same-origin",
+          keepalive: true,
+          credentials: "same-origin",
         });
         if (response.ok && pending) persist({ ...pending, status: "sent" });
       } catch {
@@ -74,11 +84,16 @@ export function QualifiedReadTracker({ storyId }: { storyId: string }): null {
       gate.setVisible(performance.now(), false);
       if (pending?.status !== "pending") return;
       const payload = JSON.stringify({ eventId: pending.eventId, storyId, source: pending.source });
-      navigator.sendBeacon?.("/api/analytics/qualified-read", new Blob([payload], { type: "application/json" }));
+      navigator.sendBeacon?.(
+        "/api/analytics/qualified-read",
+        new Blob([payload], { type: "application/json" }),
+      );
     }
 
     if (pending?.status === "pending") void send();
-    const interval = window.setInterval(() => { if (gate.checkTime(performance.now())) void send(); }, 500);
+    const interval = window.setInterval(() => {
+      if (gate.checkTime(performance.now())) void send();
+    }, 500);
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("pagehide", onLeave);

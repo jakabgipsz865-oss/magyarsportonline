@@ -13,7 +13,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!db) return NextResponse.json({ error: "D1 unavailable" }, { status: 503 });
   try {
     const snapshot = await refreshTrending(db, new Date());
-    return NextResponse.json({ refreshedAt: snapshot.refreshedAt, ranked: snapshot.ranking.length });
+    return NextResponse.json({
+      refreshedAt: snapshot.refreshedAt,
+      ranked: snapshot.ranking.length,
+    });
   } catch (error) {
     console.error("trending refresh failed", {
       error: error instanceof Error ? error.message : String(error),

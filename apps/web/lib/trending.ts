@@ -1,6 +1,13 @@
 export const READ_SOURCES = [
-  "latest", "trending_hero", "trending_side", "top5",
-  "social", "search", "direct", "rss", "internal",
+  "latest",
+  "trending_hero",
+  "trending_side",
+  "top5",
+  "social",
+  "search",
+  "direct",
+  "rss",
+  "internal",
 ] as const;
 
 export type ReadSource = (typeof READ_SOURCES)[number];
@@ -34,7 +41,8 @@ export function scoreTrending(row: TrendingCounts): number {
   return (
     5 * (row.normal1h + PROMOTED_WEIGHT * row.promoted1h) +
     2 * (row.normal6h + PROMOTED_WEIGHT * row.promoted6h) +
-    row.normal24h + PROMOTED_WEIGHT * row.promoted24h
+    row.normal24h +
+    PROMOTED_WEIGHT * row.promoted24h
   );
 }
 
@@ -46,7 +54,10 @@ export function rankTrending(rows: TrendingCounts[]): TrendingRank[] {
     .map((row, index) => ({ ...row, position: index + 1 }));
 }
 
-export function pickTrending(snapshot: TrendingSnapshot | null, now: Date): {
+export function pickTrending(
+  snapshot: TrendingSnapshot | null,
+  now: Date,
+): {
   heroId: string | null;
   sideIds: string[];
   topFiveIds: string[];
@@ -67,20 +78,26 @@ export function pickTrending(snapshot: TrendingSnapshot | null, now: Date): {
   const pictured = unique.filter((row) => row.hasImage);
   const eligible = pictured.filter((row) => {
     const storyAge = now.getTime() - new Date(row.publishedAt).getTime();
-    return storyAge >= 15 * 60_000 && storyAge <= 24 * 60 * 60_000 &&
-      row.normal24h + row.promoted24h >= 5;
+    return (
+      storyAge >= 15 * 60_000 &&
+      storyAge <= 24 * 60 * 60_000 &&
+      row.normal24h + row.promoted24h >= 5
+    );
   });
   const heroId = eligible[0]?.storyId ?? null;
   if (!heroId) return empty;
 
-  const sideIds = eligible.filter((row) => row.storyId !== heroId).slice(0, 3)
+  const sideIds = eligible
+    .filter((row) => row.storyId !== heroId)
+    .slice(0, 3)
     .map((row) => row.storyId);
   const used = new Set([heroId, ...sideIds]);
   const otherTop = pictured.filter((row) => !used.has(row.storyId));
-  const topFiveIds = (otherTop.length >= 5
-    ? otherTop
-    : pictured.filter((row) => row.storyId !== heroId))
-    .slice(0, 5).map((row) => row.storyId);
+  const topFiveIds = (
+    otherTop.length >= 5 ? otherTop : pictured.filter((row) => row.storyId !== heroId)
+  )
+    .slice(0, 5)
+    .map((row) => row.storyId);
   return { heroId, sideIds, topFiveIds };
 }
 

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  classifyReadSource, ensureQualifiedEvent, loadQualifiedEvent, QualifiedReadGate,
+  classifyReadSource,
+  ensureQualifiedEvent,
+  loadQualifiedEvent,
+  QualifiedReadGate,
 } from "./qualified-read";
 
 describe("qualified-read gate", () => {
@@ -35,14 +38,17 @@ describe("session deduplication and attribution", () => {
     const values = new Map<string, string>();
     const store = {
       getItem: (key: string) => values.get(key) ?? null,
-      setItem: (key: string, value: string) => { values.set(key, value); },
+      setItem: (key: string, value: string) => {
+        values.set(key, value);
+      },
     };
     const first = ensureQualifiedEvent(store, "story-1", "latest", () => "first-id");
     const retry = ensureQualifiedEvent(store, "story-1", "top5", () => "second-id");
     expect(retry).toEqual(first);
     expect(loadQualifiedEvent(store, "story-1")?.eventId).toBe("first-id");
-    expect(ensureQualifiedEvent(store, "story-2", "latest", () => "other-id").eventId)
-      .toBe("other-id");
+    expect(ensureQualifiedEvent(store, "story-2", "latest", () => "other-id").eventId).toBe(
+      "other-id",
+    );
   });
 
   it("separates own promotion, social, search, RSS, internal and direct sources", () => {

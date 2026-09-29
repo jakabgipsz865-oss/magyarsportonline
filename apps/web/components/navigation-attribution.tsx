@@ -13,9 +13,14 @@ export function NavigationAttribution(): null {
         const url = new URL(link.href);
         if (url.origin !== window.location.origin) return;
         if (!url.pathname.startsWith("/hir/")) return;
-        sessionStorage.setItem("mso:next-read", JSON.stringify({
-          path: url.pathname, source: link.dataset["readSource"] ?? "internal", at: Date.now(),
-        }));
+        sessionStorage.setItem(
+          "mso:next-read",
+          JSON.stringify({
+            path: url.pathname,
+            source: link.dataset["readSource"] ?? "internal",
+            at: Date.now(),
+          }),
+        );
       } catch {
         // Storage-disabled browsers still read articles normally.
       }

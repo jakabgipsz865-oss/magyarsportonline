@@ -96,9 +96,16 @@ export async function runCron(env: Env, now = new Date()): Promise<void> {
       env,
       SOCIAL_TIMEOUT_MS,
     ),
-    ...(now.getUTCMinutes() % 5 === 0 ? [
-      post(endpoint(env.APP_ORIGIN, "/api/internal/trending"), "trending", env, TRENDING_TIMEOUT_MS),
-    ] : []),
+    ...(now.getUTCMinutes() % 5 === 0
+      ? [
+          post(
+            endpoint(env.APP_ORIGIN, "/api/internal/trending"),
+            "trending",
+            env,
+            TRENDING_TIMEOUT_MS,
+          ),
+        ]
+      : []),
   ]);
   const failures = results.filter((result) => result.status === "rejected");
   if (failures.length > 0) throw new AggregateError(failures, "scheduled work failed");

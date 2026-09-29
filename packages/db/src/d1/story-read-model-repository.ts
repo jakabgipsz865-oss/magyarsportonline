@@ -100,7 +100,9 @@ export class D1StoryReadModelRepository {
     if (ids.length > 30) throw new Error("trending lookup exceeds 30 story IDs");
     const placeholders = ids.map(() => "?").join(", ");
     const result = await this.db
-      .prepare(`SELECT * FROM story_read_model WHERE story_id IN (${placeholders}) AND ${publicFilter}`)
+      .prepare(
+        `SELECT * FROM story_read_model WHERE story_id IN (${placeholders}) AND ${publicFilter}`,
+      )
       .bind(...ids, d1Timestamp(new Date(TABLOID_PUBLIC_START)), TABLOID_PUBLIC_PROMPT)
       .all<ReadModelSqlRow>();
     return result.results.map(hydrate);
