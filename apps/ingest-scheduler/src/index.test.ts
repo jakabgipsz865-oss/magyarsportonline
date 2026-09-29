@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import scheduler, { runCron } from "./index";
 
 describe("scheduler branch isolation", () => {
+  const nonRefreshMinute = new Date("2026-09-29T12:01:00.000Z");
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.useRealTimers();
@@ -16,9 +17,25 @@ describe("scheduler branch isolation", () => {
         return new Response("", { status: 200 });
       }),
     );
-    await runCron({ APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" });
+    await runCron({ APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" }, nonRefreshMinute);
     expect(signals.size).toBe(3);
     expect([...signals.values()].every(Boolean)).toBe(true);
+  });
+
+  it("refreshes trending only on five-minute boundaries without changing ingest cadence", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL | Request) => {
+      calls.push(String(url));
+      return new Response("", { status: 200 });
+    }));
+    const env = { APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" };
+    await runCron(env, nonRefreshMinute);
+    expect(calls).toHaveLength(3);
+    await runCron(env, new Date("2026-09-29T12:05:00.000Z"));
+    expect(calls).toHaveLength(7);
+    expect(calls.filter((url) => url.endsWith("/api/internal/trending"))).toHaveLength(1);
+    expect(calls.filter((url) => url.endsWith("/api/internal/cron/dispatch-ingest")))
+      .toHaveLength(2);
   });
 
   it("starts queue processing even when ingest fails", async () => {
@@ -32,7 +49,7 @@ describe("scheduler branch isolation", () => {
       }),
     );
     await expect(
-      runCron({ APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" }),
+      runCron({ APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" }, nonRefreshMinute),
     ).rejects.toBeInstanceOf(AggregateError);
     expect(calls.some((url) => url.includes("dispatch-ingest"))).toBe(true);
     expect(calls.some((url) => url.includes("jobs/process"))).toBe(true);
@@ -50,7 +67,7 @@ describe("scheduler branch isolation", () => {
       }),
     );
     await expect(
-      runCron({ APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" }),
+      runCron({ APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" }, nonRefreshMinute),
     ).rejects.toBeInstanceOf(AggregateError);
     expect(calls).toHaveLength(3);
   });
@@ -72,8 +89,8 @@ describe("scheduler branch isolation", () => {
       },
     };
     const env = { APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" };
-    scheduler.scheduled({}, env, context);
-    scheduler.scheduled({}, env, context);
+    scheduler.scheduled({ scheduledTime: nonRefreshMinute.getTime() }, env, context);
+    scheduler.scheduled({ scheduledTime: nonRefreshMinute.getTime() }, env, context);
     expect(runs).toHaveLength(1);
     expect(fetchMock).toHaveBeenCalledTimes(3);
     release();
@@ -96,7 +113,7 @@ describe("scheduler branch isolation", () => {
         });
       }),
     );
-    const run = runCron({ APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" });
+    const run = runCron({ APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" }, nonRefreshMinute);
     const assertion = expect(run).rejects.toBeInstanceOf(AggregateError);
     await vi.advanceTimersByTimeAsync(45_001);
     await assertion;
@@ -123,7 +140,7 @@ describe("scheduler branch isolation", () => {
         );
       }),
     );
-    const run = runCron({ APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" });
+    const run = runCron({ APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" }, nonRefreshMinute);
     const assertion = expect(run).rejects.toBeInstanceOf(AggregateError);
     await vi.advanceTimersByTimeAsync(45_001);
     await assertion;

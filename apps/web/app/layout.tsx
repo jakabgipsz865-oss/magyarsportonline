@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { SiteHeader } from "../components/site-header";
+import { NavigationAttribution } from "../components/navigation-attribution";
 import { bodyFont, displayFont, monoFont } from "../lib/fonts";
 import { env } from "../lib/env";
 import "./globals.css";
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: { children: ReactNode }): React
           }}
         />
         <SiteHeader />
+        <NavigationAttribution />
         {children}
       </body>
     </html>

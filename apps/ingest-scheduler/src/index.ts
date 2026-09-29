@@ -1,6 +1,7 @@
 const INGEST_TIMEOUT_MS = 50_000;
 const JOBS_TIMEOUT_MS = 45_000;
 const SOCIAL_TIMEOUT_MS = 15_000;
+const TRENDING_TIMEOUT_MS = 15_000;
 
 export interface Env {
   APP_ORIGIN: string;
@@ -75,7 +76,7 @@ async function post(url: string, label: string, env: Env, timeoutMs: number): Pr
   }
 }
 
-export async function runCron(env: Env): Promise<void> {
+export async function runCron(env: Env, now = new Date()): Promise<void> {
   const results = await Promise.allSettled([
     post(
       endpoint(env.APP_ORIGIN, "/api/internal/cron/dispatch-ingest"),
@@ -95,20 +96,23 @@ export async function runCron(env: Env): Promise<void> {
       env,
       SOCIAL_TIMEOUT_MS,
     ),
+    ...(now.getUTCMinutes() % 5 === 0 ? [
+      post(endpoint(env.APP_ORIGIN, "/api/internal/trending"), "trending", env, TRENDING_TIMEOUT_MS),
+    ] : []),
   ]);
   const failures = results.filter((result) => result.status === "rejected");
   if (failures.length > 0) throw new AggregateError(failures, "scheduled work failed");
 }
 
 export default {
-  scheduled(_event: unknown, env: Env, ctx: WorkerExecutionContext): void {
+  scheduled(event: { scheduledTime?: number }, env: Env, ctx: WorkerExecutionContext): void {
     // Prevent a hanging request from stacking further cron runs in this Worker
     // isolate. Cross-isolate overlap remains bounded by endpoint claim fencing.
     if (activeScheduledRun) {
       console.warn("scheduled invocation skipped while previous invocation is still active");
       return;
     }
-    activeScheduledRun = runCron(env).finally(() => {
+    activeScheduledRun = runCron(env, new Date(event.scheduledTime ?? Date.now())).finally(() => {
       activeScheduledRun = null;
     });
     ctx.waitUntil(activeScheduledRun);

@@ -94,6 +94,18 @@ export class D1StoryReadModelRepository {
     return result.results.map(hydrate);
   }
 
+  /** Revalidate cached trending IDs against the current public projection. */
+  async listPublishedByIds(ids: string[]): Promise<StoryReadModelRow[]> {
+    if (ids.length === 0) return [];
+    if (ids.length > 30) throw new Error("trending lookup exceeds 30 story IDs");
+    const placeholders = ids.map(() => "?").join(", ");
+    const result = await this.db
+      .prepare(`SELECT * FROM story_read_model WHERE story_id IN (${placeholders}) AND ${publicFilter}`)
+      .bind(...ids, d1Timestamp(new Date(TABLOID_PUBLIC_START)), TABLOID_PUBLIC_PROMPT)
+      .all<ReadModelSqlRow>();
+    return result.results.map(hydrate);
+  }
+
   async countPublished(): Promise<number> {
     const row = await this.db
       .prepare(`SELECT COUNT(*) AS total FROM story_read_model WHERE ${publicFilter}`)
