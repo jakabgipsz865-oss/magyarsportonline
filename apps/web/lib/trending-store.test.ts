@@ -88,7 +88,9 @@ describe("D1 qualified-read migration and ranking", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-        expect(init?.headers).toEqual({ authorization: "Bearer integration-secret" });
+        expect(init?.headers).toEqual(
+          expect.objectContaining({ authorization: "Bearer integration-secret" }),
+        );
         expect(String(url).startsWith("https://preview.example/")).toBe(true);
         if (String(url).endsWith("/api/internal/trending")) {
           const snapshot = await refreshTrending(db, time);

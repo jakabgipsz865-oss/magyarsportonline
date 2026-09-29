@@ -42,7 +42,7 @@ never the recovery time. No social intent is created. Execution is idempotent.
 
 ## Additive migrations
 
-Apply once in numbered order: 0002 qualified-read/trending, 0003 recovery. 0002 is
+Apply once in numbered order: 0002 qualified-read/trending, 0003 recovery, 0004 Language QA. 0002 is
 still pre-production and includes hero ID/time. 0003 is idempotent. Migration does
 not execute recovery or make AI calls. Retain tables/ledgers on rollback; restore
 the previous web/scheduler versions and leave activation switches off.
@@ -55,3 +55,46 @@ the real scheduler at minute 0/5/10/15 against an authenticated endpoint and D1;
 all four refreshes return 2xx and the snapshot never becomes stale. Production
 does not yet have this PR's endpoint, so live production 2xx cannot honestly be
 claimed before the separately authorized release. No production config was changed.
+
+## Language QA and targeted repair
+
+Targeted repair accepts optional detail, nonliteral warnings, and one-paragraph
+bodies. It uses the located paragraph when unique, otherwise only the affected
+field. Nonrepairable/mixed flags prevent the provider call. Protected numbers,
+names and quotes cannot change, and the publication path reruns its full gate.
+
+Language QA model: `@cf/openai/gpt-oss-120b`, existing Workers AI adapter.
+Default and production config: **LANGUAGE_QA_ENABLED=false**. Production mock mode
+is false and recovery execution is false. These are separate activation decisions.
+The provider's documented price used for the usage ledger is $0.35/$0.75 per million
+input/output tokens: https://developers.cloudflare.com/workers-ai/models/gpt-oss-120b/.
+
+New public versions create a durable, nonblocking audit intent. The existing
+minute scheduler processes at most one intent per run; every 30 minutes it performs
+a bounded safety sweep. `(version_id, content_hash)` is unique. A resulting repaired
+version gets a PASS audit in the same transaction, without another model call.
+Modified text is detected; technical failures retry after 30 minutes, at most three
+attempts. A two-minute lease prevents concurrent provider calls. Projection failures
+are retried independently and cannot regenerate content or incur model cost.
+
+Strict JSON: PASS or at most five sentence replacements, confidence >=0.97,
+meaning_change_risk=false, exact unique original sentence and one replacement
+sentence. Guards preserve numbers/currencies/dates, name order and quoted text.
+Conservative lexical equivalence also rejects unproven new assertions, negation
+changes and unsupported paraphrases. It is intentionally narrow: many otherwise
+reasonable edits remain `repair_rejected`. This is not a semantic guarantee from an
+AI confidence score. Every candidate article must pass the full deterministic gate.
+Source/version CAS guards prevent overwriting a concurrent update. Original
+publication chronology is preserved; no new Facebook intent is created.
+
+Separate daily ceiling: 300 calls and $0.50 estimated usage by default (config max
+$1/day). An atomic `llm_usage` role=`language_qa` reservation includes a conservative
+worst-case token cost before any client/provider call. Failed or unreported usage
+retains that reservation; caps cannot reset after a restart. Actual token usage
+reconciles successful reservations. Preview modes `pass`/`fixtures` require
+APP_ENV=preview, workers.dev and LLM_PROVIDER=none, and use canned responses only.
+Mock usage is identified as provider=`cloudflare_mock`, cost zero.
+
+Scheduler completion/error heartbeats are persisted in a single operational row;
+the admin never infers scheduler success from an RSS timestamp. The heartbeat adds
+one bounded HTTP call/write per run and reuses the existing scheduler.

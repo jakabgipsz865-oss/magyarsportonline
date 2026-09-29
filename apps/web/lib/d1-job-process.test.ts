@@ -28,6 +28,9 @@ function fixture(): { db: DatabaseSyncType; d1: D1Client } {
   db.exec(
     readFileSync(new URL("../../../packages/db/d1/0001_initial.sql", import.meta.url), "utf8"),
   );
+  db.exec(
+    readFileSync(new URL("../../../packages/db/d1/0004_language_qa.sql", import.meta.url), "utf8"),
+  );
   db.exec("PRAGMA foreign_keys=ON");
   db.prepare(
     `INSERT INTO sources (id,name,base_url,type,language,license_type,
@@ -167,6 +170,9 @@ describe("D1 full article publication", () => {
         outcome: { status: "published" },
       });
       expect(mock.completeJson).toHaveBeenCalledTimes(1);
+      expect(
+        db.prepare("SELECT count(*) n FROM language_qa_audits WHERE status='queued'").get(),
+      ).toEqual({ n: 1 });
       const published = result.outcome as { storyId: string; slug: string };
       expect((await new D1StoryReadModelRepository(d1).getBySlug(published.slug))?.storyId).toBe(
         published.storyId,

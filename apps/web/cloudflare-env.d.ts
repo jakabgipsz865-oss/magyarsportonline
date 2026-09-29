@@ -1,4 +1,10 @@
 interface CloudflareEnv {
+  APP_ENV?: "production" | "preview" | "development";
+  LANGUAGE_QA_ENABLED?: "true" | "false";
+  LANGUAGE_QA_DAILY_CALL_CAP?: string;
+  LANGUAGE_QA_DAILY_BUDGET_USD?: string;
+  LANGUAGE_QA_MOCK_MODE?: "false" | "pass" | "fixtures";
+  DRAFT_RECOVERY_ENABLED?: "true" | "false";
   DB?: import("@magyarsportonline/db/d1").D1Client;
   SITE_URL: string;
   LLM_PROVIDER: "cloudflare";

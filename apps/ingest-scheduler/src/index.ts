@@ -22,13 +22,23 @@ function endpoint(origin: string, path: string): string {
   return base.toString();
 }
 
-async function post(url: string, label: string, env: Env, timeoutMs: number): Promise<void> {
+async function post(
+  url: string,
+  label: string,
+  env: Env,
+  timeoutMs: number,
+  payload?: unknown,
+): Promise<void> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
       method: "POST",
-      headers: { authorization: `Bearer ${env.CRON_SECRET}` },
+      headers: {
+        authorization: `Bearer ${env.CRON_SECRET}`,
+        ...(payload ? { "content-type": "application/json" } : {}),
+      },
+      ...(payload ? { body: JSON.stringify(payload) } : {}),
       signal: controller.signal,
     });
     if (!response.ok) throw new Error(`${label} returned HTTP ${response.status}`);
@@ -79,6 +89,13 @@ async function post(url: string, label: string, env: Env, timeoutMs: number): Pr
 export async function runCron(env: Env, now = new Date()): Promise<void> {
   const results = await Promise.allSettled([
     post(
+      endpoint(env.APP_ORIGIN, "/api/internal/language-qa") +
+        (now.getUTCMinutes() % 30 === 0 ? "?sweep=true" : ""),
+      "language-qa",
+      env,
+      25_000,
+    ),
+    post(
       endpoint(env.APP_ORIGIN, "/api/internal/cron/dispatch-ingest"),
       "dispatch-ingest",
       env,
@@ -108,6 +125,21 @@ export async function runCron(env: Env, now = new Date()): Promise<void> {
       : []),
   ]);
   const failures = results.filter((result) => result.status === "rejected");
+  try {
+    await post(
+      endpoint(env.APP_ORIGIN, "/api/internal/scheduler-status"),
+      "scheduler-status",
+      env,
+      5000,
+      {
+        scheduledAt: now.toISOString(),
+        status: failures.length ? "error" : "ok",
+        branches: results.map((r) => ({ status: r.status })),
+      },
+    );
+  } catch (error) {
+    failures.push({ status: "rejected", reason: error });
+  }
   if (failures.length > 0) throw new AggregateError(failures, "scheduled work failed");
 }
 

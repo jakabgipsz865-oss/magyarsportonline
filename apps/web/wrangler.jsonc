@@ -31,6 +31,12 @@
     },
   ],
   "vars": {
+    "APP_ENV": "production",
+    "LANGUAGE_QA_ENABLED": "false",
+    "LANGUAGE_QA_DAILY_CALL_CAP": "300",
+    "LANGUAGE_QA_DAILY_BUDGET_USD": "0.50",
+    "LANGUAGE_QA_MOCK_MODE": "false",
+    "DRAFT_RECOVERY_ENABLED": "false",
     "SITE_URL": "https://mso24.hu",
     "LLM_PROVIDER": "cloudflare",
     "CLOUDFLARE_ACCOUNT_ID": "7a225d650d7e05daba6355e5526a8fb9",

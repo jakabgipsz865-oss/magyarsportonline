@@ -18,7 +18,7 @@ describe("scheduler branch isolation", () => {
       }),
     );
     await runCron({ APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" }, nonRefreshMinute);
-    expect(signals.size).toBe(3);
+    expect(signals.size).toBe(5);
     expect([...signals.values()].every(Boolean)).toBe(true);
   });
 
@@ -33,9 +33,9 @@ describe("scheduler branch isolation", () => {
     );
     const env = { APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" };
     await runCron(env, nonRefreshMinute);
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(5);
     await runCron(env, new Date("2026-09-29T12:05:00.000Z"));
-    expect(calls).toHaveLength(7);
+    expect(calls).toHaveLength(11);
     expect(calls.filter((url) => url.endsWith("/api/internal/trending"))).toHaveLength(1);
     expect(calls.filter((url) => url.endsWith("/api/internal/cron/dispatch-ingest"))).toHaveLength(
       2,
@@ -73,7 +73,7 @@ describe("scheduler branch isolation", () => {
     await expect(
       runCron({ APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" }, nonRefreshMinute),
     ).rejects.toBeInstanceOf(AggregateError);
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(5);
   });
 
   it("does not start an overlapping scheduled run in the same isolate", async () => {
@@ -96,7 +96,7 @@ describe("scheduler branch isolation", () => {
     scheduler.scheduled({ scheduledTime: nonRefreshMinute.getTime() }, env, context);
     scheduler.scheduled({ scheduledTime: nonRefreshMinute.getTime() }, env, context);
     expect(runs).toHaveLength(1);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     release();
     await runs[0];
   });

@@ -63,6 +63,15 @@ export const env = createEnv({
       .default("false")
       .transform((v) => v === "true"),
 
+    APP_ENV: z.enum(["production", "preview", "development"]).default("development"),
+    LANGUAGE_QA_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    LANGUAGE_QA_DAILY_CALL_CAP: z.coerce.number().int().positive().max(300).default(300),
+    LANGUAGE_QA_DAILY_BUDGET_USD: z.coerce.number().positive().max(1).default(0.5),
+    LANGUAGE_QA_MOCK_MODE: z.enum(["false", "pass", "fixtures"]).default("false"),
+
     GEMINI_API_KEY: z.string().min(1).optional(),
     GEMINI_MODEL: z.string().min(1).default("gemini-3.5-flash-lite"),
     GEMINI_BILLING_MODE: z.enum(["byok", "unified"]).default("byok"),

@@ -14,6 +14,7 @@ import {
 } from "@magyarsportonline/shared";
 import { buildFacebookPostText } from "./facebook-publication";
 import registry from "./tabloid-sources.json";
+import { enqueueLanguageQa } from "./language-qa-store";
 
 type Claim = { jobId: string; owner: string };
 interface RawRow {
@@ -81,13 +82,7 @@ const pendingFor = (languageWarnings: string[]) => [
     languageWarnings,
   },
 ];
-const repairable = new Set([
-  "foreign_language",
-  "forbidden_terminology",
-  "repetition",
-  "malformed_hungarian",
-  "writer_language_warning",
-]);
+const repairable = tabloid.REPAIRABLE_TABLOID_FLAGS;
 
 function parseIssues(value: string | null): Array<{ code?: string; repaired?: boolean }> {
   return value ? (JSON.parse(value) as Array<{ code?: string; repaired?: boolean }>) : [];
@@ -645,5 +640,14 @@ export async function publishD1Tabloid(
   const result = await db.batch(statements);
   if (result[1]?.meta.changes !== 1) return { status: "skipped", storyId, versionId: version.id };
   await projectD1Story(db, storyId, version.id);
+  // Durable intent only. A QA outage never blocks or undoes this publication.
+  try {
+    await enqueueLanguageQa(db, storyId, version.id, now);
+  } catch {
+    console.error("language_qa enqueue deferred to safety sweep", {
+      storyId,
+      versionId: version.id,
+    });
+  }
   return { status: "published", storyId, versionId: version.id, slug };
 }

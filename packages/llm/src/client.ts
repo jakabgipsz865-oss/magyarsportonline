@@ -32,7 +32,12 @@ export interface LlmUsage {
   fallbackReason?: string | undefined;
 }
 
-export type LlmUsageRole = "primary" | "targeted_repair" | "technical_fallback" | "unspecified";
+export type LlmUsageRole =
+  | "primary"
+  | "targeted_repair"
+  | "technical_fallback"
+  | "language_qa"
+  | "unspecified";
 
 export interface LlmUsageContext {
   role: LlmUsageRole;
