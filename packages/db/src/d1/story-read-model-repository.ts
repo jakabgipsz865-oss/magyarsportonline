@@ -94,6 +94,14 @@ export class D1StoryReadModelRepository {
     return result.results.map(hydrate);
   }
 
+  async countPublished(): Promise<number> {
+    const row = await this.db
+      .prepare(`SELECT COUNT(*) AS total FROM story_read_model WHERE ${publicFilter}`)
+      .bind(d1Timestamp(new Date(TABLOID_PUBLIC_START)), TABLOID_PUBLIC_PROMPT)
+      .first<{ total: number }>();
+    return row?.total ?? 0;
+  }
+
   async upsert(row: NewStoryReadModelRow): Promise<void> {
     await this.db
       .prepare(

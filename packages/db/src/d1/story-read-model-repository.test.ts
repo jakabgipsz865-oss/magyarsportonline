@@ -88,6 +88,7 @@ describe("D1 public read model", () => {
       expect(
         (await repository.listPublished({ limit: 10, offset: 0 })).map((item) => item.storyId),
       ).toEqual([row.storyId]);
+      expect(await repository.countPublished()).toBe(1);
 
       await repository.upsert({
         ...row,
@@ -95,10 +96,45 @@ describe("D1 public read model", () => {
       });
       expect(await repository.getBySlug(row.slug)).toBeNull();
       expect(await repository.listPublished({ limit: 10, offset: 0 })).toEqual([]);
+      expect(await repository.countPublished()).toBe(0);
       await repository.deleteByStoryId(row.storyId);
       expect(
         (db.prepare("SELECT count(*) AS n FROM story_read_model").get() as { n: number }).n,
       ).toBe(0);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("covers more than one archive page without duplicate or hidden stories", async () => {
+    const db = fixture();
+    try {
+      const repository = new D1StoryReadModelRepository(localD1(db));
+      for (let index = 1; index <= 81; index++) {
+        await repository.upsert({
+          ...row,
+          storyId: `story-${index}`,
+          slug: `hir-${index}`,
+          publishedAt: new Date(row.publishedAt.getTime() + index * 1000),
+        });
+      }
+      await repository.upsert({
+        ...row,
+        storyId: "hidden-story",
+        slug: "hidden-story",
+        versionHistorySummary: [{ prompt_version: "other", is_current: true }],
+      });
+
+      expect(await repository.countPublished()).toBe(81);
+      const pages = await Promise.all(
+        [0, 40, 80].map((offset) => repository.listPublished({ limit: 40, offset })),
+      );
+      expect(pages.map((page) => page.length)).toEqual([40, 40, 1]);
+      const ids = pages.flat().map((item) => item.storyId);
+      expect(new Set(ids).size).toBe(81);
+      expect(ids).not.toContain("hidden-story");
+      expect(ids[0]).toBe("story-81");
+      expect(ids.at(-1)).toBe("story-1");
     } finally {
       db.close();
     }
