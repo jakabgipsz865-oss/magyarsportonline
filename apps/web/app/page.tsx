@@ -82,7 +82,7 @@ export default async function HomePage(): Promise<ReactNode> {
         <h1 className="sr-only">Friss futballhírek</h1>
         <section className="home-hero-layout home-hero-layout--tabloid" aria-label="Kiemelt hírek">
           <Link href={`/hir/${hero.slug}`} className="home-hero">
-            <MediaThumb imageUrl={hero.imageUrl} title={hero.title} seed={hero.id} />
+            <MediaThumb imageUrl={hero.imageUrl} title={hero.title} seed={hero.id} priority />
             <div className="home-hero__content">
               <span className="home-kicker home-kicker--solid">Top hír</span>
               <h2>{hero.title}</h2>

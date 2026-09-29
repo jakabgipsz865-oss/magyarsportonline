@@ -12,6 +12,9 @@ export const metadata: Metadata = {
     template: "%s — MSO24",
   },
   description: "Friss nemzetközi futballhírek magyarul, közvetlenül az eredeti források alapján.",
+  robots: {
+    googleBot: { index: true, follow: true, "max-image-preview": "large" },
+  },
   alternates: {
     types: { "application/rss+xml": [{ url: "/rss.xml", title: "MSO24 RSS" }] },
   },
