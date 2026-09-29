@@ -42,5 +42,8 @@ END;
 CREATE TABLE IF NOT EXISTS trending_snapshot (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   refreshed_at TEXT NOT NULL,
-  ranking_json TEXT NOT NULL CHECK (json_valid(ranking_json))
+  ranking_json TEXT NOT NULL CHECK (json_valid(ranking_json)),
+  hero_story_id TEXT,
+  hero_selected_at TEXT,
+  CHECK ((hero_story_id IS NULL) = (hero_selected_at IS NULL))
 );

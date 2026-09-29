@@ -1,5 +1,29 @@
 # MSO24 qualified reads and trending — scoped decision
 
+## Stabilization (PR #143 coordinated release)
+
+The snapshot persists `hero_story_id` and `hero_selected_at`. A valid public,
+renderable pictured hero holds for 30 minutes. After that, a challenger must
+reach `current.score * 1.25`; picking the same hero does not reset its selection
+time. Withdrawal/deletion, missing rendering content, and the 24-hour age limit
+invalidate a hero immediately. The side/TOP5 rankings still refresh every five
+minutes. Snapshot writes fence against an older refresh/hero selection to avoid
+concurrent runs overwriting a newer hold. Homepage verification reads only the
+at-most-30 ranked IDs; it does not aggregate or scan event data.
+
+The qualified-read endpoint reuses the existing 120/minute in-memory limiter,
+preferring Cloudflare's connecting-IP header, and reads at most 512 bytes even
+without content-length. IPs are ephemeral rate-limit keys only, never stored in
+D1, logs, cookies or a visitor profile. The limit is per isolate, so distributed
+abuse remains a documented limitation; this is not a global fraud detector.
+
+The existing every-minute scheduler calls trending on UTC five-minute
+boundaries. An integration test drives its actual `runCron` through the D1
+SQLite store over 15 simulated minutes, checking four distinct `refreshedAt`
+values, authenticated 2xx responses, stable public hero, and immediate
+withdrawal. This validates the release configuration, not an undeployed
+production endpoint. Production rollout remains separately authorized.
+
 ## Current state (2026-09-29)
 
 - The Cloudflare web Worker uses D1 (`DB`) for the public story projection. No KV or Analytics Engine binding exists. The separate scheduler already ticks every minute.

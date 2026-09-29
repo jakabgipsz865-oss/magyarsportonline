@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { d1Binding } from "../../../../lib/db";
 import { READ_SOURCES, type ReadSource } from "../../../../lib/trending";
 import { recordQualifiedRead } from "../../../../lib/trending-store";
+import { allowPublicApiRequest } from "../../../../lib/rate-limit";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -17,6 +18,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!sameOrigin || (fetchSite && fetchSite !== "same-origin")) {
     return NextResponse.json({ error: "same origin required" }, { status: 403 });
   }
+  if (!allowPublicApiRequest(request.headers)) {
+    return NextResponse.json(
+      { error: "rate limited" },
+      { status: 429, headers: { "retry-after": "60" } },
+    );
+  }
   if (
     !request.headers.get("content-type")?.startsWith("application/json") ||
     Number(request.headers.get("content-length") ?? "0") > 512
@@ -25,7 +32,27 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
   let body: unknown;
   try {
-    body = await request.json();
+    const reader = request.body?.getReader();
+    if (!reader) throw new Error("missing body");
+    let length = 0;
+    const chunks: Uint8Array[] = [];
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      length += value.length;
+      if (length > 512) {
+        await reader.cancel();
+        throw new Error("oversized body");
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(length);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.length;
+    }
+    body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch {
     return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
   }

@@ -4,6 +4,7 @@ import {
   pickTrending,
   rankTrending,
   scoreTrending,
+  selectTrendingHero,
   type TrendingCounts,
   type TrendingSnapshot,
 } from "./trending";
@@ -31,6 +32,32 @@ function snapshot(rows: TrendingCounts[], refreshedAt = now.toISOString()): Tren
 }
 
 describe("trending score and selection", () => {
+  it("holds 30 minutes, then requires at least 25 percent more score", () => {
+    const selectedAt = now.toISOString();
+    const previous = { storyId: "current", selectedAt };
+    const ranks = (score: number) =>
+      rankTrending([row("current", { normal24h: 100 }), row("challenger", { normal24h: score })]);
+    expect(
+      selectTrendingHero(ranks(1000), previous, new Date(now.getTime() + 29 * 60_000)),
+    ).toEqual(previous);
+    expect(selectTrendingHero(ranks(124), previous, new Date(now.getTime() + 30 * 60_000))).toEqual(
+      previous,
+    );
+    expect(selectTrendingHero(ranks(125), previous, new Date(now.getTime() + 30 * 60_000))).toEqual(
+      { storyId: "challenger", selectedAt: new Date(now.getTime() + 30 * 60_000).toISOString() },
+    );
+  });
+
+  it("immediately replaces an invalid/withdrawn hero without waiting for the hold", () => {
+    const ranks = rankTrending([row("valid", { normal24h: 5 })]);
+    expect(
+      selectTrendingHero(ranks, { storyId: "withdrawn", selectedAt: now.toISOString() }, now)
+        ?.storyId,
+    ).toBe("valid");
+    expect(
+      selectTrendingHero([], { storyId: "withdrawn", selectedAt: now.toISOString() }, now),
+    ).toBeNull();
+  });
   it("prioritizes a fresh surge over a large older 24h total", () => {
     const fresh = row("fresh", { normal1h: 8, normal6h: 8, normal24h: 8 });
     const old = row("old", { normal24h: 55 });

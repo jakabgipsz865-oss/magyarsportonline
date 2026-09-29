@@ -33,9 +33,39 @@ export interface TrendingRank extends TrendingCounts {
 export interface TrendingSnapshot {
   refreshedAt: string;
   ranking: TrendingRank[];
+  hero?: { storyId: string; selectedAt: string } | null;
 }
 
 const PROMOTED_WEIGHT = 0.25;
+export const HERO_HOLD_MS = 30 * 60_000;
+export const HERO_CHALLENGER_RATIO = 1.25;
+
+export function heroEligible(row: TrendingCounts, now: Date): boolean {
+  const age = now.getTime() - new Date(row.publishedAt).getTime();
+  return row.hasImage && age >= 15 * 60_000 && age <= 24 * 3_600_000;
+}
+
+/** Ranking rows have already passed the public/renderable database filter. */
+export function selectTrendingHero(
+  ranking: TrendingRank[],
+  previous: TrendingSnapshot["hero"],
+  now: Date,
+): NonNullable<TrendingSnapshot["hero"]> | null {
+  const challenger = ranking.find(
+    (row) => heroEligible(row, now) && row.normal24h + row.promoted24h >= 5,
+  );
+  const current = previous && ranking.find((row) => row.storyId === previous.storyId);
+  if (current && heroEligible(current, now)) {
+    const held = now.getTime() - new Date(previous!.selectedAt).getTime();
+    if (!Number.isFinite(held) || held < 0)
+      return challenger ? { storyId: challenger.storyId, selectedAt: now.toISOString() } : null;
+    if (held < HERO_HOLD_MS) return previous!;
+    if (!challenger) return null;
+    if (challenger.storyId === current.storyId) return previous!;
+    if (challenger.score < current.score * HERO_CHALLENGER_RATIO) return previous!;
+  }
+  return challenger ? { storyId: challenger.storyId, selectedAt: now.toISOString() } : null;
+}
 
 export function scoreTrending(row: TrendingCounts): number {
   return (
@@ -84,7 +114,13 @@ export function pickTrending(
       row.normal24h + row.promoted24h >= 5
     );
   });
-  const heroId = eligible[0]?.storyId ?? null;
+  const heroId =
+    snapshot.hero === undefined
+      ? (eligible[0]?.storyId ?? null)
+      : snapshot.hero &&
+          pictured.some((row) => row.storyId === snapshot.hero!.storyId && heroEligible(row, now))
+        ? snapshot.hero.storyId
+        : null;
   if (!heroId) return empty;
 
   const sideIds = eligible

@@ -47,6 +47,8 @@ const globalLimiter = new FixedWindowRateLimiter({ windowMs: 60_000, maxRequests
 
 /** Kliens-IP a Vercel/proxy fejlécekből — hiányukban közös "unknown" vödör. */
 export function clientKeyFromHeaders(headers: Headers): string {
+  const cloudflareIp = headers.get("cf-connecting-ip");
+  if (cloudflareIp) return cloudflareIp;
   const forwardedFor = headers.get("x-forwarded-for");
   if (forwardedFor) {
     return forwardedFor.split(",")[0]?.trim() ?? "unknown";
