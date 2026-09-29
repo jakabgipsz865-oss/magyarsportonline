@@ -44,19 +44,21 @@ export async function listRecentPublicStories(
 }
 
 export function renderNewsSitemap(stories: SitemapStory[], siteUrl: string): string {
-  const urls = stories.map((story) => [
-    "  <url>",
-    `    <loc>${escapeXml(`${siteUrl}/hir/${story.slug}`)}</loc>`,
-    "    <news:news>",
-    "      <news:publication>",
-    "        <news:name>MSO24</news:name>",
-    "        <news:language>hu</news:language>",
-    "      </news:publication>",
-    `      <news:publication_date>${story.publishedAt.toISOString()}</news:publication_date>`,
-    `      <news:title>${escapeXml(story.titleHu)}</news:title>`,
-    "    </news:news>",
-    "  </url>",
-  ].join("\n"));
+  const urls = stories.map((story) =>
+    [
+      "  <url>",
+      `    <loc>${escapeXml(`${siteUrl}/hir/${story.slug}`)}</loc>`,
+      "    <news:news>",
+      "      <news:publication>",
+      "        <news:name>MSO24</news:name>",
+      "        <news:language>hu</news:language>",
+      "      </news:publication>",
+      `      <news:publication_date>${story.publishedAt.toISOString()}</news:publication_date>`,
+      `      <news:title>${escapeXml(story.titleHu)}</news:title>`,
+      "    </news:news>",
+      "  </url>",
+    ].join("\n"),
+  );
 
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',

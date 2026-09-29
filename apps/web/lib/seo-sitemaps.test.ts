@@ -31,7 +31,9 @@ describe("public SEO sitemaps", () => {
     expect(rows).toHaveLength(1251);
     expect(new Set(rows.map((row) => row.slug)).size).toBe(1251);
     expect(rows.at(-1)?.slug).toBe("story-1250");
-    expect(reader.requests.map((request) => request.offset)).toEqual([0, 250, 500, 750, 1000, 1250]);
+    expect(reader.requests.map((request) => request.offset)).toEqual([
+      0, 250, 500, 750, 1000, 1250,
+    ]);
   });
 
   it("includes exactly the previous 48 hours, excludes future rows, and stops at 1000 news items", async () => {
@@ -68,7 +70,9 @@ describe("public SEO sitemaps", () => {
     expect(xml).toContain("<loc>https://mso24.hu/hir/a&amp;b</loc>");
     expect(xml).toContain("<news:name>MSO24</news:name>");
     expect(xml).toContain("<news:language>hu</news:language>");
-    expect(xml).toContain("<news:publication_date>2026-09-29T12:00:00.000Z</news:publication_date>");
+    expect(xml).toContain(
+      "<news:publication_date>2026-09-29T12:00:00.000Z</news:publication_date>",
+    );
     expect(xml).toContain("<news:title>A &amp; B &lt;futball&gt; &quot;hír&quot;</news:title>");
   });
 });
