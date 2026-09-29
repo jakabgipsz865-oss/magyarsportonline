@@ -235,6 +235,8 @@ describe("one-call Hungarian writer", () => {
   ])("checks numeric meaning: %s => %s", (sourceContent, body_hu, rejected) => {
     const flags = assessTabloidQuality({
       sourceContent,
+      // The stored source language determines grouping; this legacy example uses DE punctuation.
+      ...(sourceContent.includes("500.000 Euro") ? { sourceLanguage: "de" } : {}),
       output: { title_hu: "Sporthír", lead_hu: "Részletek.", body_hu },
     });
     expect(flags.some((flag) => flag.code === "number_integrity")).toBe(rejected);

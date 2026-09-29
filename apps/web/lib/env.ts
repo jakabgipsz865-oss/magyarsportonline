@@ -58,6 +58,10 @@ export const env = createEnv({
     // Mock response is permitted only in a D1-only workers.dev staging runtime.
     D1_TEST_WRITER_OUTPUT: z.string().optional(),
     D1_TEST_SOURCE_ORIGIN: z.string().url().optional(),
+    DRAFT_RECOVERY_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
 
     GEMINI_API_KEY: z.string().min(1).optional(),
     GEMINI_MODEL: z.string().min(1).default("gemini-3.5-flash-lite"),

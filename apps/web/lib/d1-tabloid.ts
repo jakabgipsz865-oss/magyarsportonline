@@ -497,6 +497,7 @@ export async function publishD1Tabloid(
           | undefined
       )?.languageWarnings ?? [];
     const initial = tabloid.assessTabloidQuality({
+      sourceLanguage: raw.language,
       sourceContent: `${raw.title_original}\n${raw.body_original}`,
       output: freshlyWritten ?? {
         title_hu: version.title_hu,
@@ -523,6 +524,7 @@ export async function publishD1Tabloid(
         });
         output = repaired;
         const remaining = tabloid.assessTabloidQuality({
+          sourceLanguage: raw.language,
           sourceContent: `${raw.title_original}\n${raw.body_original}`,
           output: repaired,
           forbiddenRules: knowledge,

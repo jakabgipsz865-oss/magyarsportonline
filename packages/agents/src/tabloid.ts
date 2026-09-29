@@ -171,6 +171,7 @@ function hasRepetition(lead: string, body: string): boolean {
 
 export function assessTabloidQuality(input: {
   sourceContent: string;
+  sourceLanguage?: string;
   output: Pick<TabloidOutput, "title_hu" | "lead_hu" | "body_hu"> & {
     language_warnings?: string[];
   };
@@ -209,6 +210,7 @@ export function assessTabloidQuality(input: {
   const foreignNumbers = unverifiedNumericClaims(
     input.sourceContent,
     `${input.output.title_hu} ${input.output.lead_hu} ${input.output.body_hu}`,
+    input.sourceLanguage ? { sourceLanguage: input.sourceLanguage } : {},
   );
   if (foreignNumbers.length)
     flags.push({
