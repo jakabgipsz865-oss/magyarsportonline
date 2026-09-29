@@ -11,6 +11,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/admin/", "/api/", "/internal/"],
       },
     ],
-    sitemap: `${env.SITE_URL}/sitemap.xml`,
+    sitemap: [`${env.SITE_URL}/sitemap.xml`, `${env.SITE_URL}/news-sitemap.xml`],
   };
 }
