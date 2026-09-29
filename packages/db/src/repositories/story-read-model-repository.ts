@@ -48,6 +48,14 @@ export class StoryReadModelRepository {
       .offset(params.offset);
   }
 
+  async countPublished(): Promise<number> {
+    const [result] = await this.db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(storyReadModel)
+      .where(publicGeneration);
+    return result?.total ?? 0;
+  }
+
   /**
    * Every row here is, by construction, published (only ever upserted by
    * the read-model-projector on `story/published`) and every public surface

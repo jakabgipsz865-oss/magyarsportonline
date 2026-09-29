@@ -1,24 +1,36 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StoryRiver } from "../../../components/story-river";
 import { SiteFooter } from "../../../components/site-footer";
+import {
+  ARCHIVE_PAGE_SIZE,
+  archivePageUrl,
+  parseArchivePage,
+  visibleArchivePages,
+} from "../../../lib/archive-pagination";
 import { createPublicRepositories } from "../../../lib/db";
 import { toStorySummaryView } from "../../../lib/story-view";
 
 export const dynamic = "force-dynamic";
 
-const CATEGORY_STORY_LIMIT = 40;
-
 interface PageProps {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ oldal?: string | string[] }>;
 }
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const { slug } = await params;
+  const page = parseArchivePage((await searchParams).oldal);
   const { categoryRepository } = createPublicRepositories();
   const category = await categoryRepository.getBySlug(slug);
-  return category ? { title: category.nameHu } : {};
+  return category && page
+    ? {
+        title: page === 1 ? category.nameHu : `${category.nameHu} – ${page}. oldal`,
+        alternates: { canonical: archivePageUrl(slug, page) },
+      }
+    : {};
 }
 
 /**
@@ -29,19 +41,29 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
  * (ami ténylegesen helyes), más kategória-slugra pedig 404-et ad, nem üres
  * listát vagy kitalált szűrést.
  */
-export default async function CategoryPage({ params }: PageProps): Promise<ReactNode> {
+export default async function CategoryPage({
+  params,
+  searchParams,
+}: PageProps): Promise<ReactNode> {
   const { slug } = await params;
+  const page = parseArchivePage((await searchParams).oldal);
+  if (page === null) notFound();
   const { categoryRepository, storyReadModelRepository } = createPublicRepositories();
   const category = await categoryRepository.getBySlug(slug);
   if (!category) {
     notFound();
   }
 
+  const total = await storyReadModelRepository.countPublished();
+  const pageCount = Math.max(1, Math.ceil(total / ARCHIVE_PAGE_SIZE));
+  if (page > pageCount) notFound();
+
   const rows = await storyReadModelRepository.listPublished({
-    limit: CATEGORY_STORY_LIMIT,
-    offset: 0,
+    limit: ARCHIVE_PAGE_SIZE,
+    offset: (page - 1) * ARCHIVE_PAGE_SIZE,
   });
   const stories = rows.map(toStorySummaryView);
+  const pageNumbers = visibleArchivePages(page, pageCount);
 
   return (
     <main className="public-surface">
@@ -51,7 +73,46 @@ export default async function CategoryPage({ params }: PageProps): Promise<React
         </div>
         <h1>{category.nameHu}</h1>
       </div>
+      <p className="archive-summary">
+        {total} publikált hír · {page}. oldal / {pageCount}
+      </p>
       <StoryRiver stories={stories} />
+      {pageCount > 1 ? (
+        <nav className="archive-pagination" aria-label="Hírarchívum lapozása">
+          {page > 1 ? (
+            <Link href={archivePageUrl(slug, page - 1)} rel="prev">
+              ← Újabb hírek
+            </Link>
+          ) : (
+            <span />
+          )}
+          <div className="archive-pagination__pages">
+            {pageNumbers.map((number, index) => (
+              <span key={number}>
+                {index > 0 && number > pageNumbers[index - 1]! + 1 ? (
+                  <span className="archive-pagination__gap" aria-hidden="true">
+                    …
+                  </span>
+                ) : null}
+                <Link
+                  href={archivePageUrl(slug, number)}
+                  aria-label={`${number}. oldal`}
+                  aria-current={number === page ? "page" : undefined}
+                >
+                  {number}
+                </Link>
+              </span>
+            ))}
+          </div>
+          {page < pageCount ? (
+            <Link href={archivePageUrl(slug, page + 1)} rel="next">
+              Régebbi hírek →
+            </Link>
+          ) : (
+            <span />
+          )}
+        </nav>
+      ) : null}
       <SiteFooter />
     </main>
   );

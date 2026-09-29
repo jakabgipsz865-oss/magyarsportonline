@@ -16,12 +16,14 @@ function capture() {
 }
 
 describe("public clean-slate queries", () => {
-  it.each(["slug", "list"])(
+  it.each(["slug", "list", "count"])(
     "restricts %s to a current v2 projection after the cutoff",
     async (kind) => {
       const { repo, queries } = capture();
       if (kind === "slug") expect(await repo.getBySlug("legacy-url")).toBeNull();
-      else expect(await repo.listPublished({ limit: 10, offset: 0 })).toEqual([]);
+      else if (kind === "list")
+        expect(await repo.listPublished({ limit: 10, offset: 0 })).toEqual([]);
+      else expect(await repo.countPublished()).toBe(0);
       expect(queries).toHaveLength(1);
       const query = queries[0]!;
       expect(query.sql).toContain('"version_history_summary" @>');
@@ -30,7 +32,8 @@ describe("public clean-slate queries", () => {
       expect(query.params).toContain("2026-09-10T20:03:10.000Z");
       expect(query.sql).not.toMatch(/\b(insert|update|delete|join)\b/i);
       if (kind === "slug") expect(query.params).toContain("legacy-url");
-      else expect(query.sql.indexOf("where")).toBeLessThan(query.sql.indexOf("limit"));
+      else if (kind === "list")
+        expect(query.sql.indexOf("where")).toBeLessThan(query.sql.indexOf("limit"));
     },
   );
 });
