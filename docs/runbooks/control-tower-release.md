@@ -315,3 +315,32 @@ The live Preview stale-snapshot probe returned HTTP 200 with the chronological
 Production scheduler config points at https://mso24.hu, but production secrets and
 new endpoint success must still be checked after the separately authorized release.
 Preview has no second cron system; the wall-clock run was an integration harness.
+
+## Public privacy notice cleanup (2026-09-30)
+
+The public notice describes processing purposes, data categories, consent and rights,
+90-day necessary preference storage, 32-day raw retention and lifetime anonymous
+aggregates. It is not an implementation specification. No runtime behavior changes.
+Physical deletion can be delayed by an outage; the notice discloses that limitation
+in ordinary language rather than promising an absolute physical deadline.
+
+Implementation details remain internal:
+
+- Session storage: `mso:audience-session` ephemeral UUID; `mso:qr:<storyId>`
+  event UUID/source/pending-or-sent; `mso:next-read` path/source/time, 15-minute attribution.
+- Preference cookie: `mso_analytics_consent`, fixed `v1_allow` / `v1_deny`, 90 days,
+  Path=/, SameSite=Lax, Secure on HTTPS. No analytics identifier in this cookie.
+- D1 raw fields: event_id, session_id, event_type, page, story_id, source, placement,
+  parent_event_id, occurred_at. Strict public-page/body validation prevents extra fields.
+- Source enum: direct/internal/social/search/rss/referral/unknown. Placement enum:
+  latest/trending_hero/trending_side/top5/internal/direct/social/search/rss.
+- Public API limiter: 120 requests/60 seconds/isolate, transient proxy-IP key or unknown;
+  no IP persisted in analytics. Raw sweep: 32-day cutoff, up to 5,000 rows per existing
+  five-minute refresh; short QR ledger48h/buckets25h. Daily/Story/source rollups never
+  expire with raw rows. Monitor expired backlog/heartbeat to detect delayed deletion.
+- Same-origin CSP blocks the legacy auto-injected Cloudflare browser analytics beacon.
+  Cloudflare account settings are not modified by a notice cleanup.
+
+The exact QR algorithm, cookie attributes and IDs are retained here and in code,
+not in the visitor-facing notice. Cookie implementation names are not publicly
+retained as a legal requirement; purpose/provider/duration/choice are disclosed.
