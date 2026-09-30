@@ -6,6 +6,9 @@ import { D1PipelineJobRepository } from "@magyarsportonline/db/d1";
 import { tabloid, languageQa } from "@magyarsportonline/agents";
 import { TowerShell, Metrics } from "./tower-shell";
 import { runtimeEnvironment } from "../../../lib/runtime-environment";
+import { currentMonthExternalSpendUsd } from "@magyarsportonline/llm";
+import { loadWriterHealth } from "../../../lib/writer-health";
+import { WriterHealthPanel } from "./writer-health";
 export async function TowerSystem() {
   const db = d1Binding();
   if (!db || !env.D1_PIPELINE_START_AT)
@@ -14,12 +17,14 @@ export async function TowerSystem() {
         <p>Nincs aktív D1 pipeline-kötés.</p>
       </TowerShell>
     );
-  const [data, queue] = await Promise.all([
+  const [data, queue, health] = await Promise.all([
     loadControlTower(db),
     new D1PipelineJobRepository(db).getStatusCounts(new Date(), env.D1_PIPELINE_START_AT),
+    loadWriterHealth(db, env.D1_PIPELINE_START_AT),
   ]);
   return (
     <TowerShell path="/admin/system" title="Cloudflare · tényleges runtime">
+      <WriterHealthPanel health={health} />
       <Metrics
         items={[
           { label: "Környezet", value: runtimeEnvironment() },
@@ -27,6 +32,16 @@ export async function TowerSystem() {
             label: "Primary Writer",
             value: env.GEMINI_MODEL,
             note: `${env.LLM_PROVIDER === "none" ? "Teszt / provider OFF" : "Gemini · aktív"} · napi cap: ${env.GEMINI_DAILY_REQUEST_CAP}`,
+          },
+          {
+            label: "Gemini havi alkalmazásoldali hard cap",
+            value: `$${env.GEMINI_MONTHLY_BUDGET_USD.toFixed(2)}`,
+            note: `UTC hónap · igazolt ledgeren kívüli költés: $${currentMonthExternalSpendUsd({ externalSpentUsd: env.GEMINI_MONTHLY_EXTERNAL_SPEND_USD ?? 0, externalSpentMonth: env.GEMINI_MONTHLY_EXTERNAL_SPEND_MONTH }).toFixed(2)} · Language QA külön napi keret`,
+          },
+          {
+            label: "AI-költség · aktuális UTC hónap",
+            value: `$${data.usageMonth.reduce((sum, row) => sum + row.cost, 0).toFixed(6)}`,
+            note: "D1 llm_usage · tokenalapú becslés · nem Cloudflare credit-egyenleg",
           },
           {
             label: "Targeted repair",

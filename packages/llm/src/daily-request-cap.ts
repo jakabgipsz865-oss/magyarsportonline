@@ -30,6 +30,25 @@ export interface MonthlyReservationBudget {
   reserveUsd: number;
 }
 
+export interface MonthlyBudgetConfig {
+  capUsd: number;
+  externalSpentUsd: number;
+  externalSpentMonth?: string | undefined;
+}
+
+/** Verified non-ledger spend never carries into another UTC month. */
+export function currentMonthExternalSpendUsd(
+  budget: Pick<MonthlyBudgetConfig, "externalSpentUsd" | "externalSpentMonth">,
+  now = new Date(),
+): number {
+  if (!Number.isFinite(budget.externalSpentUsd) || budget.externalSpentUsd < 0)
+    throw new Error("Invalid Gemini external monthly spend");
+  if (budget.externalSpentUsd === 0) return 0;
+  if (!budget.externalSpentMonth || !/^\d{4}-(0[1-9]|1[0-2])$/.test(budget.externalSpentMonth))
+    throw new Error("Positive Gemini external spend requires its verified UTC month (YYYY-MM)");
+  return budget.externalSpentMonth === now.toISOString().slice(0, 7) ? budget.externalSpentUsd : 0;
+}
+
 export interface DailyRequestUsageReader {
   reserveRequest(
     provider: string,
@@ -40,6 +59,7 @@ export interface DailyRequestUsageReader {
     budget?: MonthlyReservationBudget,
   ): Promise<string | null>;
   sumCostUsdSince?(since: Date): Promise<number>;
+  sumGenerationCostUsdSince?(since: Date): Promise<number>;
   finalizeRequest(
     reservationId: string,
     inputTokens: number,
@@ -120,7 +140,7 @@ export class DailyRequestCappedLlmClient implements LlmClient {
       inputTokens: number,
       outputTokens: number,
     ) => number = () => 0,
-    private readonly monthlyBudget?: { capUsd: number; externalSpentUsd: number },
+    private readonly monthlyBudget?: MonthlyBudgetConfig,
   ) {}
 
   get modelLabel(): string | undefined {
@@ -153,11 +173,12 @@ export class DailyRequestCappedLlmClient implements LlmClient {
 
   private async reserve(request: TextCompletionRequest | JsonCompletionRequest): Promise<string> {
     const model = this.inner.modelLabel ?? "unknown";
+    const now = new Date();
     const budget = this.monthlyBudget
       ? {
-          since: new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)),
+          since: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
           capUsd: this.monthlyBudget.capUsd,
-          externalSpentUsd: this.monthlyBudget.externalSpentUsd,
+          externalSpentUsd: currentMonthExternalSpendUsd(this.monthlyBudget, now),
           // UTF-8 byte length is a conservative upper bound on input tokens.
           // Reserve twice the configured output allowance for thinking/metadata.
           reserveUsd: Math.max(
@@ -175,7 +196,7 @@ export class DailyRequestCappedLlmClient implements LlmClient {
     const reservationId = await this.usage.reserveRequest(
       this.provider,
       model,
-      geminiQuotaDayStart(),
+      geminiQuotaDayStart(now),
       this.cap,
       request.usageContext,
       budget,
@@ -183,7 +204,9 @@ export class DailyRequestCappedLlmClient implements LlmClient {
     if (!reservationId) {
       if (budget) {
         if (!this.usage.sumCostUsdSince) throw new Error("Monthly AI usage reader is unavailable");
-        const spent = await this.usage.sumCostUsdSince(budget.since);
+        const spent = this.usage.sumGenerationCostUsdSince
+          ? await this.usage.sumGenerationCostUsdSince(budget.since)
+          : await this.usage.sumCostUsdSince(budget.since);
         if (spent + budget.externalSpentUsd + budget.reserveUsd > budget.capUsd)
           throw new MonthlyLlmBudgetError(budget.capUsd);
       }

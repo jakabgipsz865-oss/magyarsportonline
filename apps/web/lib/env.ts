@@ -80,10 +80,16 @@ export const env = createEnv({
       .default("false")
       .transform((value) => value === "true"),
     GEMINI_DAILY_REQUEST_CAP: z.coerce.number().int().positive().max(450).default(450),
-    GEMINI_MONTHLY_BUDGET_USD: z.coerce.number().positive().max(10).default(9.5),
+    GEMINI_MONTHLY_BUDGET_USD: z.coerce.number().positive().max(50).default(30),
     // Spend outside the imported D1 ledger in this UTC month. Required for
     // D1 paid AI so migration never silently resets the monthly budget.
     GEMINI_MONTHLY_EXTERNAL_SPEND_USD: z.coerce.number().min(0).optional(),
+    // A positive verified adjustment belongs to exactly one UTC billing month.
+    // The request guard expires it at month rollover, including cached clients.
+    GEMINI_MONTHLY_EXTERNAL_SPEND_MONTH: z
+      .string()
+      .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+      .optional(),
     GEMINI_BASE_URL: z.string().url().optional(),
     CLOUDFLARE_AI_GATEWAY_ID: z.string().min(1).default("magyarsportonline"),
     CLOUDFLARE_AI_GATEWAY_TOKEN: z.string().min(1).optional(),

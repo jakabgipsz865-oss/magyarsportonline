@@ -434,6 +434,19 @@ export async function publishD1Tabloid(
     try {
       version = await latestVersion(db, storyId);
       if (!version) {
+        // A successful paid call whose response could not be saved must not be
+        // regenerated on retry. Retain the Story/job for diagnostics instead.
+        const paid = await db
+          .prepare(
+            `SELECT id FROM llm_usage WHERE story_id=?
+          AND provider='gemini' AND role='primary' AND status='success' LIMIT 1`,
+          )
+          .bind(storyId)
+          .first<{ id: string }>();
+        if (paid)
+          throw new Error(
+            "[writer_paid_result_missing] Successful Writer response missing from saved draft; automatic regeneration blocked",
+          );
         const input = writerInput(raw, source, knowledge, claim, storyId);
         // A provider/schema/network failure is retried through the durable
         // job with the inexpensive primary model. It must never invoke the

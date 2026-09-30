@@ -3,6 +3,44 @@
 Production is unchanged. Deploy and activation each require the owner's explicit instruction.
 Primary Writer stays `gemini-3.5-flash-lite`. Development and Preview use no paid AI.
 
+## AI BILLING PRE-FLIGHT — manual gate before any production release
+
+- Cloudflare AI Gateway Unified Billing is active for Gemini.
+- Sufficient Cloudflare AI credit / functioning equivalent billing is available.
+- Owner manually verified Auto Top-Up state and a valid payment method in Cloudflare.
+- Gemini Gateway smoke succeeds: one normal minimal request **at the authorized release**,
+  logged in the existing ledger and counted against the cap. No paid development smoke.
+- MSO application-side monthly hard cap is $30; daily request cap remains 450.
+
+The $30 MSO cap is a separate safety stop; it does not prove Cloudflare credit exists.
+No credit-balance API is connected. No code changes billing, Auto Top-Up, payment method
+or performs automatic top-ups. If this manual pre-flight fails, stop the release.
+Provider/billing/quota refusals preserve Story/source and defer the durable job, with
+a global cooldown and bounded backoff (5/30 minutes up to 6 hours). Daily quota waits
+until the provider reset; monthly app budget waits until the next UTC month.
+The admin Overview/System show OK/WARNING/BLOCKED from actual call/defer evidence,
+safe categories and retry times, never a credit balance or raw provider response.
+Persisted successful drafts resume validation/publication without another Writer call.
+If a successful paid call is logged but saving its draft failed, automatic regeneration
+is blocked (`writer_paid_result_missing`); retain the source/Story/job for diagnostics.
+
+## Primary Writer monthly budget
+
+Release configuration: `GEMINI_MONTHLY_BUDGET_USD=30` (env validation accepts up to
+$50), daily request cap unchanged at 450. This replaces the former test budget;
+actual cost remains calculated from the existing ledger, never hardcoded.
+Language QA retains its separate $0.50/day budget and remains OFF, as does recovery.
+
+`GEMINI_MONTHLY_EXTERNAL_SPEND_USD` means only verified, already-paid spend outside
+the D1 ledger for a specific UTC month. Release config is `0`; with no verified
+external October spend it must remain zero. A positive amount requires
+`GEMINI_MONTHLY_EXTERNAL_SPEND_MONTH=YYYY-MM` matching its billing evidence.
+The request guard evaluates the month on every reservation (even for cached clients):
+an adjustment from a different month contributes zero, never a carried-forward amount.
+Missing/invalid month on positive spend fails closed before any provider request.
+At each month/release, verify billing evidence and set zero or the exact verified
+amount/month; never duplicate costs already in `llm_usage`.
+
 ## Real numeric regression and saved-draft recovery
 
 The authenticated cohort is the original 2026-09-28 20:20:00.573–2026-09-29
@@ -135,6 +173,9 @@ That limiter is a minimal abuse brake, not a global/distributed bot protection s
    existing production secrets and bindings. Primary `gemini-3.5-flash-lite` unchanged;
    `LANGUAGE_QA_ENABLED=false`, `LANGUAGE_QA_MOCK_MODE=false`,
    `DRAFT_RECOVERY_ENABLED=false`. Do not deploy a Preview config to production.
+   Verify Gemini monthly cap is $30, daily cap 450, and external spend is zero unless
+   an exact, month-scoped, non-ledger payment is verified. `/admin/system` must show
+   the runtime monthly hard cap; do not copy September's adjustment into October.
 3. **Scheduler:** deploy `apps/ingest-scheduler/wrangler.jsonc`; APP_ORIGIN must be
    `https://mso24.hu`, minute cron unchanged. Confirm CRON_SECRET secret exists and
    authenticated calls succeed against the web Worker; never print its value.

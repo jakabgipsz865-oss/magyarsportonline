@@ -73,6 +73,18 @@ export class D1LlmUsageRepository {
     return Number(row?.total ?? 0);
   }
 
+  /** Language QA has its own daily budget; it does not consume the Gemini monthly cap. */
+  async sumGenerationCostUsdSince(since: Date): Promise<number> {
+    const row = await this.db
+      .prepare(
+        `SELECT coalesce(sum(CAST(cost_usd AS REAL)),0) total
+      FROM llm_usage WHERE occurred_at>=? AND role<>'language_qa'`,
+      )
+      .bind(d1Timestamp(since))
+      .first<{ total: number }>();
+    return Number(row?.total ?? 0);
+  }
+
   /** One serialized SQLite statement makes the cap check and reservation atomic. */
   async reserveRequest(
     provider: string,
@@ -105,7 +117,7 @@ export class D1LlmUsageRepository {
         WHERE provider = ? AND occurred_at >= ?) < ?
         AND (? IS NULL OR
           (SELECT coalesce(sum(CAST(cost_usd AS REAL)),0) FROM llm_usage
-            WHERE occurred_at>=?) + ? + ? <= ?)
+            WHERE occurred_at>=? AND role<>'language_qa') + ? + ? <= ?)
     `,
       )
       .bind(

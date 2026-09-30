@@ -39,7 +39,7 @@ export function getFactLlmClient(): LlmClient {
     }
     if (d1Binding() && env.GEMINI_MONTHLY_EXTERNAL_SPEND_USD === undefined)
       throw new Error(
-        "D1 paid AI requires GEMINI_MONTHLY_EXTERNAL_SPEND_USD from verified pre-cutover billing",
+        "D1 paid AI requires verified current-UTC-month GEMINI_MONTHLY_EXTERNAL_SPEND_USD (0 if none)",
       );
     const factClient = new ProviderFallbackLlmClient({
       inner: new CloudflareWorkersAiLlmClient({
@@ -63,6 +63,7 @@ export function getFactLlmClient(): LlmClient {
       {
         capUsd: env.GEMINI_MONTHLY_BUDGET_USD,
         externalSpentUsd: env.GEMINI_MONTHLY_EXTERNAL_SPEND_USD ?? 0,
+        externalSpentMonth: env.GEMINI_MONTHLY_EXTERNAL_SPEND_MONTH,
       },
     );
   } else {
@@ -76,7 +77,7 @@ function createGeminiWriter(model: string): LlmClient {
   if (env.LLM_PROVIDER === "none") return new NoLlmClient();
   if (d1Binding() && env.GEMINI_MONTHLY_EXTERNAL_SPEND_USD === undefined)
     throw new Error(
-      "D1 paid AI requires GEMINI_MONTHLY_EXTERNAL_SPEND_USD from verified pre-cutover billing",
+      "D1 paid AI requires verified current-UTC-month GEMINI_MONTHLY_EXTERNAL_SPEND_USD (0 if none)",
     );
   const geminiApiKey = env.GEMINI_BILLING_MODE === "byok" ? env.GEMINI_API_KEY : undefined;
   if (
@@ -127,6 +128,7 @@ function createGeminiWriter(model: string): LlmClient {
     {
       capUsd: env.GEMINI_MONTHLY_BUDGET_USD,
       externalSpentUsd: env.GEMINI_MONTHLY_EXTERNAL_SPEND_USD ?? 0,
+      externalSpentMonth: env.GEMINI_MONTHLY_EXTERNAL_SPEND_MONTH,
     },
   );
   return cappedGemini;

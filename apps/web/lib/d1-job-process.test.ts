@@ -14,7 +14,8 @@ import {
   D1StoryReadModelRepository,
 } from "@magyarsportonline/db/d1";
 import type { LlmClient } from "@magyarsportonline/llm";
-import { DailyRequestCappedLlmClient } from "@magyarsportonline/llm";
+import { DailyRequestCappedLlmClient, GeminiApiError } from "@magyarsportonline/llm";
+import { loadWriterHealth } from "./writer-health";
 import { tabloid } from "@magyarsportonline/agents";
 import { processOneD1Job } from "./d1-job-process";
 
@@ -104,6 +105,178 @@ function writer() {
 }
 
 describe("D1 full article publication", () => {
+  it("never repeats a paid successful Writer call when saving its response failed", async () => {
+    const { db, d1 } = fixture();
+    try {
+      const now = new Date();
+      const rawId = crypto.randomUUID();
+      db.prepare(
+        `INSERT INTO raw_articles(id,source_id,source_url,title_original,body_original,language,content_origin,inline_images,extracted_entities,first_seen_at)
+        VALUES(?,?,?,?,?,'en','full_article','[]','{}',?)`,
+      ).run(
+        rawId,
+        SOURCE_ID,
+        "https://example.com/football-save-failure",
+        "Arsenal announces football signing",
+        "Arsenal announced a new football signing. The club said the player joined the team.",
+        now.toISOString(),
+      );
+      await new D1PipelineJobRepository(d1).enqueue({
+        id: crypto.randomUUID(),
+        correlation_id: crypto.randomUUID(),
+        trace_id: crypto.randomUUID(),
+        occurred_at: now.toISOString(),
+        version: 1,
+        type: "source/article.ingested",
+        payload: { raw_article_id: rawId, source_id: SOURCE_ID },
+      });
+      const mock = writer();
+      const batch = d1.batch!;
+      let interrupted = false;
+      d1.batch = async (statements) => {
+        if (!interrupted && mock.completeJson.mock.calls.length) {
+          interrupted = true;
+          throw new Error("fixture save interruption");
+        }
+        return batch(statements);
+      };
+      const capped = new DailyRequestCappedLlmClient(
+        mock.client,
+        "gemini",
+        450,
+        new D1LlmUsageRepository(d1),
+        () => false,
+        () => 0.001,
+        { capUsd: 30, externalSpentUsd: 0 },
+      );
+      const options = {
+        activationAt: new Date(now.getTime() - 60_000),
+        siteUrl: "https://mso24.hu",
+        forceReviewMode: false,
+        facebookEnabled: false,
+        facebookStartAt: now,
+      };
+      expect(await processOneD1Job(d1, options, capped, capped)).toMatchObject({ failed: 1 });
+      expect(db.prepare("SELECT status FROM llm_usage").get()).toEqual({ status: "success" });
+      db.prepare("UPDATE pipeline_jobs SET available_at=?").run(
+        new Date(now.getTime() - 1000).toISOString(),
+      );
+      expect(await processOneD1Job(d1, options, capped, capped)).toMatchObject({
+        failed: 1,
+        error: { message: expect.stringContaining("writer_paid_result_missing") },
+      });
+      expect(mock.completeJson).toHaveBeenCalledTimes(1);
+      expect(db.prepare("SELECT count(*) n FROM story_versions").get()).toEqual({ n: 0 });
+      expect(db.prepare("SELECT count(*) n FROM story_read_model").get()).toEqual({ n: 0 });
+    } finally {
+      db.close();
+    }
+  });
+  it("preserves billing-blocked Stories, pauses all jobs, backs off, and resumes once without regenerating saved drafts", async () => {
+    const { db, d1 } = fixture();
+    try {
+      const now = new Date();
+      const jobs = new D1PipelineJobRepository(d1);
+      for (const suffix of ["billing", "waiting"]) {
+        const rawId = crypto.randomUUID();
+        db.prepare(
+          `INSERT INTO raw_articles(id,source_id,source_url,title_original,body_original,language,content_origin,inline_images,extracted_entities,first_seen_at)
+          VALUES(?,?,?,?,?,'en','full_article','[]','{}',?)`,
+        ).run(
+          rawId,
+          SOURCE_ID,
+          `https://example.com/football-${suffix}`,
+          "Arsenal announces football signing",
+          "Arsenal announced a new football signing. The club said the player joined the team.",
+          now.toISOString(),
+        );
+        await jobs.enqueue({
+          id: crypto.randomUUID(),
+          correlation_id: crypto.randomUUID(),
+          trace_id: crypto.randomUUID(),
+          occurred_at: now.toISOString(),
+          version: 1,
+          type: "source/article.ingested",
+          payload: { raw_article_id: rawId, source_id: SOURCE_ID },
+        });
+      }
+      const good = writer();
+      const call = vi
+        .fn()
+        .mockRejectedValueOnce(
+          new GeminiApiError(402, "BILLING_UNAVAILABLE", "secret provider body"),
+        )
+        .mockRejectedValueOnce(
+          new GeminiApiError(402, "BILLING_UNAVAILABLE", "secret provider body"),
+        )
+        .mockImplementation(good.completeJson);
+      const capped = new DailyRequestCappedLlmClient(
+        { ...good.client, completeJson: call },
+        "gemini",
+        450,
+        new D1LlmUsageRepository(d1),
+        () => false,
+        () => 0.001,
+        { capUsd: 30, externalSpentUsd: 0 },
+      );
+      const options = {
+        activationAt: new Date(now.getTime() - 60_000),
+        siteUrl: "https://mso24.hu",
+        forceReviewMode: false,
+        facebookEnabled: false,
+        facebookStartAt: now,
+      };
+      const blocked = await processOneD1Job(d1, options, capped, capped);
+      expect(blocked).toMatchObject({ processed: 1, providerDeferred: true });
+      expect(new Date(blocked.retryAt!).getTime() - now.getTime()).toBeGreaterThanOrEqual(
+        30 * 60_000,
+      );
+      expect(await loadWriterHealth(d1, options.activationAt)).toMatchObject({
+        status: "BLOCKED",
+        reason: "billing_unavailable",
+      });
+      expect(db.prepare("SELECT count(*) n FROM stories").get()).toEqual({ n: 1 });
+      expect(db.prepare("SELECT count(*) n FROM story_versions").get()).toEqual({ n: 0 });
+      expect(db.prepare("SELECT count(*) n FROM story_read_model").get()).toEqual({ n: 0 });
+      expect(db.prepare("SELECT count(*) n FROM social_posts").get()).toEqual({ n: 0 });
+      expect((await processOneD1Job(d1, options, capped, capped)).processed).toBe(0);
+      expect(call).toHaveBeenCalledTimes(1);
+      expect(
+        JSON.stringify(db.prepare("SELECT last_error FROM pipeline_jobs").all()),
+      ).not.toContain("secret");
+      db.prepare(
+        "UPDATE pipeline_jobs SET available_at=? WHERE last_error LIKE '[provider_ai_unavailable:%'",
+      ).run(new Date(now.getTime() - 1000).toISOString());
+      const again = await processOneD1Job(d1, options, capped, capped);
+      expect(again).toMatchObject({ providerDeferred: true });
+      expect(new Date(again.retryAt!).getTime() - now.getTime()).toBeGreaterThanOrEqual(
+        60 * 60_000,
+      );
+      expect(db.prepare("SELECT max(attempts) n FROM pipeline_jobs").get()).toEqual({ n: 0 });
+      db.prepare("UPDATE pipeline_jobs SET available_at=?").run(
+        new Date(now.getTime() - 1000).toISOString(),
+      );
+      expect((await processOneD1Job(d1, options, capped, capped)).outcome).toMatchObject({
+        status: "published",
+      });
+      expect(call).toHaveBeenCalledTimes(3);
+      const savedEvent = JSON.parse(
+        (
+          db.prepare("SELECT event FROM pipeline_jobs WHERE status='completed' LIMIT 1").get() as {
+            event: string;
+          }
+        ).event,
+      );
+      await jobs.enqueue(savedEvent);
+      // Either pending Story may be claimed first; only the ungenerated one can call Writer.
+      await processOneD1Job(d1, options, capped, capped);
+      await processOneD1Job(d1, options, capped, capped);
+      expect(call).toHaveBeenCalledTimes(4);
+      expect(db.prepare("SELECT count(*) n FROM story_versions").get()).toEqual({ n: 2 });
+    } finally {
+      db.close();
+    }
+  });
   it("receives, queues, writes, validates, publishes, projects, and prepares one social intent", async () => {
     const { db, d1 } = fixture();
     try {

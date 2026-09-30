@@ -13,3 +13,5 @@ CREATE INDEX IF NOT EXISTS story_versions_created_idx ON story_versions(created_
 CREATE INDEX IF NOT EXISTS stories_status_first_seen_idx ON stories(status,first_seen_at);
 CREATE INDEX IF NOT EXISTS story_sources_story_idx ON story_sources(story_id,excluded);
 CREATE INDEX IF NOT EXISTS llm_usage_created_role_idx ON llm_usage(occurred_at,role);
+-- Indexed protection against regenerating an already paid Primary Writer response.
+CREATE INDEX IF NOT EXISTS llm_usage_story_provider_role_status_idx ON llm_usage(story_id,provider,role,status);

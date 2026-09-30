@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   isDailyLlmQuotaError,
   isGeminiDailyQuotaError,
+  isGeminiAvailabilityError,
   MonthlyLlmBudgetError,
   type LlmClient,
   type LlmUsageContext,
@@ -359,6 +360,7 @@ export async function writeTabloid(
     if (
       isDailyLlmQuotaError(error) ||
       isGeminiDailyQuotaError(error) ||
+      isGeminiAvailabilityError(error) ||
       error instanceof MonthlyLlmBudgetError
     )
       throw error;

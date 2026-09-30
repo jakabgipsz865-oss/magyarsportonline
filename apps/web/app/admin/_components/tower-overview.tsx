@@ -3,6 +3,8 @@ import { env } from "../../../lib/env";
 import { loadControlTower, schedulerHealth } from "../../../lib/control-tower";
 import { readTrendingSnapshot } from "../../../lib/trending-store";
 import { TowerShell, Metrics } from "./tower-shell";
+import { loadWriterHealth } from "../../../lib/writer-health";
+import { WriterHealthPanel } from "./writer-health";
 export async function TowerOverview() {
   const db = d1Binding();
   if (!db)
@@ -11,12 +13,17 @@ export async function TowerOverview() {
         <p>Nincs jelenleg megbízható D1-adatforrás.</p>
       </TowerShell>
     );
-  const [data, snapshot] = await Promise.all([loadControlTower(db), readTrendingSnapshot(db)]);
+  const [data, snapshot, health] = await Promise.all([
+    loadControlTower(db),
+    readTrendingSnapshot(db),
+    loadWriterHealth(db, env.D1_PIPELINE_START_AT ?? new Date(0)),
+  ]);
   const q = (s: string) => data.qa.find((r) => r.status === s)?.count ?? 0;
   const total = (rows: typeof data.usage24h) => rows.reduce((s, r) => s + r.cost, 0);
   const fresh = snapshot && Date.now() - new Date(snapshot.refreshedAt).getTime() < 12 * 60_000;
   return (
     <TowerShell path="/admin" title="Mit csinál most a szerkesztőség?">
+      <WriterHealthPanel health={health} />
       <Metrics
         items={[
           {

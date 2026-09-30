@@ -154,8 +154,10 @@ export default async function AdminSystemPage(): Promise<ReactNode> {
           </div>
           <div className="admin-metric-card">
             <strong>Összesen</strong>
-            <span>${totalCost.toFixed(4)} / $10 külső plafon</span>
-            <span>App-oldali tartalék: ${env.GEMINI_MONTHLY_BUDGET_USD.toFixed(2)}</span>
+            <span>${totalCost.toFixed(4)} · havi ledger-költség</span>
+            <span>
+              Gemini havi alkalmazásoldali hard cap: ${env.GEMINI_MONTHLY_BUDGET_USD.toFixed(2)}
+            </span>
           </div>
         </div>
       </section>

@@ -357,6 +357,52 @@ describe("GeminiLlmClient", () => {
 });
 
 describe("describeGeminiError", () => {
+  it("recognizes HTTP billing failures and successful-HTTP error envelopes without exposing provider bodies", async () => {
+    for (const status of [402, 200]) {
+      const client = new GeminiLlmClient({
+        model: "gemini-3.5-flash-lite",
+        unifiedBilling: { accountId: "fixture", apiToken: "fixture-secret", gatewayId: "fixture" },
+        fetchImpl: async () =>
+          jsonResponse(
+            {
+              success: false,
+              errors: [{ code: 999, message: "Insufficient credits. secret-customer-details" }],
+            },
+            { status },
+          ),
+      });
+      try {
+        await client.completeText(textRequest);
+        throw new Error("Expected refusal");
+      } catch (error) {
+        expect(error).toBeInstanceOf(GeminiApiError);
+        expect(describeGeminiError(error)).toBe("billing_unavailable");
+        expect((error as Error).message).not.toContain("secret-customer-details");
+      }
+    }
+  });
+  it("retains explicit daily quota categorization after redacting the raw response", async () => {
+    const client = new GeminiLlmClient({
+      apiKey: "fixture",
+      fetchImpl: async () =>
+        jsonResponse(
+          {
+            error: {
+              status: "RESOURCE_EXHAUSTED",
+              message: "Requests per day quota exceeded: secret-account",
+            },
+          },
+          { status: 429 },
+        ),
+    });
+    try {
+      await client.completeText(textRequest);
+      throw new Error("Expected refusal");
+    } catch (error) {
+      expect(isGeminiDailyQuotaError(error)).toBe(true);
+      expect((error as Error).message).not.toContain("secret-account");
+    }
+  });
   it("classifies quota, forbidden, blocked, service and network errors", () => {
     expect(describeGeminiError(new GeminiApiError(429, "RESOURCE_EXHAUSTED", "x"))).toBe(
       "rate_limited",
