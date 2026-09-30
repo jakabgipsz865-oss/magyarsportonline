@@ -23,7 +23,8 @@ const queries = {
 };
 fs.mkdirSync(directory, { recursive: true });
 for (const [name, query] of Object.entries(queries)) {
-  const cli = require.resolve("wrangler/bin/wrangler.js");
+  const packagePath = require.resolve("wrangler/package.json");
+  const cli = path.join(path.dirname(packagePath), "bin/wrangler.js");
   const result = spawnSync(
     process.execPath,
     [cli, "d1", "execute", database, "--config", config, "--remote", "--json", "--command", query],
