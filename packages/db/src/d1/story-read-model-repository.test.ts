@@ -72,6 +72,31 @@ const row = {
 };
 
 describe("D1 public read model", () => {
+  it("a delayed projection cannot overwrite a newer or retracted live version", async () => {
+    const db = fixture();
+    try {
+      db.exec(
+        "CREATE TABLE stories(id TEXT,current_version_id TEXT,status TEXT); CREATE TABLE story_versions(id TEXT,title_hu TEXT,lead_hu TEXT,body_hu TEXT); INSERT INTO stories VALUES('story-1','v1','published'); INSERT INTO story_versions VALUES('v1','Friss hír','Bevezető','Törzs');",
+      );
+      const repo = new D1StoryReadModelRepository(localD1(db));
+      await repo.upsert(row, { versionId: "v1", bodyHu: "Törzs" });
+      db.exec("UPDATE stories SET current_version_id='v2'");
+      await repo.upsert(
+        { ...row, titleHu: "Stale overwrite" },
+        { versionId: "v1", bodyHu: "Törzs" },
+      );
+      expect((await repo.getBySlug(row.slug))?.titleHu).toBe(row.titleHu);
+      db.exec("UPDATE stories SET current_version_id='v1',status='retracted'");
+      await repo.upsert(
+        { ...row, titleHu: "Retracted overwrite" },
+        { versionId: "v1", bodyHu: "Törzs" },
+      );
+      expect((await repo.getBySlug(row.slug))?.titleHu).toBe(row.titleHu);
+    } finally {
+      db.close();
+    }
+  });
+
   it("preserves public filtering, JSON, timestamps, upsert and deletion", async () => {
     const db = fixture();
     try {

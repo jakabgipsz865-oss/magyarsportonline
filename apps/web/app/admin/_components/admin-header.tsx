@@ -1,12 +1,14 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { runtimeEnvironment } from "../../../lib/runtime-environment";
 
 const NAV_LINKS: Array<{ href: string; labelHu: string }> = [
   { href: "/admin", labelHu: "Áttekintés" },
-  { href: "/admin/review", labelHu: "Hírek" },
-  { href: "/admin/missed-merge-review", labelHu: "Ellenőrzés" },
-  { href: "/admin/knowledge", labelHu: "Szerkesztői tudás" },
+  { href: "/admin/quality", labelHu: "Minőség" },
+  { href: "/admin/popularity", labelHu: "Népszerűség" },
+  { href: "/admin/monetization", labelHu: "Monetizáció" },
   { href: "/admin/system", labelHu: "Rendszer" },
+  { href: "/admin/knowledge", labelHu: "Szerkesztői tudás" },
 ];
 
 /**
@@ -17,9 +19,13 @@ const NAV_LINKS: Array<{ href: string; labelHu: string }> = [
  * HttpOnly admin session cookie-t.
  */
 export function AdminHeader({ activePath }: { activePath: string }): ReactNode {
-  const vercelEnv = process.env["VERCEL_ENV"] ?? "development";
+  const runtimeEnv = runtimeEnvironment();
   const envLabelHu =
-    vercelEnv === "production" ? "Production" : vercelEnv === "preview" ? "Preview" : "Development";
+    runtimeEnv === "production"
+      ? "Production"
+      : runtimeEnv === "preview"
+        ? "Preview"
+        : "Development";
 
   return (
     <header className="admin-shell">
@@ -28,7 +34,7 @@ export function AdminHeader({ activePath }: { activePath: string }): ReactNode {
           <span className="admin-shell__mode">Admin</span>
           <span
             className="admin-shell__environment"
-            data-environment={vercelEnv}
+            data-environment={runtimeEnv}
             title="Melyik környezetben fut ez az admin felület"
           >
             {envLabelHu}

@@ -14,6 +14,7 @@ import {
 } from "@magyarsportonline/shared";
 import { buildFacebookPostText } from "./facebook-publication";
 import registry from "./tabloid-sources.json";
+import { enqueueLanguageQa } from "./language-qa-store";
 
 type Claim = { jobId: string; owner: string };
 interface RawRow {
@@ -81,13 +82,7 @@ const pendingFor = (languageWarnings: string[]) => [
     languageWarnings,
   },
 ];
-const repairable = new Set([
-  "foreign_language",
-  "forbidden_terminology",
-  "repetition",
-  "malformed_hungarian",
-  "writer_language_warning",
-]);
+const repairable = tabloid.REPAIRABLE_TABLOID_FLAGS;
 
 function parseIssues(value: string | null): Array<{ code?: string; repaired?: boolean }> {
   return value ? (JSON.parse(value) as Array<{ code?: string; repaired?: boolean }>) : [];
@@ -281,35 +276,38 @@ export async function projectD1Story(db: D1Client, storyId: string, versionId: s
       sourceUrl: row.source_url,
     })),
   );
-  await new D1StoryReadModelRepository(db).upsert({
-    storyId,
-    slug: story.slug,
-    titleHu: version.title_hu,
-    leadHu: version.lead_hu,
-    bodyHtml: readModelProjector.toBodyHtml(version.body_hu),
-    imageUrl: story.image_url,
-    inlineImages,
-    isAiGenerated: version.is_ai_generated !== 0,
-    metaDescription: version.meta_description,
-    structuredData: version.structured_data ? JSON.parse(version.structured_data) : null,
-    sourcesSummary,
-    tags: [],
-    category: null,
-    confidenceScore: story.confidence_score,
-    isDeveloping: story.is_developing !== 0,
-    publishedAt: new Date(story.published_at),
-    lastUpdatedAt: new Date(),
-    versionHistorySummary: versions.results
-      .filter((item) => item.is_published !== 0)
-      .map((item) => ({
-        version_number: item.version_number,
-        prompt_version: item.prompt_version,
-        is_current: item.id === version.id,
-        created_at: new Date(item.created_at).toISOString(),
-        change_summary: item.change_summary_hu,
-      })),
-    credibilitySummary: null,
-  });
+  await new D1StoryReadModelRepository(db).upsert(
+    {
+      storyId,
+      slug: story.slug,
+      titleHu: version.title_hu,
+      leadHu: version.lead_hu,
+      bodyHtml: readModelProjector.toBodyHtml(version.body_hu),
+      imageUrl: story.image_url,
+      inlineImages,
+      isAiGenerated: version.is_ai_generated !== 0,
+      metaDescription: version.meta_description,
+      structuredData: version.structured_data ? JSON.parse(version.structured_data) : null,
+      sourcesSummary,
+      tags: [],
+      category: null,
+      confidenceScore: story.confidence_score,
+      isDeveloping: story.is_developing !== 0,
+      publishedAt: new Date(story.published_at),
+      lastUpdatedAt: new Date(),
+      versionHistorySummary: versions.results
+        .filter((item) => item.is_published !== 0)
+        .map((item) => ({
+          version_number: item.version_number,
+          prompt_version: item.prompt_version,
+          is_current: item.id === version.id,
+          created_at: new Date(item.created_at).toISOString(),
+          change_summary: item.change_summary_hu,
+        })),
+      credibilitySummary: null,
+    },
+    { versionId, bodyHu: version.body_hu },
+  );
 }
 
 export interface D1PublicationOptions {
@@ -436,6 +434,19 @@ export async function publishD1Tabloid(
     try {
       version = await latestVersion(db, storyId);
       if (!version) {
+        // A successful paid call whose response could not be saved must not be
+        // regenerated on retry. Retain the Story/job for diagnostics instead.
+        const paid = await db
+          .prepare(
+            `SELECT id FROM llm_usage WHERE story_id=?
+          AND provider='gemini' AND role='primary' AND status='success' LIMIT 1`,
+          )
+          .bind(storyId)
+          .first<{ id: string }>();
+        if (paid)
+          throw new Error(
+            "[writer_paid_result_missing] Successful Writer response missing from saved draft; automatic regeneration blocked",
+          );
         const input = writerInput(raw, source, knowledge, claim, storyId);
         // A provider/schema/network failure is retried through the durable
         // job with the inexpensive primary model. It must never invoke the
@@ -497,6 +508,7 @@ export async function publishD1Tabloid(
           | undefined
       )?.languageWarnings ?? [];
     const initial = tabloid.assessTabloidQuality({
+      sourceLanguage: raw.language,
       sourceContent: `${raw.title_original}\n${raw.body_original}`,
       output: freshlyWritten ?? {
         title_hu: version.title_hu,
@@ -523,6 +535,7 @@ export async function publishD1Tabloid(
         });
         output = repaired;
         const remaining = tabloid.assessTabloidQuality({
+          sourceLanguage: raw.language,
           sourceContent: `${raw.title_original}\n${raw.body_original}`,
           output: repaired,
           forbiddenRules: knowledge,
@@ -643,5 +656,14 @@ export async function publishD1Tabloid(
   const result = await db.batch(statements);
   if (result[1]?.meta.changes !== 1) return { status: "skipped", storyId, versionId: version.id };
   await projectD1Story(db, storyId, version.id);
+  // Durable intent only. A QA outage never blocks or undoes this publication.
+  try {
+    await enqueueLanguageQa(db, storyId, version.id, now);
+  } catch {
+    console.error("language_qa enqueue deferred to safety sweep", {
+      storyId,
+      versionId: version.id,
+    });
+  }
   return { status: "published", storyId, versionId: version.id, slug };
 }

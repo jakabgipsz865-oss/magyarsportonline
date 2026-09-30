@@ -50,7 +50,7 @@ export async function D1ReviewPage({
   if (!db) throw new Error("D1 admin binding is missing");
   const items = await listD1ReviewItems(db);
   return (
-    <main className="admin-page">
+    <main className="admin-page admin-diagnostics">
       <AdminHeader activePath="/admin/review" />
       <h1>Szerkesztői ellenőrzés</h1>
       <p>
@@ -90,7 +90,7 @@ export async function D1ReviewPage({
             </label>
             <button type="submit">Szerkesztés mentése és minőségellenőrzés</button>
           </form>
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
             {(["approve", "reject", "snooze"] as const).map((action) => (
               <form action={decisionAction} key={action}>
                 <input type="hidden" name="itemId" value={item.id} />

@@ -94,6 +94,20 @@ export class D1StoryReadModelRepository {
     return result.results.map(hydrate);
   }
 
+  /** Revalidate cached trending IDs against the current public projection. */
+  async listPublishedByIds(ids: string[]): Promise<StoryReadModelRow[]> {
+    if (ids.length === 0) return [];
+    if (ids.length > 30) throw new Error("trending lookup exceeds 30 story IDs");
+    const placeholders = ids.map(() => "?").join(", ");
+    const result = await this.db
+      .prepare(
+        `SELECT * FROM story_read_model WHERE story_id IN (${placeholders}) AND ${publicFilter}`,
+      )
+      .bind(...ids, d1Timestamp(new Date(TABLOID_PUBLIC_START)), TABLOID_PUBLIC_PROMPT)
+      .all<ReadModelSqlRow>();
+    return result.results.map(hydrate);
+  }
+
   async countPublished(): Promise<number> {
     const row = await this.db
       .prepare(`SELECT COUNT(*) AS total FROM story_read_model WHERE ${publicFilter}`)
@@ -102,7 +116,10 @@ export class D1StoryReadModelRepository {
     return row?.total ?? 0;
   }
 
-  async upsert(row: NewStoryReadModelRow): Promise<void> {
+  async upsert(
+    row: NewStoryReadModelRow,
+    fence?: { versionId: string; bodyHu: string },
+  ): Promise<void> {
     await this.db
       .prepare(
         `
@@ -111,7 +128,7 @@ export class D1StoryReadModelRepository {
         inline_images, is_ai_generated, meta_description, structured_data,
         sources_summary, tags, category, confidence_score, is_developing,
         published_at, last_updated_at, version_history_summary, credibility_summary
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) ${fence ? `SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM stories s JOIN story_versions v ON s.current_version_id=v.id WHERE s.id=? AND s.status='published' AND v.id=? AND v.title_hu=? AND v.lead_hu=? AND v.body_hu=?)` : "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"}
       ON CONFLICT(story_id) DO UPDATE SET
         slug=excluded.slug, title_hu=excluded.title_hu, lead_hu=excluded.lead_hu,
         body_html=excluded.body_html, image_url=excluded.image_url,
@@ -145,6 +162,7 @@ export class D1StoryReadModelRepository {
         d1Timestamp(row.lastUpdatedAt ?? new Date()),
         json(row.versionHistorySummary ?? []),
         row.credibilitySummary == null ? null : json(row.credibilitySummary),
+        ...(fence ? [row.storyId, fence.versionId, row.titleHu, row.leadHu, fence.bodyHu] : []),
       )
       .run();
   }

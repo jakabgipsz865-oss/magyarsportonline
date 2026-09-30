@@ -58,6 +58,19 @@ export const env = createEnv({
     // Mock response is permitted only in a D1-only workers.dev staging runtime.
     D1_TEST_WRITER_OUTPUT: z.string().optional(),
     D1_TEST_SOURCE_ORIGIN: z.string().url().optional(),
+    DRAFT_RECOVERY_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+
+    APP_ENV: z.enum(["production", "preview", "development"]).default("development"),
+    LANGUAGE_QA_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    LANGUAGE_QA_DAILY_CALL_CAP: z.coerce.number().int().positive().max(300).default(300),
+    LANGUAGE_QA_DAILY_BUDGET_USD: z.coerce.number().positive().max(1).default(0.5),
+    LANGUAGE_QA_MOCK_MODE: z.enum(["false", "pass", "fixtures"]).default("false"),
 
     GEMINI_API_KEY: z.string().min(1).optional(),
     GEMINI_MODEL: z.string().min(1).default("gemini-3.5-flash-lite"),
@@ -67,10 +80,16 @@ export const env = createEnv({
       .default("false")
       .transform((value) => value === "true"),
     GEMINI_DAILY_REQUEST_CAP: z.coerce.number().int().positive().max(450).default(450),
-    GEMINI_MONTHLY_BUDGET_USD: z.coerce.number().positive().max(10).default(9.5),
+    GEMINI_MONTHLY_BUDGET_USD: z.coerce.number().positive().max(50).default(30),
     // Spend outside the imported D1 ledger in this UTC month. Required for
     // D1 paid AI so migration never silently resets the monthly budget.
     GEMINI_MONTHLY_EXTERNAL_SPEND_USD: z.coerce.number().min(0).optional(),
+    // A positive verified adjustment belongs to exactly one UTC billing month.
+    // The request guard expires it at month rollover, including cached clients.
+    GEMINI_MONTHLY_EXTERNAL_SPEND_MONTH: z
+      .string()
+      .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+      .optional(),
     GEMINI_BASE_URL: z.string().url().optional(),
     CLOUDFLARE_AI_GATEWAY_ID: z.string().min(1).default("magyarsportonline"),
     CLOUDFLARE_AI_GATEWAY_TOKEN: z.string().min(1).optional(),

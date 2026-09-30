@@ -3,14 +3,23 @@ import { z } from "zod";
 import {
   isDailyLlmQuotaError,
   isGeminiDailyQuotaError,
+  isGeminiAvailabilityError,
   MonthlyLlmBudgetError,
   type LlmClient,
   type LlmUsageContext,
 } from "@magyarsportonline/llm";
 import { unverifiedNumericClaims } from "./tabloid-numbers";
+import { preservationFailure } from "./text-preservation";
 
 export const TABLOID_MODEL = "gemini-3.5-flash-lite";
 export const TABLOID_REPAIR_MODEL = "gemini-3.5-flash";
+export const REPAIRABLE_TABLOID_FLAGS = new Set([
+  "foreign_language",
+  "forbidden_terminology",
+  "repetition",
+  "malformed_hungarian",
+  "writer_language_warning",
+]);
 export { TABLOID_PUBLIC_PROMPT as TABLOID_PROMPT } from "@magyarsportonline/shared";
 export const tabloidOutputSchema = z
   .object({
@@ -171,6 +180,7 @@ function hasRepetition(lead: string, body: string): boolean {
 
 export function assessTabloidQuality(input: {
   sourceContent: string;
+  sourceLanguage?: string;
   output: Pick<TabloidOutput, "title_hu" | "lead_hu" | "body_hu"> & {
     language_warnings?: string[];
   };
@@ -209,6 +219,7 @@ export function assessTabloidQuality(input: {
   const foreignNumbers = unverifiedNumericClaims(
     input.sourceContent,
     `${input.output.title_hu} ${input.output.lead_hu} ${input.output.body_hu}`,
+    input.sourceLanguage ? { sourceLanguage: input.sourceLanguage } : {},
   );
   if (foreignNumbers.length)
     flags.push({
@@ -349,6 +360,7 @@ export async function writeTabloid(
     if (
       isDailyLlmQuotaError(error) ||
       isGeminiDailyQuotaError(error) ||
+      isGeminiAvailabilityError(error) ||
       error instanceof MonthlyLlmBudgetError
     )
       throw error;
@@ -387,6 +399,8 @@ export async function repairTabloid(
   flags: TabloidQualityFlag[],
   usageContext: LlmUsageContext,
 ): Promise<TabloidOutput> {
+  if (!flags.length || flags.some((flag) => !REPAIRABLE_TABLOID_FLAGS.has(flag.code)))
+    throw new Error("Targeted repair blocked by non-repairable quality issue");
   const fields = new Set(flags.map((flag) => flag.field));
   const paragraphs = output.body_hu
     .split(/\n\s*\n/)
@@ -394,7 +408,7 @@ export async function repairTabloid(
     .filter(Boolean);
   const bodyFlags = flags.filter((flag) => flag.field === "body");
   const bodyIndices = bodyFlags.map((flag) => {
-    if (!flag.detail || paragraphs.length < 2) return -1;
+    if (!flag.detail) return -1;
     const matches = paragraphs.flatMap((part, index) =>
       part.toLocaleLowerCase("hu-HU").includes(flag.detail!.toLocaleLowerCase("hu-HU"))
         ? [index]
@@ -402,16 +416,17 @@ export async function repairTabloid(
     );
     return matches.length === 1 ? matches[0]! : -1;
   });
-  const bodyIndex = bodyIndices[0];
-  if (
-    bodyFlags.length &&
-    (bodyIndex === undefined || bodyIndex < 0 || bodyIndices.some((index) => index !== bodyIndex))
-  )
-    throw new Error("Targeted repair requires one identifiable body paragraph");
+  const located = bodyIndices[0];
+  const bodyIndex =
+    located !== undefined && located >= 0 && bodyIndices.every((i) => i === located)
+      ? located
+      : null;
   const fragments = {
     ...(fields.has("title") ? { title_hu: output.title_hu } : {}),
     ...(fields.has("lead") ? { lead_hu: output.lead_hu } : {}),
-    ...(fields.has("body") ? { body_hu: paragraphs[bodyIndex!]! } : {}),
+    ...(fields.has("body")
+      ? { body_hu: bodyIndex === null ? output.body_hu : paragraphs[bodyIndex]! }
+      : {}),
   };
   const result = await llm.completeJson({
     model: TABLOID_REPAIR_MODEL,
@@ -432,10 +447,15 @@ export async function repairTabloid(
     usageContext,
   });
   const repaired = repairSchema.parse(result.data);
+  if (Object.keys(repaired).some((key) => !(key in fragments)))
+    throw new Error("Targeted repair changed an unflagged field");
   for (const key of Object.keys(fragments) as Array<keyof typeof fragments>) {
     const before = fragments[key]!;
     const after = repaired[key];
     if (!after) throw new Error(`Targeted repair omitted ${key}`);
+    const preservation = preservationFailure(before, after);
+    if (preservation)
+      throw new Error(`Targeted repair changed numbers/names/quotes in ${key}: ${preservation}`);
     const beforeNumbers = normalizedNumbers(before).join("|");
     const afterNumbers = normalizedNumbers(after).join("|");
     if (beforeNumbers !== afterNumbers)
@@ -449,8 +469,8 @@ export async function repairTabloid(
     title_hu: repaired.title_hu ?? output.title_hu,
     lead_hu: repaired.lead_hu ?? output.lead_hu,
     body_hu:
-      bodyIndex === undefined
-        ? output.body_hu
+      bodyIndex === null
+        ? (repaired.body_hu ?? output.body_hu)
         : paragraphs
             .map((part, index) => (index === bodyIndex ? repaired.body_hu! : part))
             .join("\n\n"),

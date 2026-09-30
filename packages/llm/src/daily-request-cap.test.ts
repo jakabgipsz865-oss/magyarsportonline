@@ -1,11 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { FakeLlmClient } from "./fake-client";
 import {
   DailyLlmRequestCapError,
   DailyRequestCappedLlmClient,
   delayUntilNextGeminiQuotaReset,
   geminiQuotaDayStart,
+  MonthlyLlmBudgetError,
+  currentMonthExternalSpendUsd,
+  type DailyRequestUsageReader,
 } from "./daily-request-cap";
+
+afterEach(() => vi.useRealTimers());
 
 const request = {
   model: "gemini-2.5-flash",
@@ -15,6 +20,88 @@ const request = {
 };
 
 describe("DailyRequestCappedLlmClient", () => {
+  it("expires verified external spend at UTC month rollover for the same cached client", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-30T23:59:59.999Z"));
+    const inner = new FakeLlmClient();
+    inner.queueText({ text: "September", inputTokens: 1, outputTokens: 1 });
+    inner.queueText({ text: "October", inputTokens: 1, outputTokens: 1 });
+    const reserveRequest = vi
+      .fn<DailyRequestUsageReader["reserveRequest"]>()
+      .mockResolvedValue("reservation");
+    const client = new DailyRequestCappedLlmClient(
+      inner,
+      "gemini",
+      450,
+      {
+        reserveRequest,
+        finalizeRequest: async () => undefined,
+        releaseRequest: async () => undefined,
+      },
+      () => false,
+      () => 0.001,
+      { capUsd: 30, externalSpentUsd: 1, externalSpentMonth: "2026-09" },
+    );
+    await client.completeText(request);
+    expect(reserveRequest.mock.calls[0]?.[5]).toMatchObject({
+      capUsd: 30,
+      externalSpentUsd: 1,
+      since: new Date("2026-09-01T00:00:00Z"),
+    });
+    vi.setSystemTime(new Date("2026-10-01T00:00:00.000Z"));
+    await client.completeText(request);
+    expect(reserveRequest.mock.calls[1]?.[5]).toMatchObject({
+      capUsd: 30,
+      externalSpentUsd: 0,
+      since: new Date("2026-10-01T00:00:00Z"),
+    });
+  });
+  it("fails closed on positive external spend without a verified billing month", async () => {
+    const inner = new FakeLlmClient();
+    const reserveRequest = vi.fn(async () => "reservation");
+    const client = new DailyRequestCappedLlmClient(
+      inner,
+      "gemini",
+      450,
+      {
+        reserveRequest,
+        finalizeRequest: async () => undefined,
+        releaseRequest: async () => undefined,
+      },
+      () => false,
+      () => 0.001,
+      { capUsd: 30, externalSpentUsd: 1 },
+    );
+    await expect(client.completeText(request)).rejects.toThrow("verified UTC month");
+    expect(reserveRequest).not.toHaveBeenCalled();
+    expect(inner.textRequests).toHaveLength(0);
+    expect(currentMonthExternalSpendUsd({ externalSpentUsd: 0 })).toBe(0);
+    expect(
+      currentMonthExternalSpendUsd(
+        { externalSpentUsd: 2, externalSpentMonth: "2026-10" },
+        new Date("2026-10-01T00:00:00Z"),
+      ),
+    ).toBe(2);
+  });
+  it("does not call the provider if the current monthly ledger and reservation exceed $30", async () => {
+    const inner = new FakeLlmClient();
+    const client = new DailyRequestCappedLlmClient(
+      inner,
+      "gemini",
+      450,
+      {
+        reserveRequest: async () => null,
+        sumCostUsdSince: async () => 29.999,
+        finalizeRequest: async () => undefined,
+        releaseRequest: async () => undefined,
+      },
+      () => false,
+      () => 0.002,
+      { capUsd: 30, externalSpentUsd: 0 },
+    );
+    await expect(client.completeText(request)).rejects.toBeInstanceOf(MonthlyLlmBudgetError);
+    expect(inner.textRequests).toHaveLength(0);
+  });
   it("does not call Gemini after the application cap is reached", async () => {
     const inner = new FakeLlmClient();
     const reserveRequest = vi.fn(async () => null);

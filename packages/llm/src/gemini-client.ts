@@ -49,6 +49,8 @@ export class GeminiApiError extends Error {
 /** Stable error category for durable retry/defer decisions and diagnostics. */
 export function describeGeminiError(error: unknown): string {
   if (error instanceof GeminiApiError) {
+    if (error.status === 402 || error.apiStatus === "BILLING_UNAVAILABLE")
+      return "billing_unavailable";
     if (error.apiStatus === "CLOUDFLARE_GATEWAY_RATE_LIMIT") return "gateway_rate_limited";
     if (isGeminiDailyQuotaError(error)) return "daily_quota_exceeded";
     if (error.status === 429 || error.apiStatus === "RESOURCE_EXHAUSTED") return "rate_limited";
@@ -77,8 +79,27 @@ export function isGeminiDailyQuotaError(error: unknown): boolean {
   return (
     error instanceof GeminiApiError &&
     error.apiStatus !== "CLOUDFLARE_GATEWAY_RATE_LIMIT" &&
-    (error.status === 429 || error.apiStatus === "RESOURCE_EXHAUSTED") &&
-    /(?:requests? per day|per-day|daily (?:quota|limit)|\bRPD\b|quota.*\/day)/iu.test(error.message)
+    (error.apiStatus === "DAILY_QUOTA_EXCEEDED" ||
+      ((error.status === 429 || error.apiStatus === "RESOURCE_EXHAUSTED") &&
+        /(?:requests? per day|per-day|daily (?:quota|limit)|\bRPD\b|quota.*\/day)/iu.test(
+          error.message,
+        )))
+  );
+}
+
+/** Availability refusals have no usable paid response; retry slowly, never publish fallback. */
+export function isGeminiAvailabilityError(error: unknown): error is GeminiApiError {
+  return (
+    error instanceof GeminiApiError &&
+    error.meteredUsage === null &&
+    !["BLOCKED", "INVALID_SCHEMA", "OUTPUT_TRUNCATED", "INVALID_RESPONSE"].includes(
+      error.apiStatus ?? "",
+    ) &&
+    (error.status === 0 ||
+      error.status >= 400 ||
+      ["CLOUDFLARE_API_ERROR", "CLOUDFLARE_GATEWAY_RATE_LIMIT", "BILLING_UNAVAILABLE"].includes(
+        error.apiStatus ?? "",
+      ))
   );
 }
 
@@ -179,11 +200,34 @@ function stripMarkdownFence(text: string): string {
 function parseApiStatus(errorBody: string): string | null {
   try {
     const parsed = JSON.parse(errorBody) as {
-      error?: { status?: string };
-      errors?: Array<{ code?: number }>;
+      error?: { status?: string; message?: string };
+      errors?: Array<{ code?: number; message?: string }>;
     };
     if (parsed.errors?.some((entry) => entry.code === 2018)) return "CLOUDFLARE_GATEWAY_RATE_LIMIT";
-    return parsed.error?.status ?? null;
+    const message = [parsed.error?.message, ...(parsed.errors ?? []).map((e) => e.message)].join(
+      " ",
+    );
+    if (
+      /(?:insufficient|exhausted|no|not enough|out of).{0,30}(?:credit|balance|funds)|(?:credit|balance).{0,30}(?:insufficient|exhausted)|billing|payment required/iu.test(
+        message,
+      )
+    )
+      return "BILLING_UNAVAILABLE";
+    if (/(?:requests? per day|per-day|daily (?:quota|limit)|\bRPD\b|quota.*\/day)/iu.test(message))
+      return "DAILY_QUOTA_EXCEEDED";
+    const status = parsed.error?.status;
+    return status &&
+      [
+        "RESOURCE_EXHAUSTED",
+        "PERMISSION_DENIED",
+        "UNAUTHENTICATED",
+        "NOT_FOUND",
+        "INVALID_ARGUMENT",
+        "UNAVAILABLE",
+        "INTERNAL",
+      ].includes(status)
+      ? status
+      : null;
   } catch {
     return null;
   }
@@ -198,8 +242,8 @@ function unwrapCloudflareAiRunResponse(payload: unknown): GeminiGenerateContentR
   if (envelope.success === false || (envelope.errors?.length ?? 0) > 0) {
     throw new GeminiApiError(
       200,
-      "CLOUDFLARE_API_ERROR",
-      `Cloudflare AI returned an error envelope: ${envelope.errors?.[0]?.message ?? "unknown error"}`,
+      parseApiStatus(JSON.stringify(payload)) ?? "CLOUDFLARE_API_ERROR",
+      "Cloudflare AI rejected the request (sanitized provider error)",
     );
   }
 
@@ -366,11 +410,7 @@ export class GeminiLlmClient implements LlmClient {
         if (error instanceof Error && error.name === "AbortError") {
           throw new GeminiApiError(0, "TIMEOUT", `Gemini API timed out after ${this.timeoutMs}ms`);
         }
-        throw new GeminiApiError(
-          0,
-          null,
-          `Gemini API network error: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        throw new GeminiApiError(0, null, "Gemini API network error");
       }
 
       if (!httpResponse.ok) {
@@ -393,7 +433,7 @@ export class GeminiLlmClient implements LlmClient {
         throw new GeminiApiError(
           httpResponse.status,
           parseApiStatus(errorBody),
-          `Gemini API error ${httpResponse.status}: ${errorBody.slice(0, 500)}`,
+          `Gemini API rejected the request (HTTP ${httpResponse.status})`,
           null,
           null,
           retryAfterMs(httpResponse.headers.get("retry-after")),

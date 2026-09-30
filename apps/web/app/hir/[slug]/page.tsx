@@ -174,7 +174,7 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
       </Link>
       <div className="story-layout">
         <div className="story-main">
-          <article className="story-article">
+          <article className="story-article" data-story-id={story.id}>
             <span className="kicker">
               Labdarúgás{primaryEntity ? " · " + primaryEntity.nameHu : ""}
             </span>

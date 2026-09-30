@@ -42,6 +42,47 @@ function fixture(): { db: DatabaseSyncType; d1: D1Client } {
 }
 
 describe("D1 LLM usage guard", () => {
+  it("atomically enforces the $30 application cap including verified current-month external spend", async () => {
+    const { db, d1 } = fixture();
+    try {
+      const usage = new D1LlmUsageRepository(d1);
+      const since = new Date(Date.now() - 60_000);
+      await usage.insert({
+        provider: "gemini",
+        model: "gemini-3.5-flash-lite",
+        role: "primary",
+        inputTokens: 1,
+        outputTokens: 1,
+        costUsd: 28.99,
+      });
+      const budget = { since, capUsd: 30, externalSpentUsd: 1, reserveUsd: 0.006 };
+      await usage.insert({
+        provider: "cloudflare",
+        model: "@cf/openai/gpt-oss-120b",
+        role: "language_qa",
+        inputTokens: 1,
+        outputTokens: 1,
+        costUsd: 12,
+      });
+      const results = await Promise.all(
+        Array.from({ length: 3 }, () =>
+          usage.reserveRequest(
+            "gemini",
+            "gemini-3.5-flash-lite",
+            since,
+            450,
+            { role: "primary" },
+            budget,
+          ),
+        ),
+      );
+      expect(results.filter(Boolean)).toHaveLength(1);
+      expect(await usage.sumGenerationCostUsdSince(since)).toBeCloseTo(28.996);
+      expect(await usage.sumCostUsdSince(since)).toBeCloseTo(40.996);
+    } finally {
+      db.close();
+    }
+  });
   it("holds shared monthly cost for in-flight primary and repair calls", async () => {
     const { db, d1 } = fixture();
     try {

@@ -54,6 +54,7 @@
       "dependsOn": ["^build"]
     },
     "test": {
+      "passThroughEnv": ["MSO_NUMBER_CORPUS", "MSO_RECOVERY_METADATA", "MSO_NUMBER_REPORT"],
       "dependsOn": ["^build"]
     },
     "dev": {

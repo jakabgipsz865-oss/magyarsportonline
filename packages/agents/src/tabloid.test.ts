@@ -235,6 +235,8 @@ describe("one-call Hungarian writer", () => {
   ])("checks numeric meaning: %s => %s", (sourceContent, body_hu, rejected) => {
     const flags = assessTabloidQuality({
       sourceContent,
+      // The stored source language determines grouping; this legacy example uses DE punctuation.
+      ...(sourceContent.includes("500.000 Euro") ? { sourceLanguage: "de" } : {}),
       output: { title_hu: "Sporthír", lead_hu: "Részletek.", body_hu },
     });
     expect(flags.some((flag) => flag.code === "number_integrity")).toBe(rejected);
@@ -363,12 +365,65 @@ describe("one-call Hungarian writer", () => {
     expect(llm.completeJson.mock.calls[0]?.[0]?.messages[0]?.content).not.toContain(
       "Az első félidőben",
     );
+    const fallback = client({ body_hu: output.body_hu });
+    await repairTabloid(
+      fallback,
+      output,
+      [{ kind: "language", code: "foreign_language", field: "body" }],
+      { role: "targeted_repair" },
+    );
+    expect(fallback.completeJson).toHaveBeenCalledOnce();
+    expect(fallback.completeJson.mock.calls[0]?.[0]?.messages[0]?.content).toContain(
+      "Az első félidőben",
+    );
+  });
+  it.each([undefined, "not a literal warning"])(
+    "repairs a single paragraph with optional detail %s",
+    async (detail) => {
+      const output = {
+        title_hu: "A Bayern győzött",
+        lead_hu: "A csapat nyert.",
+        body_hu: "A Bayern győzelmet hozott.",
+        language_warnings: [],
+        generatedByModel: "gemini-3.5-flash-lite",
+      };
+      const llm = client({ body_hu: "A Bayern győzött." });
+      await repairTabloid(
+        llm,
+        output,
+        [
+          {
+            kind: "language",
+            code: detail ? "writer_language_warning" : "malformed_hungarian",
+            field: "body",
+            ...(detail ? { detail } : {}),
+          },
+        ],
+        { role: "targeted_repair" },
+      );
+      expect(llm.completeJson).toHaveBeenCalledOnce();
+    },
+  );
+  it("spends no repair call on a mixed hard numeric failure", async () => {
+    const llm = client({ body_hu: "Javítva." });
     await expect(
-      repairTabloid(llm, output, [{ kind: "language", code: "foreign_language", field: "body" }], {
-        role: "targeted_repair",
-      }),
-    ).rejects.toThrow("one identifiable body paragraph");
-    expect(llm.completeJson).toHaveBeenCalledOnce();
+      repairTabloid(
+        llm,
+        {
+          title_hu: "Cím",
+          lead_hu: "Bevezető",
+          body_hu: "Szöveg",
+          language_warnings: [],
+          generatedByModel: "mock",
+        },
+        [
+          { kind: "hard", code: "number_integrity", field: "body" },
+          { kind: "language", code: "malformed_hungarian", field: "body" },
+        ],
+        { role: "targeted_repair" },
+      ),
+    ).rejects.toThrow("non-repairable");
+    expect(llm.completeJson).not.toHaveBeenCalled();
   });
   it("deterministically splits a long one-block draft into readable paragraphs", () => {
     expect(

@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ne, sql } from "drizzle-orm";
 import type { Database } from "../client";
 import { llmUsage } from "../schema/index";
 
@@ -59,6 +59,15 @@ export class LlmUsageRepository {
     return row ? Number(row.total) : 0;
   }
 
+  /** The Language QA daily ledger is separate from the Gemini monthly generation cap. */
+  async sumGenerationCostUsdSince(since: Date): Promise<number> {
+    const [row] = await this.db
+      .select({ total: sql<string>`coalesce(sum(${llmUsage.costUsd}), 0)` })
+      .from(llmUsage)
+      .where(and(gte(llmUsage.occurredAt, since), ne(llmUsage.role, "language_qa")));
+    return row ? Number(row.total) : 0;
+  }
+
   /** Legutóbbi N sikeres (nem-fallback) hívás naplója, legfrissebb elöl — diagnosztikai/audit célra (pl. "tényleg történt-e valódi Cloudflare-hívás mostanában"). */
   async listRecent(limit: number): Promise<LlmUsageRow[]> {
     return this.db.select().from(llmUsage).orderBy(desc(llmUsage.occurredAt)).limit(limit);
@@ -102,7 +111,7 @@ export class LlmUsageRepository {
             total: sql<string>`coalesce(sum(${llmUsage.costUsd}), 0)`,
           })
           .from(llmUsage)
-          .where(gte(llmUsage.occurredAt, budget.since));
+          .where(and(gte(llmUsage.occurredAt, budget.since), ne(llmUsage.role, "language_qa")));
         if (Number(spent?.total ?? 0) + budget.externalSpentUsd + budget.reserveUsd > budget.capUsd)
           return null;
       }
