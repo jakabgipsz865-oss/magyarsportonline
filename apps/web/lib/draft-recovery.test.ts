@@ -1,8 +1,11 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { tabloid } from "@magyarsportonline/agents";
 import { sqliteD1 } from "./testing/sqlite-d1";
 import { recoverSavedDrafts } from "./draft-recovery";
+vi.hoisted(() => {
+  process.env["CRON_SECRET"] ??= "isolated-test-secret";
+});
 const corpus = process.env["MSO_NUMBER_CORPUS"],
   metadata = process.env["MSO_RECOVERY_METADATA"];
 describe.skipIf(!corpus || !metadata)("real 124 saved-draft recovery, isolated SQLite", () => {
@@ -81,6 +84,17 @@ describe.skipIf(!corpus || !metadata)("real 124 saved-draft recovery, isolated S
       await expect(recoverSavedDrafts(d1, ids, { ...options, execute: true })).rejects.toThrow(
         "disabled",
       );
+      const guarded = dry.find((r) => r.publishable)!;
+      const rawId = rows.find((r) => r["story_id"] === guarded.storyId)!["raw_article_id"]!;
+      const job = crypto.randomUUID();
+      db.prepare("INSERT INTO pipeline_jobs(id,event,status) VALUES(?,?,'pending')").run(
+        job,
+        JSON.stringify({ payload: { raw_article_id: rawId } }),
+      );
+      expect((await recoverSavedDrafts(d1, [guarded.storyId], options))[0]!.reasons).toContain(
+        "active_pipeline_job",
+      );
+      db.prepare("UPDATE pipeline_jobs SET status='completed' WHERE id=?").run(job);
       const result = await recoverSavedDrafts(d1, ids, {
         ...options,
         execute: true,

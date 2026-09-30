@@ -42,7 +42,9 @@ export default async function AdminLoginPage({ searchParams }: LoginPageProps): 
       >
         <p style={{ margin: "0 0 8px", color: "#57606a", fontWeight: 600 }}>MSO24</p>
         <h1 style={{ margin: "0 0 8px" }}>Admin belépés</h1>
-        <p style={{ margin: "0 0 22px", color: "#57606a" }}>Add meg a production admin jelszót.</p>
+        <p style={{ margin: "0 0 22px", color: "#57606a" }}>
+          Add meg az aktuális környezet admin jelszavát.
+        </p>
 
         {message ? (
           <p

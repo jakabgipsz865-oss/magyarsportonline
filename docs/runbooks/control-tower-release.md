@@ -98,3 +98,123 @@ Mock usage is identified as provider=`cloudflare_mock`, cost zero.
 Scheduler completion/error heartbeats are persisted in a single operational row;
 the admin never infers scheduler success from an RSS timestamp. The heartbeat adds
 one bounded HTTP call/write per run and reuses the existing scheduler.
+
+## Admin, measurement and privacy
+
+Cloudflare APP_ENV determines Production/Preview/Development. Primary Writer,
+repair, QA, deterministic gate, disabled Fact extraction and disabled self-check
+are shown from the active D1 runtime/config. Navigation: Overview, Quality,
+Popularity, Monetization, System, Knowledge. Existing review routes remain available
+as diagnostic links, with existing session authentication and logout.
+
+The dashboard uses indexed 24-hour/month ranges. Latest audit/draft lists are bounded
+to 30; the homepage reads only the existing bounded trending snapshot. Scheduler
+health comes from the actual persisted heartbeat, including stale/error status.
+Audit diffs show the original/replacement sentences, reason, model and timestamp.
+
+No reliable programmatic UV/PV/session feed is configured. These metrics explicitly
+show unavailable for day/week/month, and inventory/UV threshold assessment is not
+computed. Qualified reads remain a separate KPI, measured from existing deduplicated
+events. Weekly/monthly qualified reads cannot be reconstructed from the short
+retention ledger. A pure estimator accepts only verified monthly PV / complete
+30-day UV, computes 1/2/3 slots and theoretical/70% inventory, and labels estimates
+and internal 3,000/5,000/15,000 UV work thresholds explicitly.
+No new visitor cookie, marketing tracker, fingerprint or persistent IP profile.
+The existing necessary HttpOnly admin session cookie is unchanged. Qualified-read
+sessionStorage and the existing transient per-isolate IP limiter are retained.
+That limiter is a minimal abuse brake, not a global/distributed bot protection system.
+
+## Production release sequence — only after separate authorization
+
+1. **D1 migrations:** back up/snapshot first. Verify production binding is
+   `eb02f98e-fd89-4277-94be-0f763056b91e` (its historical name contains "staging"
+   but it is production). Apply 0002, 0003, 0004 in order. Never use a production
+   SQL import to perform a read-only audit. 0002 is controlled pre-release;
+   0003/0004 are additive/idempotent. Verify tables/indexes and foreign-key integrity.
+2. **Web Worker:** deploy the reviewed PR commit to `magyarsportonline-web` with
+   existing production secrets and bindings. Primary `gemini-3.5-flash-lite` unchanged;
+   `LANGUAGE_QA_ENABLED=false`, `LANGUAGE_QA_MOCK_MODE=false`,
+   `DRAFT_RECOVERY_ENABLED=false`. Do not deploy a Preview config to production.
+3. **Scheduler:** deploy `apps/ingest-scheduler/wrangler.jsonc`; APP_ORIGIN must be
+   `https://mso24.hu`, minute cron unchanged. Confirm CRON_SECRET secret exists and
+   authenticated calls succeed against the web Worker; never print its value.
+4. **First trending refresh:** authenticated POST `/api/internal/trending`; expect
+   2xx. GET that endpoint must show a changing refreshedAt and valid public ranking.
+5. **Qualified-read smoke:** one dedicated public test Story/event through the
+   existing endpoint; duplicate event must not increment twice; cross-origin and
+   over-size submissions fail. Delete only explicitly designated smoke data if needed.
+6. **Admin smoke:** login, Overview/Quality/Popularity/Monetization/System/Knowledge,
+   old review routes and logout. Check Production label and real D1 KPIs; no fake UV/PV.
+7. **QA OFF:** authenticated POST `/api/internal/language-qa` returns disabled and
+   performs zero database/model work. No new paid QA usage. Recovery execution is OFF.
+8. **12+ minute trending stability:** observe at least four real 5-minute refreshes
+   over 15 minutes; no stale fallback under healthy operation, heartbeat OK,
+   no scheduler failure. Check hero hold/challenger state. This is a release gate.
+9. **Parser health:** run the authenticated 124-pair manifest/hash regression;
+   A89/B8 PASS, C6/D21 blocked. Existing numeric/date/currency/name regressions pass.
+10. **Recovery DRY RUN:** send the explicit 124 IDs with execute=false. Save the
+    decisions. Expected original frozen cohort: 96 publishable / 28 blocked; any
+    production changes since the audit must be re-evaluated, never forced through.
+11. **Recovery execute — separate owner permission:** enable only its switch,
+    use the reviewed dry-run IDs in explicit batches of at most 20 Stories and explicit
+    confirmation, then disable again. Batching bounds D1 subrequests per HTTP invocation.
+    Verify recovery ledger, original chronology, existing version IDs, unchanged
+    llm_usage count and zero new Facebook intents. Projection is rebuildable without AI.
+12. **Language QA ON — separate owner permission:** verify daily limits, Workers AI
+    credential/model, mock=false and caps. Enable, observe the first bounded audit,
+    persisted statuses/diffs/usage, reject guards and per-version idempotency. Disable
+    immediately if unexpected changes/cost appear. Provider is never used for development.
+13. **RSS:** `/rss.xml` returns valid XML and only public eligible Stories.
+14. **Sitemap:** `/sitemap.xml`, canonical production URLs and chronology are valid.
+15. **Category/archive:** `/kategoria/labdarugas` and pagination remain chronological;
+    recovered drafts do not appear as newly timed publications.
+16. **Article:** desktop/mobile images/body/source attribution and public status are
+    correct; QA failure/rejection leaves the original live content available.
+17. **Facebook:** fresh normal publications retain existing behavior; recovery and
+    Language QA ledger entries have no automatic backlog intent.
+18. **Rollback:** kill QA/recovery switches first, restore the previous web and
+    scheduler Worker versions, retain additive schemas/audits. Do not bulk delete
+    recovered or repaired content. If a particular publication is wrong, explicitly
+    retract it via existing review controls and reproject. A repaired Story's prior
+    version is retained for individually authorized restoration; no Writer is needed.
+
+Production endpoint 2xx/secret match and real 15-minute health remain release-time
+checks: this development request authorizes no production deployment or mutation.
+
+## Combined Cloudflare Preview evidence (2026-09-30)
+
+Preview: https://mso-controltower-preview-20260930.footballinvestmentkft.workers.dev
+Isolated D1: `ba02bd50-140f-4954-9abe-183bbb32b1ca`.
+No production custom domains, AI credentials, active RSS sources, Writer or Facebook.
+QA uses the Preview-only fixture adapter; recovery execution is enabled only here.
+Seed: the saved 124 drafts with original source metadata/timestamps/usage, 44 existing
+public article copies and ten explicitly synthetic stories/read traffic.
+
+The real 124-pair regression and isolated recovery integration passed. Preview
+HTTP dry run: 96 publishable / 28 blocked, then five explicit recovery batches
+published 96; zero chronology mismatches and zero social posts. The imported
+124 Primary usage rows stayed at 124, $0.233611 historical cost. New QA usage is
+`cloudflare_mock`, $0. Six QA fixtures: two guarded sentence repairs, three rejected
+(number/name/risk), one PASS; rejected public text stayed identical.
+
+Homepage, article, category and actual `?oldal=2` pagination, RSS/sitemap XML with
+Preview URLs, eight authenticated admin routes and session login passed. Qualified
+read: first unique event recorded, duplicate false, cross-origin 403, oversize 400,
+internal unauthenticated access 401. Mobile review wrapping was fixed after browser
+verification. Admin metrics explicitly describe version/hash PASS states and missing
+UV/PV/session data; no audience measurement is inferred from qualified reads.
+
+Local full test suite: 921 passed, six existing PostgreSQL integration tests skipped
+without that test database. Lint, monorepo typecheck, formatting, OpenNext Cloudflare
+build and Wrangler runtime type generation passed. No paid AI was called.
+
+The actual existing scheduler code ran against the Preview for 16+ wall-clock
+minutes: all branches returned 2xx, successful heartbeat each minute, scheduled
+trending refreshes at 06:00 / 06:05 / 06:10 / 06:15 UTC. No stale snapshot;
+persisted hero ID and selectedAt stayed unchanged. Thirty-minute hold and exact
+1.24/1.25 boundary are covered by the deterministic scheduler/hero regression.
+The live Preview stale-snapshot probe returned HTTP 200 with the chronological
+"Top hír" fallback; the snapshot was immediately refreshed afterward.
+Production scheduler config points at https://mso24.hu, but production secrets and
+new endpoint success must still be checked after the separately authorized release.
+Preview has no second cron system; the wall-clock run was an integration harness.

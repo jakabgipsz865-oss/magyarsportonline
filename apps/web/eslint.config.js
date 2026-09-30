@@ -5,6 +5,12 @@ import { nextjsConfig } from "@magyarsportonline/config/eslint/nextjs";
 export default [
   ...nextjsConfig,
   {
-    ignores: [".next/**", "next-env.d.ts"],
+    ignores: [
+      ".next/**",
+      ".open-next/**",
+      ".wrangler/**",
+      "cloudflare-generated.d.ts",
+      "next-env.d.ts",
+    ],
   },
 ];

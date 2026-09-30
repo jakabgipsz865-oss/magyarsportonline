@@ -25,7 +25,7 @@ const VALUE = String.raw`(?:${NUM}|acht|fünf|fuenf|zwei|uno|tre|one)`;
 const MULT = String.raw`(?:mil\s+millones|milliarden?|miliard[oi]|milliárd|billions?|millions?|millionen|millones|milioni|millió|milli[oó]n|mio\.?|thousand|ezer|mila|m(?!\p{L}))`;
 const CUR = String.raw`(?:amerikai\s+dollár|US[- ]?Dollar|dollars?|dollár|USD|euros?|euró|EUR|pounds?|Pfund|sterline|libras?(?:\s+esterlinas?)?|font|GBP|€|£|\$)`;
 const HU_END = String.raw`(?:nyi|hoz|ba|be|os|ot|tal|nak|nek|val|vel|ért|ban|ben|ról|ről|ra|re|s|t)?`;
-const NAME = String.raw`\p{Lu}[\p{L}'’\-]+(?:\s+\p{Lu}[\p{L}'’\-]+){0,4}`;
+const NAME = String.raw`\p{Lu}[\p{L}'’-]+(?:\s+\p{Lu}[\p{L}'’-]+){0,4}`;
 const re = (pattern: string) => new RegExp(pattern, "giu");
 const words: Record<string, string> = {
   acht: "8",
@@ -349,8 +349,8 @@ export function numericFacts(text: string, language: NumericLanguage): NumericFa
 }
 
 function sharedNames(source: string, output: string): string[] {
-  const sourceNames = [...new Set(source.match(/\p{Lu}[\p{L}'’\-]{2,}/gu) ?? [])];
-  const out = [...new Set(output.match(/\p{Lu}[\p{L}'’\-]{2,}/gu) ?? [])];
+  const sourceNames = [...new Set(source.match(/\p{Lu}[\p{L}'’-]{2,}/gu) ?? [])];
+  const out = [...new Set(output.match(/\p{Lu}[\p{L}'’-]{2,}/gu) ?? [])];
   return sourceNames.filter((name) =>
     out.some(
       (word) =>
@@ -398,7 +398,7 @@ function scoreWinner(text: string, fact: NumericFact, names: string[]): string |
         "iu",
       ).test(text) ||
       new RegExp(
-        String.raw`\b${escaped}\s+(?:beat|defeated|verte|legyőzte)\s+\p{Lu}[\p{L}'’\-]{2,}\s+${score}`,
+        String.raw`\b${escaped}\s+(?:beat|defeated|verte|legyőzte)\s+\p{Lu}[\p{L}'’-]{2,}\s+${score}`,
         "iu",
       ).test(text)
     )

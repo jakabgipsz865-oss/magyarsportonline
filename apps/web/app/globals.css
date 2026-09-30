@@ -2071,8 +2071,72 @@ main {
 .home-empty-grid--tabloid {
   grid-template-columns: 1fr;
 }
+.admin-tower .admin-metric-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  gap: 0.6rem;
+}
+.admin-tower-value {
+  font-size: 1.15rem;
+  font-weight: 650;
+}
+.admin-preview-note {
+  border-left: 4px solid #c7771c;
+  padding: 0.65rem 1rem;
+  background: #fff8e9;
+  color: #75450b;
+}
+.admin-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  margin-bottom: 1.5rem;
+}
+.admin-tower .admin-table {
+  min-width: 580px;
+}
+.admin-audit {
+  padding: 1rem;
+  margin: 0.6rem 0;
+  border: 1px solid #d9dfe5;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.admin-audit summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.admin-audit-diff {
+  border-left: 3px solid #679779;
+  padding-left: 1rem;
+  margin-top: 1rem;
+}
+.admin-diagnostic-links {
+  margin-top: 2rem;
+}
 @media (max-width: 760px) {
   .home-hero-layout--tabloid {
     grid-template-columns: 1fr;
   }
+}
+
+.admin-diagnostics {
+  overflow-wrap: anywhere;
+}
+.admin-diagnostics form,
+.admin-diagnostics label {
+  min-width: 0;
+}
+.admin-diagnostics input,
+.admin-diagnostics textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.admin-diagnostics pre {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.admin-diagnostics button {
+  max-width: 100%;
+  white-space: normal;
 }

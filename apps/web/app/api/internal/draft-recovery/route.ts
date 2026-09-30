@@ -22,6 +22,11 @@ export async function POST(request: NextRequest) {
     (!env.DRAFT_RECOVERY_ENABLED || input.data.confirmation !== "publish_saved_drafts_without_ai")
   )
     return NextResponse.json({ error: "execution disabled; dry run first" }, { status: 403 });
+  if (input.data.execute && input.data.storyIds.length > 20)
+    return NextResponse.json(
+      { error: "Execute in explicit batches of at most 20 Stories; dry run supports all 124" },
+      { status: 400 },
+    );
   const db = d1Binding();
   if (!db || !env.D1_PIPELINE_START_AT)
     return NextResponse.json({ error: "D1 unavailable" }, { status: 503 });

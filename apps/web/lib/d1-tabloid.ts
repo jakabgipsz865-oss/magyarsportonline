@@ -276,35 +276,38 @@ export async function projectD1Story(db: D1Client, storyId: string, versionId: s
       sourceUrl: row.source_url,
     })),
   );
-  await new D1StoryReadModelRepository(db).upsert({
-    storyId,
-    slug: story.slug,
-    titleHu: version.title_hu,
-    leadHu: version.lead_hu,
-    bodyHtml: readModelProjector.toBodyHtml(version.body_hu),
-    imageUrl: story.image_url,
-    inlineImages,
-    isAiGenerated: version.is_ai_generated !== 0,
-    metaDescription: version.meta_description,
-    structuredData: version.structured_data ? JSON.parse(version.structured_data) : null,
-    sourcesSummary,
-    tags: [],
-    category: null,
-    confidenceScore: story.confidence_score,
-    isDeveloping: story.is_developing !== 0,
-    publishedAt: new Date(story.published_at),
-    lastUpdatedAt: new Date(),
-    versionHistorySummary: versions.results
-      .filter((item) => item.is_published !== 0)
-      .map((item) => ({
-        version_number: item.version_number,
-        prompt_version: item.prompt_version,
-        is_current: item.id === version.id,
-        created_at: new Date(item.created_at).toISOString(),
-        change_summary: item.change_summary_hu,
-      })),
-    credibilitySummary: null,
-  });
+  await new D1StoryReadModelRepository(db).upsert(
+    {
+      storyId,
+      slug: story.slug,
+      titleHu: version.title_hu,
+      leadHu: version.lead_hu,
+      bodyHtml: readModelProjector.toBodyHtml(version.body_hu),
+      imageUrl: story.image_url,
+      inlineImages,
+      isAiGenerated: version.is_ai_generated !== 0,
+      metaDescription: version.meta_description,
+      structuredData: version.structured_data ? JSON.parse(version.structured_data) : null,
+      sourcesSummary,
+      tags: [],
+      category: null,
+      confidenceScore: story.confidence_score,
+      isDeveloping: story.is_developing !== 0,
+      publishedAt: new Date(story.published_at),
+      lastUpdatedAt: new Date(),
+      versionHistorySummary: versions.results
+        .filter((item) => item.is_published !== 0)
+        .map((item) => ({
+          version_number: item.version_number,
+          prompt_version: item.prompt_version,
+          is_current: item.id === version.id,
+          created_at: new Date(item.created_at).toISOString(),
+          change_summary: item.change_summary_hu,
+        })),
+      credibilitySummary: null,
+    },
+    { versionId, bodyHu: version.body_hu },
+  );
 }
 
 export interface D1PublicationOptions {

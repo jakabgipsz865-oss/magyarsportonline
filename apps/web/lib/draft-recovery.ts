@@ -155,7 +155,7 @@ export async function recoverSavedDrafts(
     reasons.push(...flags.map((f) => f.code));
     const active = await db
       .prepare(
-        `SELECT 1 FROM pipeline_jobs WHERE (json_extract(event,'$.payload.storyId')=? OR json_extract(event,'$.payload.rawArticleId')=?) AND status IN ('pending','in_progress') LIMIT 1`,
+        `SELECT 1 FROM pipeline_jobs WHERE (coalesce(json_extract(event,'$.payload.story_id'),json_extract(event,'$.payload.storyId'))=? OR coalesce(json_extract(event,'$.payload.raw_article_id'),json_extract(event,'$.payload.rawArticleId'))=?) AND status IN ('pending','in_progress') LIMIT 1`,
       )
       .bind(id, row.raw_id)
       .first();
@@ -189,7 +189,7 @@ export async function recoverSavedDrafts(
             AND v.quality_issues IS ? AND v.title_hu=? AND v.lead_hu=? AND v.body_hu=?
             AND v.version_number=(SELECT max(version_number) FROM story_versions WHERE story_id=s.id))
           AND EXISTS(SELECT 1 FROM raw_articles WHERE id=? AND title_original=? AND body_original=? AND published_at_source IS ? AND first_seen_at IS ?)
-          AND NOT EXISTS(SELECT 1 FROM pipeline_jobs WHERE (json_extract(event,'$.payload.storyId')=? OR json_extract(event,'$.payload.rawArticleId')=?) AND status IN ('pending','in_progress'))
+          AND NOT EXISTS(SELECT 1 FROM pipeline_jobs WHERE (coalesce(json_extract(event,'$.payload.story_id'),json_extract(event,'$.payload.storyId'))=? OR coalesce(json_extract(event,'$.payload.raw_article_id'),json_extract(event,'$.payload.rawArticleId'))=?) AND status IN ('pending','in_progress'))
           AND NOT EXISTS(SELECT 1 FROM review_queue_items WHERE story_version_id=? AND status='pending' AND reason!='content_quality_failed')
           ON CONFLICT(version_id) DO NOTHING`,
           )

@@ -75,7 +75,7 @@ describe.skipIf(!corpusPath)("124 authenticated real source/draft pairs", () => 
       }>;
       const warnings = stored
         .filter((f) => f.code === "writer_language_warning" && !f.repaired)
-        .map((f) => "Persisted Writer warning");
+        .map(() => "Persisted Writer warning");
       const flags = assessTabloidQuality({
         sourceLanguage: row["language"]!,
         sourceContent: `${row["title_original"]}\n${row["body_original"]}`,
