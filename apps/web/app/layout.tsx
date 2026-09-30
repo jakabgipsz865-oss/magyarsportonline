@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { SiteHeader } from "../components/site-header";
+import { AnalyticsConsent } from "../components/analytics-consent";
+import { AudienceTracker } from "../components/audience-tracker";
 import { NavigationAttribution } from "../components/navigation-attribution";
 import { bodyFont, displayFont, monoFont } from "../lib/fonts";
 import { env } from "../lib/env";
@@ -43,8 +45,13 @@ export default function RootLayout({ children }: { children: ReactNode }): React
           }}
         />
         <SiteHeader />
-        <NavigationAttribution />
-        {children}
+        <AnalyticsConsent>
+          <NavigationAttribution />
+          <Suspense fallback={null}>
+            <AudienceTracker />
+          </Suspense>
+          {children}
+        </AnalyticsConsent>
       </body>
     </html>
   );

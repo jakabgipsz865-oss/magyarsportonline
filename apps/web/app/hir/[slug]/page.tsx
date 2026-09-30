@@ -5,7 +5,6 @@ import { cache, Fragment, type ReactNode } from "react";
 import { deduplication } from "@magyarsportonline/agents";
 import { MediaThumb } from "../../../components/media-thumb";
 import { SiteFooter } from "../../../components/site-footer";
-import { QualifiedReadTracker } from "../../../components/qualified-read-tracker";
 import { StoryRiver } from "../../../components/story-river";
 import { createPublicRepositories } from "../../../lib/db";
 import { env } from "../../../lib/env";
@@ -175,8 +174,7 @@ export default async function StoryPage({ params }: PageProps): Promise<ReactNod
       </Link>
       <div className="story-layout">
         <div className="story-main">
-          <article className="story-article">
-            <QualifiedReadTracker storyId={story.id} />
+          <article className="story-article" data-story-id={story.id}>
             <span className="kicker">
               Labdarúgás{primaryEntity ? " · " + primaryEntity.nameHu : ""}
             </span>

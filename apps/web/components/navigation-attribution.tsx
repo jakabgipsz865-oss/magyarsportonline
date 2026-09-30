@@ -1,10 +1,15 @@
 "use client";
 
 import { useEffect } from "react";
+import { useAnalyticsConsent } from "./analytics-consent";
+import { readConsent } from "../lib/audience";
 
 export function NavigationAttribution(): null {
+  const allowed = useAnalyticsConsent();
   useEffect(() => {
+    if (!allowed) return;
     function rememberClick(event: MouseEvent): void {
+      if (readConsent(document.cookie) !== "allow") return;
       const target = event.target;
       if (!(target instanceof Element)) return;
       const link = target.closest<HTMLAnchorElement>("a[href]");
@@ -27,6 +32,6 @@ export function NavigationAttribution(): null {
     }
     document.addEventListener("click", rememberClick);
     return () => document.removeEventListener("click", rememberClick);
-  }, []);
+  }, [allowed]);
   return null;
 }

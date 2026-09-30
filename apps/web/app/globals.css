@@ -1278,6 +1278,7 @@ main {
   padding-top: clamp(2rem, 5vw, 4rem);
 }
 .legal-page > article {
+  overflow-wrap: anywhere;
   max-width: 760px;
   margin: 0 auto 3rem;
 }
@@ -2139,4 +2140,76 @@ main {
 .admin-diagnostics button {
   max-width: 100%;
   white-space: normal;
+}
+
+/* Optional statistics: equal choices, unobstructed reading, always revocable. */
+.consent-settings {
+  position: fixed;
+  bottom: 12px;
+  left: 12px;
+  z-index: 50;
+  background: #fff;
+  color: #182522;
+  border: 1px solid #52635a;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.consent-panel {
+  position: fixed;
+  z-index: 51;
+  bottom: 52px;
+  left: 12px;
+  right: 12px;
+  max-width: 620px;
+  max-height: 65vh;
+  overflow: auto;
+  background: #fff;
+  color: #182522;
+  padding: 20px;
+  border: 1px solid #52635a;
+  border-radius: 8px;
+  box-shadow: 0 4px 24px #0003;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.consent-panel h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+.consent-panel a {
+  text-decoration: underline;
+}
+.consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.consent-actions button {
+  flex: 1 1 220px;
+  padding: 12px;
+  background: #fff;
+  color: #182522;
+  border: 1px solid #52635a;
+  border-radius: 4px;
+  font: inherit;
+  cursor: pointer;
+}
+.consent-actions button:focus-visible,
+.consent-settings:focus-visible {
+  outline: 3px solid #28734a;
+  outline-offset: 3px;
+}
+
+.consent-close {
+  float: right;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  margin-bottom: 8px;
 }

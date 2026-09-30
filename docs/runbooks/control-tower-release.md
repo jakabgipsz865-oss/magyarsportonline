@@ -1,13 +1,17 @@
 # Coordinated control-tower release — PR #143
 
-Production is unchanged. Deploy and activation each require the owner's explicit instruction.
+The owner authorized controlled production release after all technical/privacy/CI gates pass.
+Consent-first audience measurement is approved (owner decision 2026-09-30).
+Language QA and recovery execution remain separately disabled.
 Primary Writer stays `gemini-3.5-flash-lite`. Development and Preview use no paid AI.
 
 ## AI BILLING PRE-FLIGHT — manual gate before any production release
 
 - Cloudflare AI Gateway Unified Billing is active for Gemini.
 - Sufficient Cloudflare AI credit / functioning equivalent billing is available.
-- Owner manually verified Auto Top-Up state and a valid payment method in Cloudflare.
+- Credit is MANUALLY replenished by the owner; Auto Recharge is intentionally OFF.
+- Account-level Cloudflare Gateway Spend Limit is $30/month (owner-confirmed).
+- Check manual credit availability and valid billing; never enable Auto Recharge or change payment/billing.
 - Gemini Gateway smoke succeeds: one normal minimal request **at the authorized release**,
   logged in the existing ledger and counted against the cap. No paid development smoke.
 - MSO application-side monthly hard cap is $30; daily request cap remains 450.
@@ -80,7 +84,7 @@ never the recovery time. No social intent is created. Execution is idempotent.
 
 ## Additive migrations
 
-Apply once in numbered order: 0002 qualified-read/trending, 0003 recovery, 0004 Language QA. 0002 is
+Apply once in numbered order: 0002 qualified-read/trending, 0003 recovery, 0004 Language QA, 0005 consent-only audience analytics. 0002 is
 still pre-production and includes hero ID/time. 0003 is idempotent. Migration does
 not execute recovery or make AI calls. Retain tables/ledgers on rollback; restore
 the previous web/scheduler versions and leave activation switches off.
@@ -150,23 +154,63 @@ to 30; the homepage reads only the existing bounded trending snapshot. Scheduler
 health comes from the actual persisted heartbeat, including stale/error status.
 Audit diffs show the original/replacement sentences, reason, model and timestamp.
 
-No reliable programmatic UV/PV/session feed is configured. These metrics explicitly
-show unavailable for day/week/month, and inventory/UV threshold assessment is not
-computed. Qualified reads remain a separate KPI, measured from existing deduplicated
-events. Weekly/monthly qualified reads cannot be reconstructed from the short
-retention ledger. A pure estimator accepts only verified monthly PV / complete
-30-day UV, computes 1/2/3 slots and theoretical/70% inventory, and labels estimates
-and internal 3,000/5,000/15,000 UV work thresholds explicitly.
-No new visitor cookie, marketing tracker, fingerprint or persistent IP profile.
-The existing necessary HttpOnly admin session cookie is unchanged. Qualified-read
-sessionStorage and the existing transient per-isolate IP limiter are retained.
-That limiter is a minimal abuse brake, not a global/distributed bot protection system.
+### Consent and retention — owner decision incorporated
 
-## Production release sequence — only after separate authorization
+Optional first-party PV, browser-session and Qualified Read measurement starts ONLY
+following explicit opt-in. Equal buttons: “Statisztikai mérés engedélyezése” / “Csak
+szükséges funkciók”. Reading/navigation remain functional without consent. No event,
+random session UUID or analytics sessionStorage before consent. Revocation is always
+available through “Statisztikai beállítások”, stops requests and clears analytics keys.
+GDPR analytics basis: consent, GDPR 6(1)(a), as explicitly decided by the owner.
+Terminal-device analytics storage/access is also consent-gated.
+Necessary preference cookie `mso_analytics_consent`: fixed versioned allow/deny, no ID,
+90 days, Path=/, SameSite=Lax, Secure on HTTPS. No cookie before an explicit choice.
+Cookie changes/expiry are checked again before requests; no enduring visitor identifier.
+SessionStorage `mso:audience-session` is tab-session scoped; browser restore/duplication
+can retain/copy it. It is not UV. QR keys and 15-minute navigation markers stay ephemeral.
+No localStorage visitor ID, fingerprint, marketing profile, GA, Meta Pixel, email,
+user-agent, raw referrer/query or analytics IP persistence.
+
+0005 stores minimal pseudonymous events for **32 days** (rolling 30 days + 2 buffer).
+Five-minute scheduler cleanup deletes at most 5,000 old indexed raw events per call;
+physical retention may exceed the target if cleanup is delayed—monitor heartbeat and
+backlog, repeat sweeps without AI. Existing QR raw/buckets remain 48h/25h.
+Atomic insert triggers update identifier-free UTC daily totals, daily Story PV/QR and
+daily categorized sources. These aggregates remain for **the entire site lifetime**;
+raw cleanup never deletes them. They support future current/previous calendar month,
+year and all-time reports/media kits. No pre-instrumentation backfill is invented.
+Daily session counts remain daily; never sum them into period-distinct sessions.
+The 24h/7d/30d report uses indexed raw-window DISTINCT session IDs across day boundaries.
+QR/article-PV uses qualified linked PVs in the period, excluding unmatched QR boundary
+noise; QR totals separately use actual event timestamps. Before 30 full measured days,
+inventory remains unavailable; this means partial rolling coverage, not lost history.
+1/2/3 slots × observed consented 30-day PV, 100%/70%, always BECSLÉS; no extrapolation
+for nonconsenting users and no UV threshold derived from PV/session.
+CSV is authenticated aggregate-only (no event/session IDs), formula-escaped.
+
+### Existing Cloudflare source audit — READ ONLY, 2026-09-30
+
+Existing mso24.hu RUM site `f72f8ac6306143ccb3ffe357d711a7ec` has auto_install=true,
+ruleset enabled (lite=true). No account setting was changed and no beacon was added.
+Existing GraphQL rumPageloadEventsAdaptiveGroups query succeeded for 2026-09-29 UTC:
+count=703 / sum(visits)=703. Cloudflare visits are external/direct-entry page views,
+not unique people or our Browser session. The admin does not merge this older metric
+with consented first-party counts. True UV/returning remain NOT RELIABLY MEASURABLE;
+PV/visits/source integration would require the Cloudflare data-source adapter and
+explicit attribution/sampling disclosure. No reliable UV/returning source is proved.
+The application CSP blocks external scripts including the edge-auto-injected
+static.cloudflareinsights.com beacon; connect-src stays same-origin. Verify this on
+all production aliases and in a fresh browser before completing release. This keeps
+all optional client analytics consent-first without altering Cloudflare account settings.
+Cloudflare hosting/security analytics remain distinct from browser analytics.
+The in-memory IP abuse limiter remains 120/60s/isolate; keys are not D1-persisted and
+expire on clearing/restart, not a guaranteed globally distributed rate limit.
+
+## Production release sequence — authorized after all gates PASS
 
 1. **D1 migrations:** back up/snapshot first. Verify production binding is
    `eb02f98e-fd89-4277-94be-0f763056b91e` (its historical name contains "staging"
-   but it is production). Apply 0002, 0003, 0004 in order. Never use a production
+   but it is production). Apply 0002 → 0003 → 0004 → 0005 in order. Never use a production
    SQL import to perform a read-only audit. 0002 is controlled pre-release;
    0003/0004 are additive/idempotent. Verify tables/indexes and foreign-key integrity.
 2. **Web Worker:** deploy the reviewed PR commit to `magyarsportonline-web` with
@@ -181,9 +225,21 @@ That limiter is a minimal abuse brake, not a global/distributed bot protection s
    authenticated calls succeed against the web Worker; never print its value.
 4. **First trending refresh:** authenticated POST `/api/internal/trending`; expect
    2xx. GET that endpoint must show a changing refreshedAt and valid public ranking.
-5. **Qualified-read smoke:** one dedicated public test Story/event through the
-   existing endpoint; duplicate event must not increment twice; cross-origin and
-   over-size submissions fail. Delete only explicitly designated smoke data if needed.
+5. **Consent/PV/Qualified-read smoke:** fresh browser, no event/storage before choice;
+   explicit opt-in, a real public page/article PV and a linked QR; event retry and
+   session/story duplicates must not increment twice. Revoke, confirm no new event.
+   Cross-origin, missing consent/origin and oversize bodies fail. Keep minimal smoke
+   counters with genuine observed traffic; never publish a synthetic production Story.
+   Use existing signed admin auth for aggregate reports and `/api/admin/release-check`.
+   That endpoint reads only the frozen 124 IDs, verifies saved text hashes and numeric
+   categories, and calls recovery with execute=false/executionEnabled=false. No writes,
+   no models, no social. If cohort differs, report it; do not force the expected 96/28.
+   CRON/Gateway secrets remain Worker bindings: check names/metadata, never extract
+   or rotate them. Observe the scheduler's own authenticated protected calls and
+   heartbeat for ≥15 minutes / ≥4 five-minute refreshes, including no 401/403 mismatch.
+   A fresh successful regular Primary Writer ledger entry after release verifies the
+   existing Gateway/Unified Billing path; do not generate another paid test draft just
+   to obtain the same evidence. This is a normal production call, not a development call.
 6. **Admin smoke:** login, Overview/Quality/Popularity/Monetization/System/Knowledge,
    old review routes and logout. Check Production label and real D1 KPIs; no fake UV/PV.
 7. **QA OFF:** authenticated POST `/api/internal/language-qa` returns disabled and
