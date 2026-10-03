@@ -2,7 +2,9 @@ import { languageQa, tabloid } from "@magyarsportonline/agents";
 import { d1Timestamp, type D1Client } from "@magyarsportonline/db/d1";
 import {
   CloudflareApiError,
-  estimateCloudflareCostUsd,
+  GeminiApiError,
+  describeGeminiError,
+  estimateGeminiCostUsd,
   type LlmClient,
 } from "@magyarsportonline/llm";
 import { projectD1Story, relevantD1Knowledge } from "./d1-tabloid";
@@ -137,7 +139,7 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
       new TextEncoder().encode(request.system + request.messages[0]!.content).length + 512;
     reservedCost = policy.mock
       ? 0
-      : estimateCloudflareCostUsd(languageQa.LANGUAGE_QA_MODEL, maxInput, request.maxTokens);
+      : estimateGeminiCostUsd(languageQa.LANGUAGE_QA_MODEL, maxInput, request.maxTokens);
     const day = now.toISOString().slice(0, 10);
     usageId = crypto.randomUUID();
     const reservation = await db
@@ -153,7 +155,7 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
         languageQa.LANGUAGE_QA_MODEL,
         reservedCost.toFixed(8),
         time,
-        policy.mock ? "cloudflare_mock" : "cloudflare",
+        policy.mock ? "gemini_mock" : "gemini",
         audit.story_id,
         day,
         policy.dailyCalls,
@@ -184,7 +186,7 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
     const cost = policy.mock
       ? 0
       : result.inputTokens > 0
-        ? estimateCloudflareCostUsd(
+        ? estimateGeminiCostUsd(
             languageQa.LANGUAGE_QA_MODEL,
             result.inputTokens,
             result.outputTokens,
@@ -325,7 +327,9 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
           : outputShape
             ? `cloudflare_parse_${outputShape}`
             : `cloudflare_${error.kind}_${error.status}`
-        : null;
+        : error instanceof GeminiApiError
+          ? `gemini_${describeGeminiError(error)}`
+          : null;
     if (usageId)
       await db
         .prepare(
