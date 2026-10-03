@@ -68,6 +68,6 @@ export function getLanguageQaClient(): LlmClient {
     accountId: env.CLOUDFLARE_ACCOUNT_ID,
     apiToken: env.WORKERS_AI_API_TOKEN,
     model: languageQa.LANGUAGE_QA_MODEL,
-    requestTimeoutMs: 20_000,
+    requestTimeoutMs: 70_000,
   });
 }
