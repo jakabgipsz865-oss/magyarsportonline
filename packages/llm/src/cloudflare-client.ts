@@ -149,6 +149,16 @@ function stripMarkdownFence(text: string): string {
   const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/.exec(trimmed);
   return fenced ? (fenced[1] ?? "").trim() : trimmed;
 }
+function outputShape(content: unknown): string {
+  if (typeof content !== "string") return "non_string";
+  const value = content.trim();
+  if (!value) return "empty";
+  if (value.startsWith("<think>") || value.startsWith("<|")) return "reasoning";
+  if (value.startsWith("```")) return "fence";
+  if (value.startsWith("{")) return "object";
+  if (value.startsWith("[")) return "array";
+  return "prose";
+}
 
 /**
  * Sekély, séma-könyvtár-független teljesség-ellenőrzés: a kért JSON Schema
@@ -265,7 +275,7 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
         lastError ??= error instanceof CloudflareApiError
           ? error
           : new CloudflareApiError("parse_error", 0,
-              `Cloudflare Workers AI returned non-JSON output: ${error instanceof Error ? error.message : String(error)}`);
+              `output_shape:${outputShape(content)}`);
       }
     }
     if (lastError) throw lastError;

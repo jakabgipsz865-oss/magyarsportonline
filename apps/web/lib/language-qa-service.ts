@@ -288,9 +288,14 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
     const timeoutMs = error instanceof CloudflareApiError && error.kind === "network"
       ? /timed out after (\d+) ms/u.exec(error.message)?.[1]
       : null;
+    const outputShape = error instanceof CloudflareApiError && error.kind === "parse_error"
+      ? /output_shape:(empty|reasoning|fence|object|array|prose|non_string)/u.exec(error.message)?.[1]
+      : null;
     const providerCode = error instanceof CloudflareApiError
       ? (timeoutMs
         ? `cloudflare_timeout_${timeoutMs}`
+        : outputShape
+          ? `cloudflare_parse_${outputShape}`
         : `cloudflare_${error.kind}_${error.status}`)
       : null;
     if (usageId)

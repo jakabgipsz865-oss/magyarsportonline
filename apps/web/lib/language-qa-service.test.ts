@@ -257,6 +257,18 @@ describe("durable bounded Language QA", () => {
       f.db.close();
     }
   });
+  it("records only the parse shape and never the model's article text", async () => {
+    const f = fixture();
+    try {
+      f.completeJson.mockRejectedValue(new CloudflareApiError("parse_error", 0,
+        "output_shape:reasoning"));
+      await enqueueLanguageQa(f.d1, f.story, f.version, now);
+      await processLanguageQa(f.d1, policy, () => f.client);
+      expect(f.db.prepare("SELECT reason FROM language_qa_audits").get()).toEqual({ reason: "cloudflare_parse_reasoning" });
+    } finally {
+      f.db.close();
+    }
+  });
   it("detects modified content under an existing version ID during the safety sweep", async () => {
     const f = fixture();
     try {
