@@ -185,6 +185,28 @@ describe("durable bounded Language QA", () => {
       f.db.close();
     }
   });
+  it("does not flood the queue while a historical QA backlog is pending", async () => {
+    const f = fixture();
+    try {
+      await enqueueLanguageQa(f.d1, f.story, f.version, now);
+      for (let index = 1; index < 100; index++)
+        f.db
+          .prepare(
+            `INSERT INTO language_qa_audits(id,story_id,version_id,content_hash,original_fields,status,model,queued_at,next_attempt_at)
+          SELECT ?,story_id,version_id,?,original_fields,'queued',model,queued_at,next_attempt_at FROM language_qa_audits LIMIT 1`,
+          )
+          .run(crypto.randomUUID(), `historical-${index}`);
+      f.db.prepare("UPDATE story_versions SET body_hu='Másik szöveg.' WHERE id=?").run(f.version);
+      expect(await sweepLanguageQa(f.d1, now)).toBe(0);
+      expect(f.db.prepare("SELECT count(*) n FROM language_qa_audits").get()).toEqual({ n: 100 });
+      f.db
+        .prepare("UPDATE language_qa_audits SET status='pass' WHERE content_hash='historical-1'")
+        .run();
+      expect(await sweepLanguageQa(f.d1, now)).toBe(1);
+    } finally {
+      f.db.close();
+    }
+  });
   it("daily call limit is reserved atomically before creating a client", async () => {
     const f = fixture();
     try {
