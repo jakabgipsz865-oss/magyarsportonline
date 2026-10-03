@@ -1,6 +1,6 @@
 import { languageQa } from "@magyarsportonline/agents";
 import {
-  CloudflareWorkersAiLlmClient,
+  GeminiLlmClient,
   type LlmClient,
   type JsonCompletionRequest,
 } from "@magyarsportonline/llm";
@@ -62,12 +62,20 @@ export function getLanguageQaClient(): LlmClient {
       },
     };
   }
-  if (env.LLM_PROVIDER !== "cloudflare" || !env.CLOUDFLARE_ACCOUNT_ID || !env.WORKERS_AI_API_TOKEN)
-    throw new Error("Workers AI credentials unavailable");
-  return new CloudflareWorkersAiLlmClient({
-    accountId: env.CLOUDFLARE_ACCOUNT_ID,
-    apiToken: env.WORKERS_AI_API_TOKEN,
+  if (
+    env.LLM_PROVIDER !== "cloudflare" ||
+    env.GEMINI_BILLING_MODE !== "unified" ||
+    !env.CLOUDFLARE_ACCOUNT_ID ||
+    !env.WORKERS_AI_API_TOKEN
+  )
+    throw new Error("Unified Billing QA credentials unavailable");
+  return new GeminiLlmClient({
     model: languageQa.LANGUAGE_QA_MODEL,
-    requestTimeoutMs: 70_000,
+    unifiedBilling: {
+      accountId: env.CLOUDFLARE_ACCOUNT_ID,
+      apiToken: env.WORKERS_AI_API_TOKEN,
+      gatewayId: env.CLOUDFLARE_AI_GATEWAY_ID,
+    },
+    timeoutMs: 70_000,
   });
 }

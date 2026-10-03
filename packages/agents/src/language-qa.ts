@@ -2,9 +2,8 @@ import { z } from "zod";
 import type { LlmClient } from "@magyarsportonline/llm";
 import { assessTabloidQuality, type TabloidForbiddenRule } from "./tabloid";
 import { languageQaPreservationFailure } from "./text-preservation";
-// This model supports Workers AI JSON Mode; GPT-OSS does not reliably return
-// the bounded JSON response required for safe, unattended production repairs.
-export const LANGUAGE_QA_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+// Separate source-aware review call; the primary Writer remains Flash Lite.
+export const LANGUAGE_QA_MODEL = "gemini-3.5-flash-lite";
 export const QA_ISSUE_TYPES = [
   "FOREIGN_LANGUAGE",
   "UNNATURAL_HUNGARIAN",

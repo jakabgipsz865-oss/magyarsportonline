@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { languageQa, tabloid } from "@magyarsportonline/agents";
-import { CloudflareApiError, type LlmClient } from "@magyarsportonline/llm";
+import { CloudflareApiError, GeminiApiError, type LlmClient } from "@magyarsportonline/llm";
 import { sqliteD1 } from "./testing/sqlite-d1";
 import { enqueueLanguageQa, sweepLanguageQa } from "./language-qa-store";
 import { processLanguageQa } from "./language-qa-service";
@@ -132,7 +132,7 @@ describe("durable bounded Language QA", () => {
       });
       expect(f.db.prepare("SELECT role,provider,status FROM llm_usage").get()).toEqual({
         role: "language_qa",
-        provider: "cloudflare",
+        provider: "gemini",
         status: "success",
       });
       expect(f.db.prepare("SELECT count(*) n FROM social_posts").get()).toEqual({ n: 0 });
@@ -322,6 +322,24 @@ describe("durable bounded Language QA", () => {
       });
       expect(f.db.prepare("SELECT error_code FROM llm_usage").get()).toEqual({
         error_code: "cloudflare_http_400",
+      });
+    } finally {
+      f.db.close();
+    }
+  });
+  it("records a bounded Gemini provider category without exposing response text", async () => {
+    const f = fixture();
+    try {
+      f.completeJson.mockRejectedValue(
+        new GeminiApiError(429, "RESOURCE_EXHAUSTED", "private provider response"),
+      );
+      await enqueueLanguageQa(f.d1, f.story, f.version, now);
+      await processLanguageQa(f.d1, policy, () => f.client);
+      expect(f.db.prepare("SELECT reason FROM language_qa_audits").get()).toEqual({
+        reason: "gemini_rate_limited",
+      });
+      expect(f.db.prepare("SELECT error_code FROM llm_usage").get()).toEqual({
+        error_code: "gemini_rate_limited",
       });
     } finally {
       f.db.close();
