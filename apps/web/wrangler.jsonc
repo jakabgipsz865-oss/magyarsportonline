@@ -32,10 +32,11 @@
   ],
   "vars": {
     "APP_ENV": "production",
-    "LANGUAGE_QA_ENABLED": "false",
+    "LANGUAGE_QA_ENABLED": "true",
     "LANGUAGE_QA_DAILY_CALL_CAP": "300",
     "LANGUAGE_QA_DAILY_BUDGET_USD": "0.50",
     "LANGUAGE_QA_MOCK_MODE": "false",
+    "LANGUAGE_QA_PRIORITY_AFTER": "2026-10-03T15:40:00.000Z",
     "DRAFT_RECOVERY_ENABLED": "false",
     "SITE_URL": "https://mso24.hu",
     "LLM_PROVIDER": "cloudflare",

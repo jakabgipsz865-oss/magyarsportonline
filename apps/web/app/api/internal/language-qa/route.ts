@@ -18,6 +18,9 @@ export async function POST(request: NextRequest) {
           dailyCalls: env.LANGUAGE_QA_DAILY_CALL_CAP,
           dailyBudgetUsd: env.LANGUAGE_QA_DAILY_BUDGET_USD,
           mock: env.LANGUAGE_QA_MOCK_MODE !== "false",
+          ...(env.LANGUAGE_QA_PRIORITY_AFTER
+            ? { priorityAfter: env.LANGUAGE_QA_PRIORITY_AFTER }
+            : {}),
           sweep: request.nextUrl.searchParams.get("sweep") === "true",
         },
         getLanguageQaClient,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyLanguageQa, qaSentences, languageQaSchema, type ArticleFields } from "./language-qa";
+import { applyLanguageQa, qaRequest, qaSentences, languageQaSchema, type ArticleFields } from "./language-qa";
 const fields = (body_hu: string): ArticleFields => ({
   title_hu: "Hír a csapatról",
   lead_hu: "A klub beszámolt az eseményről.",
@@ -27,6 +27,14 @@ function response(
   };
 }
 describe("autonomous sentence Language QA guards", () => {
+  it("passes the original source language and full source text to the QA request", () => {
+    const source = { language: "de", title_original: "Ein Titel", body_original: "Der vollständige Quelltext." };
+    const request = qaRequest(fields("A csapat nyert."), "story-1", source);
+    expect(JSON.parse(request.messages[0]!.content).source).toEqual(source);
+    expect(request.system).toContain("forrásnyelvi mondatszerkezetet");
+    expect(languageQaSchema.safeParse(response(fields("A csapat nyert."), "A csapat nyert.", { type: "AWKWARD_COMPOUND" })).success).toBe(true);
+    expect(languageQaSchema.safeParse(response(fields("A csapat nyert."), "A csapat nyert.", { type: "SOURCE_LANGUAGE_STRUCTURE" })).success).toBe(true);
+  });
   it("accepts bounded PASS only", () => {
     expect(
       applyLanguageQa(
@@ -61,6 +69,13 @@ describe("autonomous sentence Language QA guards", () => {
     expect(r.article.title_hu).toBe(a.title_hu);
     expect(r.article.lead_hu).toBe(a.lead_hu);
   });
+  it("permits a bounded, meaning-preserving Hungarian word choice", () => {
+    const a = fields("A kapus grandiózus teljesítményt nyújtott.");
+    const result = applyLanguageQa(a, response(a, "A kapus remek teljesítményt nyújtott."), {
+      text: "The goalkeeper produced a great performance.", language: "en",
+    });
+    expect(result.status).toBe("repaired");
+  });
   it.each([
     ["Kane 2 gólt szerzett.", "Kane 3 gólt szerzett.", {}, "numbers_changed"],
     ["Kane nyert a mérkőzésen.", "Messi nyert a mérkőzésen.", {}, "proper_names_changed"],
@@ -74,6 +89,8 @@ describe("autonomous sentence Language QA guards", () => {
     ["A Bayern nem győzött.", "A Bayern győzött.", {}, "unproven_semantic_change"],
     ["A Bayern győzött.", "A Bayern csalással győzött.", {}, "unproven_semantic_change"],
     ["A Bayern győzött.", "A Bayern kikapott.", {}, "unproven_semantic_change"],
+    ["A Bayern ma játszott.", "A Bayern tegnap játszott.", {}, "unproven_semantic_change"],
+    ["A kapus megtartotta a labdát.", "A kapus eldobta a labdát.", {}, "unproven_semantic_change"],
     ["Kane azt mondta: „Nyertünk”.", "Kane azt mondta: „Vesztettünk”.", {}, "quote_changed"],
   ])("rejects unsafe replacement %s", (original, replacement, extra, reason) => {
     const a = fields(original as string);

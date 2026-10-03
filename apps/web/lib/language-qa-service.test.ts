@@ -56,7 +56,7 @@ function fixture(body = "A Bayern győzelmet hozott a mérkőzésen.") {
       },
     ],
   };
-  const completeJson = vi.fn(async () => ({
+  const completeJson = vi.fn(async (_request: ReturnType<typeof languageQa.qaRequest>) => ({
     data: response,
     inputTokens: 100,
     outputTokens: 100,
@@ -86,6 +86,11 @@ describe("durable bounded Language QA", () => {
       expect((await processLanguageQa(f.d1, policy, () => f.client)).processed).toBe(0);
       expect(await sweepLanguageQa(f.d1, now)).toBe(0);
       expect(f.completeJson).toHaveBeenCalledOnce();
+      expect(JSON.parse(f.completeJson.mock.calls[0]![0].messages[0]!.content).source).toEqual({
+        language: "en",
+        title_original: "Bayern won the match",
+        body_original: "Bayern won the match. Kane scored 2 goals.",
+      });
       expect(f.db.prepare("SELECT count(*) n FROM story_versions").get()).toEqual({ n: 2 });
       expect(f.db.prepare("SELECT published_at FROM stories").get()).toEqual({
         published_at: "2026-09-29T18:00:00Z",
@@ -97,6 +102,31 @@ describe("durable bounded Language QA", () => {
       });
       expect(f.db.prepare("SELECT count(*) n FROM social_posts").get()).toEqual({ n: 0 });
       expect(f.db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    } finally {
+      f.db.close();
+    }
+  });
+  it("processes a new published story before the older backlog, one audit per invocation", async () => {
+    const f = fixture();
+    try {
+      await enqueueLanguageQa(f.d1, f.story, f.version, new Date("2026-09-29T19:00:00Z"));
+      const freshStory = crypto.randomUUID(), freshVersion = crypto.randomUUID();
+      f.db.exec("BEGIN");
+      f.db.prepare(`INSERT INTO stories(id,canonical_title,status,current_version_id,version_count,slug,published_at)
+        VALUES(?,'Fresh','published',?,1,'fresh','2026-09-30T00:00:00Z')`).run(freshStory, freshVersion);
+      f.db.prepare(`INSERT INTO story_versions(id,story_id,version_number,title_hu,lead_hu,body_hu,generated_by_model,prompt_version,is_published)
+        SELECT ?,?,1,title_hu,lead_hu,body_hu,generated_by_model,prompt_version,1 FROM story_versions WHERE id=?`)
+        .run(freshVersion, freshStory, f.version);
+      f.db.prepare(`INSERT INTO story_sources(id,story_id,raw_article_id,contribution_type)
+        VALUES(?,?,?,'initial')`).run(crypto.randomUUID(), freshStory, f.raw);
+      f.db.exec("COMMIT");
+      await enqueueLanguageQa(f.d1, freshStory, freshVersion, now);
+      const first = await processLanguageQa(f.d1, {
+        ...policy, priorityAfter: new Date("2026-09-29T20:00:00Z"),
+      }, () => f.client);
+      expect(first.processed).toBe(1);
+      expect(f.completeJson.mock.calls[0]![0].usageContext.storyId).toBe(freshStory);
+      expect(f.db.prepare("SELECT status FROM language_qa_audits WHERE story_id=?").get(f.story)).toEqual({ status: "queued" });
     } finally {
       f.db.close();
     }

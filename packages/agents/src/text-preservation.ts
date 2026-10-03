@@ -102,3 +102,51 @@ export function preservationFailure(
   if (strictContent && !same(content(before), content(after))) return "unproven_semantic_change";
   return null;
 }
+
+// A Language QA sentence may replace a small number of awkward words. Keep
+// factual anchors immutable even when the complete lexical bag changes.
+const factualAnchors: Array<[string, RegExp]> = [
+  ["NEGATION", /^(?:nem|nincs|sincs|sem|se|soha|nelkul)$/u],
+  ["UNCERTAINTY", /^(?:lehet|talan|allitolag|feltehetoleg|varhato|bizonytalan|kerdeses)$/u],
+  ["TIME", /^(?:ma|tegnap|holnap|korabban|kesobb|mar|meg|hetfo|kedd|szerda|csutortok|pentek|szombat|vasarnap)$/u],
+  ["WIN", /^(?:gyoz|nyer|megnyer|legyoz|diadalmaskod)/u],
+  ["LOSS", /^(?:veszit|kikap|elbuk|vereseget|legyoztek)/u],
+  ["DRAW", /^(?:dontetlen|ikszel)/u],
+  ["SCORE", /^(?:gol|talalat|pont|vezet|egyenlit|hatrany)/u],
+  ["INJURY", /^(?:serul|mutet|beteg|felepul|kihagy)/u],
+  ["TRANSFER", /^(?:igazol|szerzod|kolcson|atad|elad|megvasarol)/u],
+  ["CONFIRMATION", /^(?:megerosit|bejelent|tagad|cafol|elutasit)/u],
+  ["ALLEGATION", /^(?:csal|vad|gyanu|allit|hazud|botrany|buntet)/u],
+  ["CAUSE", /^(?:miatt|okoz|kovetkez|ellenere)/u],
+];
+const safeIdiomaticVariants = [
+  ["grandiozus", "nagyszeru", "remek"],
+  ["labdarugo", "futballista", "focista"],
+  ["merkozes", "meccs"],
+  ["fontos", "lenyeges"],
+];
+function sameSafeVariant(before: string, after: string): boolean {
+  return safeIdiomaticVariants.some((group) => group.includes(before) && group.includes(after));
+}
+function anchorSignature(s: string): string[] {
+  return tokens(s)
+    .map((word) => fold(word))
+    .flatMap((word) => factualAnchors.filter(([, pattern]) => pattern.test(word))
+      .map(([key]) => ["WIN", "LOSS", "DRAW"].includes(key) ? key : `${key}:${word}`))
+    .sort();
+}
+/** Bounded idiomatic change for a source-aware QA decision, never a fact rewrite. */
+export function languageQaPreservationFailure(before: string, after: string): string | null {
+  const immutableFailure = preservationFailure(before, after);
+  if (immutableFailure) return immutableFailure;
+  const oldWords = content(before), newWords = content(after);
+  if (same(oldWords, newWords)) return null;
+  if (!same(anchorSignature(before), anchorSignature(after))) return "unproven_semantic_change";
+  const removed = oldWords.filter((word) => !newWords.includes(word));
+  const added = newWords.filter((word) => !oldWords.includes(word));
+  if (!removed.length || removed.length !== added.length || removed.length > 2 ||
+      after.length > before.length * 1.5 ||
+      !removed.every((word, index) => sameSafeVariant(word, added[index]!)))
+    return "unproven_semantic_change";
+  return null;
+}

@@ -27,6 +27,7 @@ export interface QaPolicy {
   mock?: boolean;
   now?: Date;
   sweep?: boolean;
+  priorityAfter?: Date;
 }
 const retryAt = (now: Date) => d1Timestamp(new Date(now.getTime() + 30 * 60_000));
 /** Separate durable audit queue in the existing scheduler. No publication waits for it. */
@@ -42,6 +43,9 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
     throw new Error("Invalid QA hard limits");
   const now = policy.now ?? new Date(),
     time = d1Timestamp(now);
+  const priorityAfter = policy.priorityAfter
+    ? d1Timestamp(policy.priorityAfter)
+    : "9999-12-31 23:59:59";
   const swept = policy.sweep ? await sweepLanguageQa(db, now) : 0;
   const projection = await db
     .prepare(
@@ -59,11 +63,11 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
   const audit = await db
     .prepare(
       `UPDATE language_qa_audits SET status='processing',lease_owner=?,lease_expires_at=?,attempts=attempts+1
-  WHERE id=(SELECT id FROM language_qa_audits WHERE attempts<3 AND
-   ((status IN ('queued','technical_error') AND next_attempt_at<=?) OR (status='processing' AND lease_expires_at<=?))
-   ORDER BY queued_at LIMIT 1) RETURNING *`,
+  WHERE id=(SELECT q.id FROM language_qa_audits q JOIN stories s ON s.id=q.story_id WHERE q.attempts<3 AND
+   ((q.status IN ('queued','technical_error') AND q.next_attempt_at<=?) OR (q.status='processing' AND q.lease_expires_at<=?))
+   ORDER BY CASE WHEN s.published_at>=? THEN 0 ELSE 1 END, q.queued_at LIMIT 1) RETURNING *`,
     )
-    .bind(owner, d1Timestamp(new Date(now.getTime() + 120_000)), time, time)
+    .bind(owner, d1Timestamp(new Date(now.getTime() + 120_000)), time, time, priorityAfter)
     .first<Audit>();
   if (!audit) return { processed: 0, swept };
   const finish = async (status: string, reason: string, issues: unknown[] = []) =>
@@ -90,12 +94,13 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
         `SELECT v.title_hu,v.lead_hu,v.body_hu,v.quality_issues,v.prompt_version,r.id raw_id,r.language,r.title_original,r.body_original
    FROM stories s JOIN story_versions v ON s.current_version_id=v.id
    JOIN story_sources ss ON ss.story_id=s.id AND ss.excluded=0 JOIN raw_articles r ON r.id=ss.raw_article_id
-   WHERE s.id=? AND v.id=? AND s.status='published' AND v.is_published=1 AND r.content_origin='full_article' LIMIT 2`,
+   WHERE s.id=? AND v.id=? AND s.status='published' AND v.is_published=1 AND r.content_origin='full_article'
+   ORDER BY CASE WHEN ss.contribution_type='initial' THEN 0 ELSE 1 END,ss.id LIMIT 1`,
       )
       .bind(audit.story_id, audit.version_id)
       .all<Live>();
     const row = live.results[0];
-    if (live.results.length !== 1 || !row || row.prompt_version !== tabloid.TABLOID_PROMPT) {
+    if (!row || row.prompt_version !== tabloid.TABLOID_PROMPT) {
       await finish("repair_rejected", "stale_version_or_ambiguous_source");
       return { processed: 1, status: "repair_rejected" };
     }
@@ -112,7 +117,11 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
       await finish("repair_rejected", "stored_non_repairable_quality_issue");
       return { processed: 1, status: "repair_rejected" };
     }
-    const request = languageQa.qaRequest(fields, audit.story_id);
+    const request = languageQa.qaRequest(fields, audit.story_id, {
+      language: row.language,
+      title_original: row.title_original,
+      body_original: row.body_original,
+    });
     const maxInput =
       new TextEncoder().encode(request.system + request.messages[0]!.content).length + 512;
     reservedCost = policy.mock
@@ -284,8 +293,8 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
         .bind(usageId)
         .run();
     const reason =
-      error instanceof Error && error.message === "qa_input_too_large"
-        ? "qa_input_too_large"
+      error instanceof Error && ["qa_input_too_large", "qa_source_unavailable"].includes(error.message)
+        ? error.message
         : "language_qa_technical_error";
     await finish("technical_error", reason);
     console.error("language_qa technical_error", { auditId: audit.id, reason });

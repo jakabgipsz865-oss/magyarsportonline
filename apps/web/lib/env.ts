@@ -71,6 +71,7 @@ export const env = createEnv({
     LANGUAGE_QA_DAILY_CALL_CAP: z.coerce.number().int().positive().max(300).default(300),
     LANGUAGE_QA_DAILY_BUDGET_USD: z.coerce.number().positive().max(1).default(0.5),
     LANGUAGE_QA_MOCK_MODE: z.enum(["false", "pass", "fixtures"]).default("false"),
+    LANGUAGE_QA_PRIORITY_AFTER: z.coerce.date().optional(),
 
     GEMINI_API_KEY: z.string().min(1).optional(),
     GEMINI_MODEL: z.string().min(1).default("gemini-3.5-flash-lite"),
