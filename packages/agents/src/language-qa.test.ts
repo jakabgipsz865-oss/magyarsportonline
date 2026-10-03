@@ -34,6 +34,7 @@ describe("autonomous sentence Language QA guards", () => {
     expect(request.system).toContain("forrásnyelvi mondatszerkezetet");
     expect(request.system).toContain("TELJES mondatát másold be betű szerint");
     expect(request.system).toContain("legalább 0.97 bizonyosságú");
+    expect(request.system).toContain("grandiózus teljesítményt");
     expect(languageQaSchema.safeParse(response(fields("A csapat nyert."), "A csapat nyert.", { type: "AWKWARD_COMPOUND" })).success).toBe(true);
     expect(languageQaSchema.safeParse(response(fields("A csapat nyert."), "A csapat nyert.", { type: "SOURCE_LANGUAGE_STRUCTURE" })).success).toBe(true);
   });
