@@ -285,8 +285,13 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
     }
     return { processed: 1, status: "repaired", newVersionId: newId };
   } catch (error) {
+    const timeoutMs = error instanceof CloudflareApiError && error.kind === "network"
+      ? /timed out after (\d+) ms/u.exec(error.message)?.[1]
+      : null;
     const providerCode = error instanceof CloudflareApiError
-      ? `cloudflare_${error.kind}_${error.status}`
+      ? (timeoutMs
+        ? `cloudflare_timeout_${timeoutMs}`
+        : `cloudflare_${error.kind}_${error.status}`)
       : null;
     if (usageId)
       await db

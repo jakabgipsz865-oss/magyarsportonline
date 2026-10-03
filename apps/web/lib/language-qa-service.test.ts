@@ -245,6 +245,18 @@ describe("durable bounded Language QA", () => {
       f.db.close();
     }
   });
+  it("distinguishes a bounded provider timeout from another network failure", async () => {
+    const f = fixture();
+    try {
+      f.completeJson.mockRejectedValue(new CloudflareApiError("network", 0,
+        "Cloudflare Workers AI request timed out after 20000 ms"));
+      await enqueueLanguageQa(f.d1, f.story, f.version, now);
+      await processLanguageQa(f.d1, policy, () => f.client);
+      expect(f.db.prepare("SELECT reason FROM language_qa_audits").get()).toEqual({ reason: "cloudflare_timeout_20000" });
+    } finally {
+      f.db.close();
+    }
+  });
   it("detects modified content under an existing version ID during the safety sweep", async () => {
     const f = fixture();
     try {
