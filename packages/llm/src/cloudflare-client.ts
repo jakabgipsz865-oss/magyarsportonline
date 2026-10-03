@@ -20,9 +20,8 @@ export const WRITER_CLOUDFLARE_MODEL = "@cf/openai/gpt-oss-120b";
 
 /** A logikai gyors/olcsó tier Cloudflare-only production modellje. */
 const FAST_LOGICAL_MODEL_TIERS = new Set(["claude-haiku-4-5", "claude-sonnet-5"]);
-// GPT-OSS speaks the Responses shape on /ai/run. Use its supported Chat
-// Completions endpoint and validate the prompted JSON in our own boundary.
-const CHAT_ONLY_MODELS = new Set([WRITER_CLOUDFLARE_MODEL]);
+// GPT-OSS may return a Responses or Chat-shaped payload from /ai/run.
+const GPT_OSS_MODELS = new Set([WRITER_CLOUDFLARE_MODEL]);
 
 /** Cloudflare által dokumentált JSON Mode modellazonosítók. */
 const JSON_MODE_SUPPORTED_MODELS = new Set([
@@ -124,8 +123,12 @@ interface CloudflareChatCompletionResponse {
 interface CloudflareStructuredResponse {
   result?: {
     response?: unknown;
-    usage?: { prompt_tokens?: number; completion_tokens?: number };
+    choices?: Array<{ message?: { content?: unknown } }>;
+    output_text?: string;
+    output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number; input_tokens?: number; output_tokens?: number };
   };
+  choices?: Array<{ message?: { content?: unknown } }>;
   errors?: Array<{ code?: number; message?: string }>;
 }
 
@@ -213,7 +216,7 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
     // env-ben maradt modell ezt hivatalosan nem támogatja, ne próbáljuk meg
     // reménykedve parse-olni a szabad szöveges választ: használjuk a
     // dokumentált production alapmodellt.
-    this.model = JSON_MODE_SUPPORTED_MODELS.has(configuredModel) || CHAT_ONLY_MODELS.has(configuredModel)
+    this.model = JSON_MODE_SUPPORTED_MODELS.has(configuredModel) || GPT_OSS_MODELS.has(configuredModel)
       ? configuredModel
       : DEFAULT_CLOUDFLARE_MODEL;
     this.baseUrl = options.baseUrl ?? API_BASE;
@@ -237,36 +240,41 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
   }
 
   async completeJson(request: JsonCompletionRequest): Promise<JsonCompletionResult> {
-    let content: unknown;
-    let inputTokens = 0, outputTokens = 0;
-    if (CHAT_ONLY_MODELS.has(this.modelForRequest(request.model))) {
-      const response = await this.chatCompletion(request, undefined);
-      content = response.choices?.[0]?.message?.content;
-      inputTokens = response.usage?.prompt_tokens ?? 0;
-      outputTokens = response.usage?.completion_tokens ?? 0;
-    } else {
-      const response = await this.structuredCompletion(request);
-      content = response.result?.response;
-      inputTokens = response.result?.usage?.prompt_tokens ?? 0;
-      outputTokens = response.result?.usage?.completion_tokens ?? 0;
-    }
-
+    const response = await this.structuredCompletion(request);
+    const result = response.result;
+    const outputText = result?.output?.flatMap((entry) => entry.content ?? [])
+      .find((entry) => entry.type === "output_text")?.text;
+    const candidates = [
+      result?.response,
+      result?.choices?.[0]?.message?.content,
+      response.choices?.[0]?.message?.content,
+      result?.output_text,
+      outputText,
+      result,
+    ];
     let data: unknown;
-    try {
-      data = typeof content === "string" ? JSON.parse(stripMarkdownFence(content)) : content;
-    } catch (error) {
-      throw new CloudflareApiError(
-        "parse_error",
-        0,
-        `Cloudflare Workers AI returned non-JSON output: ${error instanceof Error ? error.message : String(error)}`,
-      );
+    let lastError: CloudflareApiError | null = null;
+    for (const content of candidates) {
+      if (content === undefined || content === null) continue;
+      try {
+        data = typeof content === "string" ? JSON.parse(stripMarkdownFence(content)) : content;
+        assertRequiredFields(data, request.jsonSchema);
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError ??= error instanceof CloudflareApiError
+          ? error
+          : new CloudflareApiError("parse_error", 0,
+              `Cloudflare Workers AI returned non-JSON output: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
+    if (lastError) throw lastError;
     assertRequiredFields(data, request.jsonSchema);
 
     return {
       data,
-      inputTokens,
-      outputTokens,
+      inputTokens: result?.usage?.prompt_tokens ?? result?.usage?.input_tokens ?? 0,
+      outputTokens: result?.usage?.completion_tokens ?? result?.usage?.output_tokens ?? 0,
       modelLabel: this.modelForRequest(request.model),
     };
   }
@@ -298,7 +306,7 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
     if (JSON_MODE_SUPPORTED_MODELS.has(requestedModel)) {
       return requestedModel;
     }
-    if (CHAT_ONLY_MODELS.has(requestedModel)) return requestedModel;
+    if (GPT_OSS_MODELS.has(requestedModel)) return requestedModel;
     return this.model;
   }
 
