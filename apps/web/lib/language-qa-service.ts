@@ -52,6 +52,14 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
   const priorityAfter = policy.priorityAfter
     ? d1Timestamp(policy.priorityAfter)
     : "9999-12-31 23:59:59";
+  // Reserve the daily QA capacity for articles that have not yet been published.
+  // At most one historical article becomes eligible per elapsed UTC hour, with
+  // a hard maximum of 24 backlog calls per day. A large old queue must not
+  // consume all 300 calls before later new articles arrive.
+  const backlogAllowance = Math.min(policy.dailyCalls, 24, now.getUTCHours() + 1);
+  const dayStart = d1Timestamp(
+    new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())),
+  );
   const swept = policy.sweep ? await sweepLanguageQa(db, now) : 0;
   const projection = await db
     .prepare(
@@ -71,6 +79,9 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
       `UPDATE language_qa_audits SET status='processing',model=?,lease_owner=?,lease_expires_at=?,attempts=attempts+1
   WHERE id=(SELECT q.id FROM language_qa_audits q JOIN stories s ON s.id=q.story_id WHERE q.attempts<3 AND
    ((q.status IN ('queued','technical_error') AND q.next_attempt_at<=?) OR (q.status='processing' AND q.lease_expires_at<=?))
+   AND (s.published_at>=? OR (SELECT count(*) FROM llm_usage u JOIN stories historical ON historical.id=u.story_id
+     WHERE u.role='language_qa' AND u.status IN ('reserved','success','error') AND u.occurred_at>=?
+       AND historical.published_at<?)<?)
    ORDER BY CASE WHEN s.published_at>=? THEN 0 ELSE 1 END, q.queued_at LIMIT 1) RETURNING *`,
     )
     .bind(
@@ -79,6 +90,10 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
       d1Timestamp(new Date(now.getTime() + 120_000)),
       time,
       time,
+      priorityAfter,
+      dayStart,
+      priorityAfter,
+      backlogAllowance,
       priorityAfter,
     )
     .first<Audit>();
