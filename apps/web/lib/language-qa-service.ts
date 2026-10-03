@@ -1,6 +1,6 @@
 import { languageQa, tabloid } from "@magyarsportonline/agents";
 import { d1Timestamp, type D1Client } from "@magyarsportonline/db/d1";
-import { estimateCloudflareCostUsd, type LlmClient } from "@magyarsportonline/llm";
+import { CloudflareApiError, estimateCloudflareCostUsd, type LlmClient } from "@magyarsportonline/llm";
 import { projectD1Story, relevantD1Knowledge } from "./d1-tabloid";
 import { qaContentHash, sweepLanguageQa } from "./language-qa-store";
 interface Audit {
@@ -285,17 +285,20 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
     }
     return { processed: 1, status: "repaired", newVersionId: newId };
   } catch (error) {
+    const providerCode = error instanceof CloudflareApiError
+      ? `cloudflare_${error.kind}_${error.status}`
+      : null;
     if (usageId)
       await db
         .prepare(
-          "UPDATE llm_usage SET status='error',error_code='language_qa_technical_error' WHERE id=? AND status='reserved'",
+          "UPDATE llm_usage SET status='error',error_code=? WHERE id=? AND status='reserved'",
         )
-        .bind(usageId)
+        .bind(providerCode ?? "language_qa_technical_error", usageId)
         .run();
     const reason =
       error instanceof Error && ["qa_input_too_large", "qa_source_unavailable"].includes(error.message)
         ? error.message
-        : "language_qa_technical_error";
+        : (providerCode ?? "language_qa_technical_error");
     await finish("technical_error", reason);
     console.error("language_qa technical_error", { auditId: audit.id, reason });
     return { processed: 1, status: "technical_error" };

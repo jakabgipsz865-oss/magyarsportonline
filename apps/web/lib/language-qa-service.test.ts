@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { languageQa, tabloid } from "@magyarsportonline/agents";
-import type { LlmClient } from "@magyarsportonline/llm";
+import { CloudflareApiError, type LlmClient } from "@magyarsportonline/llm";
 import { sqliteD1 } from "./testing/sqlite-d1";
 import { enqueueLanguageQa, sweepLanguageQa } from "./language-qa-store";
 import { processLanguageQa } from "./language-qa-service";
@@ -229,6 +229,18 @@ describe("durable bounded Language QA", () => {
         current_version_id: f.version,
       });
       expect(f.db.prepare("SELECT status FROM llm_usage").get()).toEqual({ status: "error" });
+    } finally {
+      f.db.close();
+    }
+  });
+  it("records only a safe provider error code, never a credential-bearing error message", async () => {
+    const f = fixture();
+    try {
+      f.completeJson.mockRejectedValue(new CloudflareApiError("http", 400, "secret must not persist"));
+      await enqueueLanguageQa(f.d1, f.story, f.version, now);
+      await processLanguageQa(f.d1, policy, () => f.client);
+      expect(f.db.prepare("SELECT reason FROM language_qa_audits").get()).toEqual({ reason: "cloudflare_http_400" });
+      expect(f.db.prepare("SELECT error_code FROM llm_usage").get()).toEqual({ error_code: "cloudflare_http_400" });
     } finally {
       f.db.close();
     }
