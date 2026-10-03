@@ -80,7 +80,10 @@ describe("durable bounded Language QA", () => {
     const f = fixture();
     try {
       f.completeJson.mockResolvedValueOnce({
-        data: { status: "PASS", issues: [{ replacement: "unbounded" }] },
+        data: {
+          status: "PASS",
+          issues: [{ replacement: "unbounded" }],
+        } as unknown as typeof f.response,
         inputTokens: 100,
         outputTokens: 100,
         modelLabel: languageQa.LANGUAGE_QA_MODEL,
