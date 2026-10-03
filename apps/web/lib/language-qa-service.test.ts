@@ -145,6 +145,12 @@ describe("durable bounded Language QA", () => {
     const f = fixture();
     try {
       await enqueueLanguageQa(f.d1, f.story, f.version, new Date("2026-09-29T19:00:00Z"));
+      f.db
+        .prepare(
+          `INSERT INTO llm_usage(id,model,input_tokens,output_tokens,cost_usd,role,status,occurred_at,story_id)
+          VALUES(?,'previous-qa',0,0,'0','language_qa','success','2026-09-30T00:00:00.000000+00:00',?)`,
+        )
+        .run(crypto.randomUUID(), f.story);
       const freshStory = crypto.randomUUID(),
         freshVersion = crypto.randomUUID();
       f.db.exec("BEGIN");
@@ -181,6 +187,33 @@ describe("durable bounded Language QA", () => {
       expect(
         f.db.prepare("SELECT status FROM language_qa_audits WHERE story_id=?").get(f.story),
       ).toEqual({ status: "queued" });
+    } finally {
+      f.db.close();
+    }
+  });
+  it("paces the old backlog by UTC hour without spending later new-story capacity", async () => {
+    const f = fixture();
+    try {
+      await enqueueLanguageQa(f.d1, f.story, f.version, now);
+      f.db
+        .prepare(
+          `INSERT INTO llm_usage(id,model,input_tokens,output_tokens,cost_usd,role,status,occurred_at,story_id)
+          VALUES(?,'previous-qa',0,0,'0','language_qa','success','2026-09-30T00:00:00.000000+00:00',?)`,
+        )
+        .run(crypto.randomUUID(), f.story);
+      const freshFirst = { ...policy, priorityAfter: new Date("2026-09-29T20:00:00Z") };
+      expect((await processLanguageQa(f.d1, freshFirst, () => f.client)).processed).toBe(0);
+      expect(f.completeJson).not.toHaveBeenCalled();
+      expect(f.db.prepare("SELECT status FROM language_qa_audits").get()).toEqual({
+        status: "queued",
+      });
+      const nextHour = await processLanguageQa(
+        f.d1,
+        { ...freshFirst, now: new Date("2026-09-30T01:00:00Z") },
+        () => f.client,
+      );
+      expect(nextHour.processed).toBe(1);
+      expect(f.completeJson).toHaveBeenCalledOnce();
     } finally {
       f.db.close();
     }
