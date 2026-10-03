@@ -95,10 +95,39 @@ describe("scheduler branch isolation", () => {
     const env = { APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" };
     scheduler.scheduled({ scheduledTime: nonRefreshMinute.getTime() }, env, context);
     scheduler.scheduled({ scheduledTime: nonRefreshMinute.getTime() }, env, context);
-    expect(runs).toHaveLength(1);
+    expect(runs).toHaveLength(2);
     expect(fetchMock).toHaveBeenCalledTimes(4);
     release();
-    await runs[0];
+    await Promise.all(runs);
+  });
+
+  it("keeps the next minute's ingest running while a QA model request is still pending", async () => {
+    let releaseQa!: () => void;
+    const heldQa = new Promise<void>((resolve) => {
+      releaseQa = resolve;
+    });
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL | Request) => {
+        calls.push(String(url));
+        if (String(url).includes("language-qa")) await heldQa;
+        return new Response("", { status: 200 });
+      }),
+    );
+    const runs: Promise<unknown>[] = [];
+    const context = {
+      waitUntil: (promise: Promise<unknown>) => {
+        runs.push(promise);
+      },
+    };
+    const env = { APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" };
+    scheduler.scheduled({ scheduledTime: nonRefreshMinute.getTime() }, env, context);
+    await runs[1];
+    scheduler.scheduled({ scheduledTime: nonRefreshMinute.getTime() + 60_000 }, env, context);
+    expect(calls.filter((url) => url.includes("dispatch-ingest"))).toHaveLength(2);
+    releaseQa();
+    await Promise.all(runs);
   });
 
   it("aborts a dependency that never sends response headers", async () => {

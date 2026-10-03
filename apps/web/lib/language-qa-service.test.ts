@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { languageQa, tabloid } from "@magyarsportonline/agents";
-import type { LlmClient } from "@magyarsportonline/llm";
+import { CloudflareApiError, type LlmClient } from "@magyarsportonline/llm";
 import { sqliteD1 } from "./testing/sqlite-d1";
 import { enqueueLanguageQa, sweepLanguageQa } from "./language-qa-store";
 import { processLanguageQa } from "./language-qa-service";
@@ -56,7 +56,7 @@ function fixture(body = "A Bayern győzelmet hozott a mérkőzésen.") {
       },
     ],
   };
-  const completeJson = vi.fn(async () => ({
+  const completeJson = vi.fn(async (_request: ReturnType<typeof languageQa.qaRequest>) => ({
     data: response,
     inputTokens: 100,
     outputTokens: 100,
@@ -76,17 +76,57 @@ describe("durable bounded Language QA", () => {
     expect(factory).not.toHaveBeenCalled();
     expect((db as { prepare: ReturnType<typeof vi.fn> }).prepare).not.toHaveBeenCalled();
   });
+  it("retries a malformed model audit as a technical error without changing the story", async () => {
+    const f = fixture();
+    try {
+      f.completeJson.mockResolvedValueOnce({
+        data: {
+          status: "PASS",
+          issues: [{ replacement: "unbounded" }],
+        } as unknown as typeof f.response,
+        inputTokens: 100,
+        outputTokens: 100,
+        modelLabel: languageQa.LANGUAGE_QA_MODEL,
+      });
+      await enqueueLanguageQa(f.d1, f.story, f.version, now);
+      expect((await processLanguageQa(f.d1, policy, () => f.client)).status).toBe(
+        "technical_error",
+      );
+      expect(f.db.prepare("SELECT status,reason FROM language_qa_audits").get()).toEqual({
+        status: "technical_error",
+        reason:
+          "invalid_model_schema:issues.0.sentence_id:invalid_type,issues.0.type:invalid_type,issues.0.confidence:invalid_type",
+      });
+      expect(f.db.prepare("SELECT current_version_id FROM stories").get()).toEqual({
+        current_version_id: f.version,
+      });
+      expect(f.db.prepare("SELECT status FROM llm_usage").get()).toEqual({ status: "success" });
+    } finally {
+      f.db.close();
+    }
+  });
   it("publishes a guarded new version once, retains chronology, and audits the resulting version without another call", async () => {
     const f = fixture();
     try {
       await enqueueLanguageQa(f.d1, f.story, f.version, now);
       await enqueueLanguageQa(f.d1, f.story, f.version, now);
+      f.db.prepare("UPDATE language_qa_audits SET model='@cf/openai/gpt-oss-120b'").run();
       const r = await processLanguageQa(f.d1, policy, () => f.client);
       expect(r.status).toBe("repaired");
       expect((await processLanguageQa(f.d1, policy, () => f.client)).processed).toBe(0);
       expect(await sweepLanguageQa(f.d1, now)).toBe(0);
       expect(f.completeJson).toHaveBeenCalledOnce();
+      expect(JSON.parse(f.completeJson.mock.calls[0]![0].messages[0]!.content).source).toEqual({
+        language: "en",
+        title_original: "Bayern won the match",
+        body_original: "Bayern won the match. Kane scored 2 goals.",
+      });
       expect(f.db.prepare("SELECT count(*) n FROM story_versions").get()).toEqual({ n: 2 });
+      expect(
+        f.db.prepare("SELECT model FROM language_qa_audits WHERE version_id=?").get(f.version),
+      ).toEqual({
+        model: languageQa.LANGUAGE_QA_MODEL,
+      });
       expect(f.db.prepare("SELECT published_at FROM stories").get()).toEqual({
         published_at: "2026-09-29T18:00:00Z",
       });
@@ -97,6 +137,72 @@ describe("durable bounded Language QA", () => {
       });
       expect(f.db.prepare("SELECT count(*) n FROM social_posts").get()).toEqual({ n: 0 });
       expect(f.db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    } finally {
+      f.db.close();
+    }
+  });
+  it("processes a new published story before the older backlog, one audit per invocation", async () => {
+    const f = fixture();
+    try {
+      await enqueueLanguageQa(f.d1, f.story, f.version, new Date("2026-09-29T19:00:00Z"));
+      const freshStory = crypto.randomUUID(),
+        freshVersion = crypto.randomUUID();
+      f.db.exec("BEGIN");
+      f.db
+        .prepare(
+          `INSERT INTO stories(id,canonical_title,status,current_version_id,version_count,slug,published_at)
+        VALUES(?,'Fresh','published',?,1,'fresh','2026-09-30T00:00:00Z')`,
+        )
+        .run(freshStory, freshVersion);
+      f.db
+        .prepare(
+          `INSERT INTO story_versions(id,story_id,version_number,title_hu,lead_hu,body_hu,generated_by_model,prompt_version,is_published)
+        SELECT ?,?,1,title_hu,lead_hu,body_hu,generated_by_model,prompt_version,1 FROM story_versions WHERE id=?`,
+        )
+        .run(freshVersion, freshStory, f.version);
+      f.db
+        .prepare(
+          `INSERT INTO story_sources(id,story_id,raw_article_id,contribution_type)
+        VALUES(?,?,?,'initial')`,
+        )
+        .run(crypto.randomUUID(), freshStory, f.raw);
+      f.db.exec("COMMIT");
+      await enqueueLanguageQa(f.d1, freshStory, freshVersion, now);
+      const first = await processLanguageQa(
+        f.d1,
+        {
+          ...policy,
+          priorityAfter: new Date("2026-09-29T20:00:00Z"),
+        },
+        () => f.client,
+      );
+      expect(first.processed).toBe(1);
+      expect(f.completeJson.mock.calls[0]![0].usageContext.storyId).toBe(freshStory);
+      expect(
+        f.db.prepare("SELECT status FROM language_qa_audits WHERE story_id=?").get(f.story),
+      ).toEqual({ status: "queued" });
+    } finally {
+      f.db.close();
+    }
+  });
+  it("does not flood the queue while a historical QA backlog is pending", async () => {
+    const f = fixture();
+    try {
+      await enqueueLanguageQa(f.d1, f.story, f.version, now);
+      for (let index = 1; index < 100; index++)
+        f.db
+          .prepare(
+            `INSERT INTO language_qa_audits(id,story_id,version_id,content_hash,original_fields,status,model,queued_at,next_attempt_at)
+          SELECT ?,story_id,version_id,?,original_fields,'queued',model,queued_at,next_attempt_at FROM language_qa_audits LIMIT 1`,
+          )
+          .run(crypto.randomUUID(), `historical-${index}`);
+      f.db.prepare("UPDATE story_versions SET body_hu='Másik szöveg.' WHERE id=?").run(f.version);
+      expect(await sweepLanguageQa(f.d1, now)).toBe(0);
+      expect(f.db.prepare("SELECT count(*) n FROM language_qa_audits").get()).toEqual({ n: 100 });
+      f.db
+        .prepare("UPDATE language_qa_audits SET status='pass' WHERE content_hash='historical-1'")
+        .run();
+      expect(await sweepLanguageQa(f.d1, now)).toBe(1);
     } finally {
       f.db.close();
     }
@@ -199,6 +305,58 @@ describe("durable bounded Language QA", () => {
         current_version_id: f.version,
       });
       expect(f.db.prepare("SELECT status FROM llm_usage").get()).toEqual({ status: "error" });
+    } finally {
+      f.db.close();
+    }
+  });
+  it("records only a safe provider error code, never a credential-bearing error message", async () => {
+    const f = fixture();
+    try {
+      f.completeJson.mockRejectedValue(
+        new CloudflareApiError("http", 400, "secret must not persist"),
+      );
+      await enqueueLanguageQa(f.d1, f.story, f.version, now);
+      await processLanguageQa(f.d1, policy, () => f.client);
+      expect(f.db.prepare("SELECT reason FROM language_qa_audits").get()).toEqual({
+        reason: "cloudflare_http_400",
+      });
+      expect(f.db.prepare("SELECT error_code FROM llm_usage").get()).toEqual({
+        error_code: "cloudflare_http_400",
+      });
+    } finally {
+      f.db.close();
+    }
+  });
+  it("distinguishes a bounded provider timeout from another network failure", async () => {
+    const f = fixture();
+    try {
+      f.completeJson.mockRejectedValue(
+        new CloudflareApiError(
+          "network",
+          0,
+          "Cloudflare Workers AI request timed out after 20000 ms",
+        ),
+      );
+      await enqueueLanguageQa(f.d1, f.story, f.version, now);
+      await processLanguageQa(f.d1, policy, () => f.client);
+      expect(f.db.prepare("SELECT reason FROM language_qa_audits").get()).toEqual({
+        reason: "cloudflare_timeout_20000",
+      });
+    } finally {
+      f.db.close();
+    }
+  });
+  it("records only the parse shape and never the model's article text", async () => {
+    const f = fixture();
+    try {
+      f.completeJson.mockRejectedValue(
+        new CloudflareApiError("parse_error", 0, "output_shape:reasoning"),
+      );
+      await enqueueLanguageQa(f.d1, f.story, f.version, now);
+      await processLanguageQa(f.d1, policy, () => f.client);
+      expect(f.db.prepare("SELECT reason FROM language_qa_audits").get()).toEqual({
+        reason: "cloudflare_parse_reasoning",
+      });
     } finally {
       f.db.close();
     }

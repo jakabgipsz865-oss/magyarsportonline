@@ -2,6 +2,7 @@ const INGEST_TIMEOUT_MS = 50_000;
 const JOBS_TIMEOUT_MS = 45_000;
 const SOCIAL_TIMEOUT_MS = 15_000;
 const TRENDING_TIMEOUT_MS = 15_000;
+const LANGUAGE_QA_TIMEOUT_MS = 90_000;
 
 export interface Env {
   APP_ORIGIN: string;
@@ -86,15 +87,21 @@ async function post(
   }
 }
 
-export async function runCron(env: Env, now = new Date()): Promise<void> {
+export async function runCron(
+  env: Env,
+  now = new Date(),
+  backgroundQa?: (promise: Promise<void>) => void,
+): Promise<void> {
+  const qa = post(
+    endpoint(env.APP_ORIGIN, "/api/internal/language-qa") +
+      (now.getUTCMinutes() % 30 === 0 ? "?sweep=true" : ""),
+    "language-qa",
+    env,
+    LANGUAGE_QA_TIMEOUT_MS,
+  );
+  if (backgroundQa) backgroundQa(qa.catch(() => undefined));
   const results = await Promise.allSettled([
-    post(
-      endpoint(env.APP_ORIGIN, "/api/internal/language-qa") +
-        (now.getUTCMinutes() % 30 === 0 ? "?sweep=true" : ""),
-      "language-qa",
-      env,
-      25_000,
-    ),
+    ...(backgroundQa ? [] : [qa]),
     post(
       endpoint(env.APP_ORIGIN, "/api/internal/cron/dispatch-ingest"),
       "dispatch-ingest",
@@ -151,7 +158,9 @@ export default {
       console.warn("scheduled invocation skipped while previous invocation is still active");
       return;
     }
-    activeScheduledRun = runCron(env, new Date(event.scheduledTime ?? Date.now())).finally(() => {
+    activeScheduledRun = runCron(env, new Date(event.scheduledTime ?? Date.now()), (qa) =>
+      ctx.waitUntil(qa),
+    ).finally(() => {
       activeScheduledRun = null;
     });
     ctx.waitUntil(activeScheduledRun);

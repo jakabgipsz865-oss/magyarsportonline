@@ -128,12 +128,21 @@ describe("CloudflareWorkersAiLlmClient", () => {
     expect(client.modelLabel).toBe(FAST_CLOUDFLARE_MODEL);
   });
 
-  it("uses the dedicated gpt-oss model for a structured writer request", async () => {
-    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+  it("accepts the GPT-OSS Chat-shaped /ai/run payload for a structured request", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       expect(String(url)).toBe(
         `https://api.cloudflare.com/client/v4/accounts/acc/ai/run/${WRITER_CLOUDFLARE_MODEL}`,
       );
-      return structuredResponse({ title_hu: "Cím", lead_hu: "Lead" });
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      expect(body["response_format"]).toEqual({ type: "json_schema", json_schema: JSON_SCHEMA });
+      return jsonResponse({
+        result: {
+          choices: [{ message: { content: '{"title_hu":"Cím","lead_hu":"Lead"}' } }],
+          usage: { prompt_tokens: 30, completion_tokens: 12 },
+        },
+        success: true,
+        errors: [],
+      });
     });
     const client = new CloudflareWorkersAiLlmClient({
       accountId: "acc",
@@ -149,6 +158,36 @@ describe("CloudflareWorkersAiLlmClient", () => {
     });
 
     expect(result.modelLabel).toBe(WRITER_CLOUDFLARE_MODEL);
+    expect(result.data).toEqual({ title_hu: "Cím", lead_hu: "Lead" });
+    expect(result.inputTokens).toBe(30);
+  });
+
+  it("accepts the GPT-OSS Responses-shaped /ai/run output", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        result: {
+          output: [
+            { content: [{ type: "output_text", text: '{"title_hu":"Cím","lead_hu":"Lead"}' }] },
+          ],
+          usage: { input_tokens: 20, output_tokens: 10 },
+        },
+        success: true,
+        errors: [],
+      }),
+    );
+    const client = new CloudflareWorkersAiLlmClient({
+      accountId: "acc",
+      apiToken: "tok",
+      fetchImpl,
+    });
+    const result = await client.completeJson({
+      ...textRequest,
+      model: WRITER_CLOUDFLARE_MODEL,
+      jsonSchema: JSON_SCHEMA,
+    });
+    expect(result.data).toEqual({ title_hu: "Cím", lead_hu: "Lead" });
+    expect(result.inputTokens).toBe(20);
+    expect(result.outputTokens).toBe(10);
   });
 
   it("parses JSON completions, including markdown-fenced output", async () => {

@@ -4,6 +4,7 @@ interface CloudflareEnv {
   LANGUAGE_QA_DAILY_CALL_CAP?: string;
   LANGUAGE_QA_DAILY_BUDGET_USD?: string;
   LANGUAGE_QA_MOCK_MODE?: "false" | "pass" | "fixtures";
+  LANGUAGE_QA_PRIORITY_AFTER?: string;
   DRAFT_RECOVERY_ENABLED?: "true" | "false";
   DB?: import("@magyarsportonline/db/d1").D1Client;
   SITE_URL: string;

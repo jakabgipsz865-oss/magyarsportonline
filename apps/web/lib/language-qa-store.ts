@@ -40,8 +40,17 @@ export async function enqueueLanguageQa(
     )
     .run();
 }
-/** Bounded incremental sweep. Modified text under the same ID also gets a new content hash. */
+/** Reconcile older missing audits only when the existing queue has room.
+ * Fresh publications enqueue directly and are never throttled by this sweep.
+ */
 export async function sweepLanguageQa(db: D1Client, now = new Date()): Promise<number> {
+  const pending = await db
+    .prepare(
+      "SELECT count(*) n FROM language_qa_audits WHERE status IN ('queued','technical_error','processing')",
+    )
+    .first<{ n: number }>();
+  const room = Math.max(0, 100 - (pending?.n ?? 0));
+  if (room === 0) return 0;
   const rows = await db
     .prepare(
       `SELECT s.id story_id,s.current_version_id version_id FROM stories s JOIN story_versions v ON v.id=s.current_version_id
@@ -50,9 +59,9 @@ export async function sweepLanguageQa(db: D1Client, now = new Date()): Promise<n
     AND json_extract(q.original_fields,'$.title_hu')=v.title_hu
     AND json_extract(q.original_fields,'$.lead_hu')=v.lead_hu
     AND json_extract(q.original_fields,'$.body_hu')=v.body_hu)
-  ORDER BY s.last_updated_at DESC LIMIT 50`,
+  ORDER BY s.last_updated_at DESC LIMIT ?`,
     )
-    .bind(tabloid.TABLOID_PROMPT)
+    .bind(tabloid.TABLOID_PROMPT, Math.min(room, 10))
     .all<{ story_id: string; version_id: string }>();
   for (const row of rows.results) await enqueueLanguageQa(db, row.story_id, row.version_id, now);
   return rows.results.length;
