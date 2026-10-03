@@ -1,6 +1,10 @@
 import { languageQa, tabloid } from "@magyarsportonline/agents";
 import { d1Timestamp, type D1Client } from "@magyarsportonline/db/d1";
-import { CloudflareApiError, estimateCloudflareCostUsd, type LlmClient } from "@magyarsportonline/llm";
+import {
+  CloudflareApiError,
+  estimateCloudflareCostUsd,
+  type LlmClient,
+} from "@magyarsportonline/llm";
 import { projectD1Story, relevantD1Knowledge } from "./d1-tabloid";
 import { qaContentHash, sweepLanguageQa } from "./language-qa-store";
 interface Audit {
@@ -67,7 +71,14 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
    ((q.status IN ('queued','technical_error') AND q.next_attempt_at<=?) OR (q.status='processing' AND q.lease_expires_at<=?))
    ORDER BY CASE WHEN s.published_at>=? THEN 0 ELSE 1 END, q.queued_at LIMIT 1) RETURNING *`,
     )
-    .bind(languageQa.LANGUAGE_QA_MODEL, owner, d1Timestamp(new Date(now.getTime() + 120_000)), time, time, priorityAfter)
+    .bind(
+      languageQa.LANGUAGE_QA_MODEL,
+      owner,
+      d1Timestamp(new Date(now.getTime() + 120_000)),
+      time,
+      time,
+      priorityAfter,
+    )
     .first<Audit>();
   if (!audit) return { processed: 0, swept };
   const finish = async (status: string, reason: string, issues: unknown[] = []) =>
@@ -191,7 +202,8 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
       // A syntactically valid model reply without the bounded audit schema is
       // not a completed language review. Record only field paths and error
       // codes, never article text or the provider's raw reply.
-      const shape = validated.error.issues.slice(0, 3)
+      const shape = validated.error.issues
+        .slice(0, 3)
         .map((issue) => `${issue.path.join(".") || "root"}:${issue.code}`)
         .join(",");
       await finish("technical_error", `invalid_model_schema:${shape}`);
@@ -296,19 +308,24 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
     }
     return { processed: 1, status: "repaired", newVersionId: newId };
   } catch (error) {
-    const timeoutMs = error instanceof CloudflareApiError && error.kind === "network"
-      ? /timed out after (\d+) ms/u.exec(error.message)?.[1]
-      : null;
-    const outputShape = error instanceof CloudflareApiError && error.kind === "parse_error"
-      ? /output_shape:(empty|reasoning|fence|object|array|prose|non_string)/u.exec(error.message)?.[1]
-      : null;
-    const providerCode = error instanceof CloudflareApiError
-      ? (timeoutMs
-        ? `cloudflare_timeout_${timeoutMs}`
-        : outputShape
-          ? `cloudflare_parse_${outputShape}`
-        : `cloudflare_${error.kind}_${error.status}`)
-      : null;
+    const timeoutMs =
+      error instanceof CloudflareApiError && error.kind === "network"
+        ? /timed out after (\d+) ms/u.exec(error.message)?.[1]
+        : null;
+    const outputShape =
+      error instanceof CloudflareApiError && error.kind === "parse_error"
+        ? /output_shape:(empty|reasoning|fence|object|array|prose|non_string)/u.exec(
+            error.message,
+          )?.[1]
+        : null;
+    const providerCode =
+      error instanceof CloudflareApiError
+        ? timeoutMs
+          ? `cloudflare_timeout_${timeoutMs}`
+          : outputShape
+            ? `cloudflare_parse_${outputShape}`
+            : `cloudflare_${error.kind}_${error.status}`
+        : null;
     if (usageId)
       await db
         .prepare(
@@ -317,7 +334,8 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
         .bind(providerCode ?? "language_qa_technical_error", usageId)
         .run();
     const reason =
-      error instanceof Error && ["qa_input_too_large", "qa_source_unavailable"].includes(error.message)
+      error instanceof Error &&
+      ["qa_input_too_large", "qa_source_unavailable"].includes(error.message)
         ? error.message
         : (providerCode ?? "language_qa_technical_error");
     await finish("technical_error", reason);

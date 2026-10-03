@@ -126,7 +126,12 @@ interface CloudflareStructuredResponse {
     choices?: Array<{ message?: { content?: unknown } }>;
     output_text?: string;
     output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
-    usage?: { prompt_tokens?: number; completion_tokens?: number; input_tokens?: number; output_tokens?: number };
+    usage?: {
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      input_tokens?: number;
+      output_tokens?: number;
+    };
   };
   choices?: Array<{ message?: { content?: unknown } }>;
   errors?: Array<{ code?: number; message?: string }>;
@@ -226,9 +231,10 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
     // env-ben maradt modell ezt hivatalosan nem támogatja, ne próbáljuk meg
     // reménykedve parse-olni a szabad szöveges választ: használjuk a
     // dokumentált production alapmodellt.
-    this.model = JSON_MODE_SUPPORTED_MODELS.has(configuredModel) || GPT_OSS_MODELS.has(configuredModel)
-      ? configuredModel
-      : DEFAULT_CLOUDFLARE_MODEL;
+    this.model =
+      JSON_MODE_SUPPORTED_MODELS.has(configuredModel) || GPT_OSS_MODELS.has(configuredModel)
+        ? configuredModel
+        : DEFAULT_CLOUDFLARE_MODEL;
     this.baseUrl = options.baseUrl ?? API_BASE;
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.sessionAffinity = options.sessionAffinity ?? "magyarsportonline-production-v1";
@@ -252,7 +258,8 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
   async completeJson(request: JsonCompletionRequest): Promise<JsonCompletionResult> {
     const response = await this.structuredCompletion(request);
     const result = response.result;
-    const outputText = result?.output?.flatMap((entry) => entry.content ?? [])
+    const outputText = result?.output
+      ?.flatMap((entry) => entry.content ?? [])
       .find((entry) => entry.type === "output_text")?.text;
     const candidates = [
       result?.response,
@@ -272,10 +279,10 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
         lastError = null;
         break;
       } catch (error) {
-        lastError ??= error instanceof CloudflareApiError
-          ? error
-          : new CloudflareApiError("parse_error", 0,
-              `output_shape:${outputShape(content)}`);
+        lastError ??=
+          error instanceof CloudflareApiError
+            ? error
+            : new CloudflareApiError("parse_error", 0, `output_shape:${outputShape(content)}`);
       }
     }
     if (lastError) throw lastError;

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { applyLanguageQa, qaRequest, qaSentences, languageQaSchema, type ArticleFields } from "./language-qa";
+import {
+  applyLanguageQa,
+  qaRequest,
+  qaSentences,
+  languageQaSchema,
+  type ArticleFields,
+} from "./language-qa";
 const fields = (body_hu: string): ArticleFields => ({
   title_hu: "Hír a csapatról",
   lead_hu: "A klub beszámolt az eseményről.",
@@ -28,15 +34,33 @@ function response(
 }
 describe("autonomous sentence Language QA guards", () => {
   it("passes the original source language and full source text to the QA request", () => {
-    const source = { language: "de", title_original: "Ein Titel", body_original: "Der vollständige Quelltext." };
+    const source = {
+      language: "de",
+      title_original: "Ein Titel",
+      body_original: "Der vollständige Quelltext.",
+    };
     const request = qaRequest(fields("A csapat nyert."), "story-1", source);
     expect(JSON.parse(request.messages[0]!.content).source).toEqual(source);
     expect(request.system).toContain("forrásnyelvi mondatszerkezetet");
     expect(request.system).toContain("TELJES mondatát másold be betű szerint");
     expect(request.system).toContain("legalább 0.97 bizonyosságú");
     expect(request.system).toContain("grandiózus teljesítményt");
-    expect(languageQaSchema.safeParse(response(fields("A csapat nyert."), "A csapat nyert.", { type: "AWKWARD_COMPOUND" })).success).toBe(true);
-    expect(languageQaSchema.safeParse(response(fields("A csapat nyert."), "A csapat nyert.", { type: "SOURCE_LANGUAGE_STRUCTURE" })).success).toBe(true);
+    expect(request.system).toContain("S1, S2");
+    expect(request.jsonSchema.properties.issues.items.properties.sentence_id.pattern).toBe(
+      "^S[0-9]{1,3}$",
+    );
+    expect(
+      languageQaSchema.safeParse(
+        response(fields("A csapat nyert."), "A csapat nyert.", { type: "AWKWARD_COMPOUND" }),
+      ).success,
+    ).toBe(true);
+    expect(
+      languageQaSchema.safeParse(
+        response(fields("A csapat nyert."), "A csapat nyert.", {
+          type: "SOURCE_LANGUAGE_STRUCTURE",
+        }),
+      ).success,
+    ).toBe(true);
   });
   it("accepts bounded PASS only", () => {
     expect(
@@ -75,7 +99,8 @@ describe("autonomous sentence Language QA guards", () => {
   it("permits a bounded, meaning-preserving Hungarian word choice", () => {
     const a = fields("A kapus grandiózus teljesítményt nyújtott.");
     const result = applyLanguageQa(a, response(a, "A kapus remek teljesítményt nyújtott."), {
-      text: "The goalkeeper produced a great performance.", language: "en",
+      text: "The goalkeeper produced a great performance.",
+      language: "en",
     });
     expect(result.status).toBe("repaired");
   });

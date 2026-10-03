@@ -135,8 +135,14 @@ describe("CloudflareWorkersAiLlmClient", () => {
       );
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
       expect(body["response_format"]).toEqual({ type: "json_schema", json_schema: JSON_SCHEMA });
-      return jsonResponse({ result: { choices: [{ message: { content: '{"title_hu":"Cím","lead_hu":"Lead"}' } }],
-        usage: { prompt_tokens: 30, completion_tokens: 12 } }, success: true, errors: [] });
+      return jsonResponse({
+        result: {
+          choices: [{ message: { content: '{"title_hu":"Cím","lead_hu":"Lead"}' } }],
+          usage: { prompt_tokens: 30, completion_tokens: 12 },
+        },
+        success: true,
+        errors: [],
+      });
     });
     const client = new CloudflareWorkersAiLlmClient({
       accountId: "acc",
@@ -157,13 +163,28 @@ describe("CloudflareWorkersAiLlmClient", () => {
   });
 
   it("accepts the GPT-OSS Responses-shaped /ai/run output", async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({ result: {
-      output: [{ content: [{ type: "output_text", text: '{"title_hu":"Cím","lead_hu":"Lead"}' }] }],
-      usage: { input_tokens: 20, output_tokens: 10 },
-    }, success: true, errors: [] }));
-    const client = new CloudflareWorkersAiLlmClient({ accountId: "acc", apiToken: "tok", fetchImpl });
-    const result = await client.completeJson({ ...textRequest, model: WRITER_CLOUDFLARE_MODEL,
-      jsonSchema: JSON_SCHEMA });
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        result: {
+          output: [
+            { content: [{ type: "output_text", text: '{"title_hu":"Cím","lead_hu":"Lead"}' }] },
+          ],
+          usage: { input_tokens: 20, output_tokens: 10 },
+        },
+        success: true,
+        errors: [],
+      }),
+    );
+    const client = new CloudflareWorkersAiLlmClient({
+      accountId: "acc",
+      apiToken: "tok",
+      fetchImpl,
+    });
+    const result = await client.completeJson({
+      ...textRequest,
+      model: WRITER_CLOUDFLARE_MODEL,
+      jsonSchema: JSON_SCHEMA,
+    });
     expect(result.data).toEqual({ title_hu: "Cím", lead_hu: "Lead" });
     expect(result.inputTokens).toBe(20);
     expect(result.outputTokens).toBe(10);

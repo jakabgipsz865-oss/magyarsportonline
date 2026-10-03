@@ -103,15 +103,24 @@ describe("scheduler branch isolation", () => {
 
   it("keeps the next minute's ingest running while a QA model request is still pending", async () => {
     let releaseQa!: () => void;
-    const heldQa = new Promise<void>((resolve) => { releaseQa = resolve; });
+    const heldQa = new Promise<void>((resolve) => {
+      releaseQa = resolve;
+    });
     const calls: string[] = [];
-    vi.stubGlobal("fetch", vi.fn(async (url: string | URL | Request) => {
-      calls.push(String(url));
-      if (String(url).includes("language-qa")) await heldQa;
-      return new Response("", { status: 200 });
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL | Request) => {
+        calls.push(String(url));
+        if (String(url).includes("language-qa")) await heldQa;
+        return new Response("", { status: 200 });
+      }),
+    );
     const runs: Promise<unknown>[] = [];
-    const context = { waitUntil: (promise: Promise<unknown>) => { runs.push(promise); } };
+    const context = {
+      waitUntil: (promise: Promise<unknown>) => {
+        runs.push(promise);
+      },
+    };
     const env = { APP_ORIGIN: "https://example.com", CRON_SECRET: "secret" };
     scheduler.scheduled({ scheduledTime: nonRefreshMinute.getTime() }, env, context);
     await runs[1];

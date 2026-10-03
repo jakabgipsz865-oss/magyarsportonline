@@ -93,12 +93,12 @@ export async function runCron(
   backgroundQa?: (promise: Promise<void>) => void,
 ): Promise<void> {
   const qa = post(
-      endpoint(env.APP_ORIGIN, "/api/internal/language-qa") +
-        (now.getUTCMinutes() % 30 === 0 ? "?sweep=true" : ""),
-      "language-qa",
-      env,
-      LANGUAGE_QA_TIMEOUT_MS,
-    );
+    endpoint(env.APP_ORIGIN, "/api/internal/language-qa") +
+      (now.getUTCMinutes() % 30 === 0 ? "?sweep=true" : ""),
+    "language-qa",
+    env,
+    LANGUAGE_QA_TIMEOUT_MS,
+  );
   if (backgroundQa) backgroundQa(qa.catch(() => undefined));
   const results = await Promise.allSettled([
     ...(backgroundQa ? [] : [qa]),
@@ -158,8 +158,9 @@ export default {
       console.warn("scheduled invocation skipped while previous invocation is still active");
       return;
     }
-    activeScheduledRun = runCron(env, new Date(event.scheduledTime ?? Date.now()),
-      (qa) => ctx.waitUntil(qa)).finally(() => {
+    activeScheduledRun = runCron(env, new Date(event.scheduledTime ?? Date.now()), (qa) =>
+      ctx.waitUntil(qa),
+    ).finally(() => {
       activeScheduledRun = null;
     });
     ctx.waitUntil(activeScheduledRun);

@@ -86,10 +86,13 @@ describe("durable bounded Language QA", () => {
         modelLabel: languageQa.LANGUAGE_QA_MODEL,
       });
       await enqueueLanguageQa(f.d1, f.story, f.version, now);
-      expect((await processLanguageQa(f.d1, policy, () => f.client)).status).toBe("technical_error");
+      expect((await processLanguageQa(f.d1, policy, () => f.client)).status).toBe(
+        "technical_error",
+      );
       expect(f.db.prepare("SELECT status,reason FROM language_qa_audits").get()).toEqual({
         status: "technical_error",
-        reason: "invalid_model_schema:issues.0.sentence_id:invalid_type,issues.0.type:invalid_type,issues.0.confidence:invalid_type",
+        reason:
+          "invalid_model_schema:issues.0.sentence_id:invalid_type,issues.0.type:invalid_type,issues.0.confidence:invalid_type",
       });
       expect(f.db.prepare("SELECT current_version_id FROM stories").get()).toEqual({
         current_version_id: f.version,
@@ -116,7 +119,9 @@ describe("durable bounded Language QA", () => {
         body_original: "Bayern won the match. Kane scored 2 goals.",
       });
       expect(f.db.prepare("SELECT count(*) n FROM story_versions").get()).toEqual({ n: 2 });
-      expect(f.db.prepare("SELECT model FROM language_qa_audits WHERE version_id=?").get(f.version)).toEqual({
+      expect(
+        f.db.prepare("SELECT model FROM language_qa_audits WHERE version_id=?").get(f.version),
+      ).toEqual({
         model: languageQa.LANGUAGE_QA_MODEL,
       });
       expect(f.db.prepare("SELECT published_at FROM stories").get()).toEqual({
@@ -137,23 +142,42 @@ describe("durable bounded Language QA", () => {
     const f = fixture();
     try {
       await enqueueLanguageQa(f.d1, f.story, f.version, new Date("2026-09-29T19:00:00Z"));
-      const freshStory = crypto.randomUUID(), freshVersion = crypto.randomUUID();
+      const freshStory = crypto.randomUUID(),
+        freshVersion = crypto.randomUUID();
       f.db.exec("BEGIN");
-      f.db.prepare(`INSERT INTO stories(id,canonical_title,status,current_version_id,version_count,slug,published_at)
-        VALUES(?,'Fresh','published',?,1,'fresh','2026-09-30T00:00:00Z')`).run(freshStory, freshVersion);
-      f.db.prepare(`INSERT INTO story_versions(id,story_id,version_number,title_hu,lead_hu,body_hu,generated_by_model,prompt_version,is_published)
-        SELECT ?,?,1,title_hu,lead_hu,body_hu,generated_by_model,prompt_version,1 FROM story_versions WHERE id=?`)
+      f.db
+        .prepare(
+          `INSERT INTO stories(id,canonical_title,status,current_version_id,version_count,slug,published_at)
+        VALUES(?,'Fresh','published',?,1,'fresh','2026-09-30T00:00:00Z')`,
+        )
+        .run(freshStory, freshVersion);
+      f.db
+        .prepare(
+          `INSERT INTO story_versions(id,story_id,version_number,title_hu,lead_hu,body_hu,generated_by_model,prompt_version,is_published)
+        SELECT ?,?,1,title_hu,lead_hu,body_hu,generated_by_model,prompt_version,1 FROM story_versions WHERE id=?`,
+        )
         .run(freshVersion, freshStory, f.version);
-      f.db.prepare(`INSERT INTO story_sources(id,story_id,raw_article_id,contribution_type)
-        VALUES(?,?,?,'initial')`).run(crypto.randomUUID(), freshStory, f.raw);
+      f.db
+        .prepare(
+          `INSERT INTO story_sources(id,story_id,raw_article_id,contribution_type)
+        VALUES(?,?,?,'initial')`,
+        )
+        .run(crypto.randomUUID(), freshStory, f.raw);
       f.db.exec("COMMIT");
       await enqueueLanguageQa(f.d1, freshStory, freshVersion, now);
-      const first = await processLanguageQa(f.d1, {
-        ...policy, priorityAfter: new Date("2026-09-29T20:00:00Z"),
-      }, () => f.client);
+      const first = await processLanguageQa(
+        f.d1,
+        {
+          ...policy,
+          priorityAfter: new Date("2026-09-29T20:00:00Z"),
+        },
+        () => f.client,
+      );
       expect(first.processed).toBe(1);
       expect(f.completeJson.mock.calls[0]![0].usageContext.storyId).toBe(freshStory);
-      expect(f.db.prepare("SELECT status FROM language_qa_audits WHERE story_id=?").get(f.story)).toEqual({ status: "queued" });
+      expect(
+        f.db.prepare("SELECT status FROM language_qa_audits WHERE story_id=?").get(f.story),
+      ).toEqual({ status: "queued" });
     } finally {
       f.db.close();
     }
@@ -263,11 +287,17 @@ describe("durable bounded Language QA", () => {
   it("records only a safe provider error code, never a credential-bearing error message", async () => {
     const f = fixture();
     try {
-      f.completeJson.mockRejectedValue(new CloudflareApiError("http", 400, "secret must not persist"));
+      f.completeJson.mockRejectedValue(
+        new CloudflareApiError("http", 400, "secret must not persist"),
+      );
       await enqueueLanguageQa(f.d1, f.story, f.version, now);
       await processLanguageQa(f.d1, policy, () => f.client);
-      expect(f.db.prepare("SELECT reason FROM language_qa_audits").get()).toEqual({ reason: "cloudflare_http_400" });
-      expect(f.db.prepare("SELECT error_code FROM llm_usage").get()).toEqual({ error_code: "cloudflare_http_400" });
+      expect(f.db.prepare("SELECT reason FROM language_qa_audits").get()).toEqual({
+        reason: "cloudflare_http_400",
+      });
+      expect(f.db.prepare("SELECT error_code FROM llm_usage").get()).toEqual({
+        error_code: "cloudflare_http_400",
+      });
     } finally {
       f.db.close();
     }
@@ -275,11 +305,18 @@ describe("durable bounded Language QA", () => {
   it("distinguishes a bounded provider timeout from another network failure", async () => {
     const f = fixture();
     try {
-      f.completeJson.mockRejectedValue(new CloudflareApiError("network", 0,
-        "Cloudflare Workers AI request timed out after 20000 ms"));
+      f.completeJson.mockRejectedValue(
+        new CloudflareApiError(
+          "network",
+          0,
+          "Cloudflare Workers AI request timed out after 20000 ms",
+        ),
+      );
       await enqueueLanguageQa(f.d1, f.story, f.version, now);
       await processLanguageQa(f.d1, policy, () => f.client);
-      expect(f.db.prepare("SELECT reason FROM language_qa_audits").get()).toEqual({ reason: "cloudflare_timeout_20000" });
+      expect(f.db.prepare("SELECT reason FROM language_qa_audits").get()).toEqual({
+        reason: "cloudflare_timeout_20000",
+      });
     } finally {
       f.db.close();
     }
@@ -287,11 +324,14 @@ describe("durable bounded Language QA", () => {
   it("records only the parse shape and never the model's article text", async () => {
     const f = fixture();
     try {
-      f.completeJson.mockRejectedValue(new CloudflareApiError("parse_error", 0,
-        "output_shape:reasoning"));
+      f.completeJson.mockRejectedValue(
+        new CloudflareApiError("parse_error", 0, "output_shape:reasoning"),
+      );
       await enqueueLanguageQa(f.d1, f.story, f.version, now);
       await processLanguageQa(f.d1, policy, () => f.client);
-      expect(f.db.prepare("SELECT reason FROM language_qa_audits").get()).toEqual({ reason: "cloudflare_parse_reasoning" });
+      expect(f.db.prepare("SELECT reason FROM language_qa_audits").get()).toEqual({
+        reason: "cloudflare_parse_reasoning",
+      });
     } finally {
       f.db.close();
     }
