@@ -1,4 +1,4 @@
-import { MODEL_TIERS, type LlmClient } from "@magyarsportonline/llm";
+import { CloudflareApiError, MODEL_TIERS, type LlmClient } from "@magyarsportonline/llm";
 import { z } from "zod";
 
 export const FACT_TYPES = [
@@ -223,7 +223,10 @@ export async function extractFacts(
   try {
     response = (await complete(false)).data;
   } catch (error) {
-    if (!(error instanceof Error) || !/non-JSON output/i.test(error.message)) throw error;
+    const malformed =
+      (error instanceof CloudflareApiError && error.kind === "parse_error") ||
+      (error instanceof Error && /non-JSON output/i.test(error.message));
+    if (!malformed) throw error;
     response = (await complete(true)).data;
   }
   const groundedFacts = ground(response);

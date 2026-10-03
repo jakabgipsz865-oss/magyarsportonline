@@ -2,7 +2,9 @@ import { z } from "zod";
 import type { LlmClient } from "@magyarsportonline/llm";
 import { assessTabloidQuality, type TabloidForbiddenRule } from "./tabloid";
 import { languageQaPreservationFailure } from "./text-preservation";
-export const LANGUAGE_QA_MODEL = "@cf/openai/gpt-oss-120b";
+// This model supports Workers AI JSON Mode; GPT-OSS does not reliably return
+// the bounded JSON response required for safe, unattended production repairs.
+export const LANGUAGE_QA_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 export const QA_ISSUE_TYPES = [
   "FOREIGN_LANGUAGE",
   "UNNATURAL_HUNGARIAN",
