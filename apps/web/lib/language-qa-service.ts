@@ -62,12 +62,12 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
   const owner = crypto.randomUUID();
   const audit = await db
     .prepare(
-      `UPDATE language_qa_audits SET status='processing',lease_owner=?,lease_expires_at=?,attempts=attempts+1
+      `UPDATE language_qa_audits SET status='processing',model=?,lease_owner=?,lease_expires_at=?,attempts=attempts+1
   WHERE id=(SELECT q.id FROM language_qa_audits q JOIN stories s ON s.id=q.story_id WHERE q.attempts<3 AND
    ((q.status IN ('queued','technical_error') AND q.next_attempt_at<=?) OR (q.status='processing' AND q.lease_expires_at<=?))
    ORDER BY CASE WHEN s.published_at>=? THEN 0 ELSE 1 END, q.queued_at LIMIT 1) RETURNING *`,
     )
-    .bind(owner, d1Timestamp(new Date(now.getTime() + 120_000)), time, time, priorityAfter)
+    .bind(languageQa.LANGUAGE_QA_MODEL, owner, d1Timestamp(new Date(now.getTime() + 120_000)), time, time, priorityAfter)
     .first<Audit>();
   if (!audit) return { processed: 0, swept };
   const finish = async (status: string, reason: string, issues: unknown[] = []) =>
@@ -186,8 +186,19 @@ export async function processLanguageQa(db: D1Client, policy: QaPolicy, client: 
       .bind(result.inputTokens, result.outputTokens, cost.toFixed(8), usageId)
       .run();
     usageId = null;
+    const validated = languageQa.languageQaSchema.safeParse(result.data);
+    if (!validated.success) {
+      // A syntactically valid model reply without the bounded audit schema is
+      // not a completed language review. Record only field paths and error
+      // codes, never article text or the provider's raw reply.
+      const shape = validated.error.issues.slice(0, 3)
+        .map((issue) => `${issue.path.join(".") || "root"}:${issue.code}`)
+        .join(",");
+      await finish("technical_error", `invalid_model_schema:${shape}`);
+      return { processed: 1, status: "technical_error" };
+    }
     const knowledge = await relevantD1Knowledge(db, row);
-    const guarded = languageQa.applyLanguageQa(fields, result.data, {
+    const guarded = languageQa.applyLanguageQa(fields, validated.data, {
       text: `${row.title_original}\n${row.body_original}`,
       language: row.language,
       forbiddenRules: knowledge,

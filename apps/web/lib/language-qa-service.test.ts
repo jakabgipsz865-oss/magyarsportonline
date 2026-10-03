@@ -76,11 +76,35 @@ describe("durable bounded Language QA", () => {
     expect(factory).not.toHaveBeenCalled();
     expect((db as { prepare: ReturnType<typeof vi.fn> }).prepare).not.toHaveBeenCalled();
   });
+  it("retries a malformed model audit as a technical error without changing the story", async () => {
+    const f = fixture();
+    try {
+      f.completeJson.mockResolvedValueOnce({
+        data: { status: "PASS", issues: [{ replacement: "unbounded" }] },
+        inputTokens: 100,
+        outputTokens: 100,
+        modelLabel: languageQa.LANGUAGE_QA_MODEL,
+      });
+      await enqueueLanguageQa(f.d1, f.story, f.version, now);
+      expect((await processLanguageQa(f.d1, policy, () => f.client)).status).toBe("technical_error");
+      expect(f.db.prepare("SELECT status,reason FROM language_qa_audits").get()).toEqual({
+        status: "technical_error",
+        reason: "invalid_model_schema:issues.0.sentence_id:invalid_type,issues.0.type:invalid_type,issues.0.confidence:invalid_type",
+      });
+      expect(f.db.prepare("SELECT current_version_id FROM stories").get()).toEqual({
+        current_version_id: f.version,
+      });
+      expect(f.db.prepare("SELECT status FROM llm_usage").get()).toEqual({ status: "success" });
+    } finally {
+      f.db.close();
+    }
+  });
   it("publishes a guarded new version once, retains chronology, and audits the resulting version without another call", async () => {
     const f = fixture();
     try {
       await enqueueLanguageQa(f.d1, f.story, f.version, now);
       await enqueueLanguageQa(f.d1, f.story, f.version, now);
+      f.db.prepare("UPDATE language_qa_audits SET model='@cf/openai/gpt-oss-120b'").run();
       const r = await processLanguageQa(f.d1, policy, () => f.client);
       expect(r.status).toBe("repaired");
       expect((await processLanguageQa(f.d1, policy, () => f.client)).processed).toBe(0);
@@ -92,6 +116,9 @@ describe("durable bounded Language QA", () => {
         body_original: "Bayern won the match. Kane scored 2 goals.",
       });
       expect(f.db.prepare("SELECT count(*) n FROM story_versions").get()).toEqual({ n: 2 });
+      expect(f.db.prepare("SELECT model FROM language_qa_audits WHERE version_id=?").get(f.version)).toEqual({
+        model: languageQa.LANGUAGE_QA_MODEL,
+      });
       expect(f.db.prepare("SELECT published_at FROM stories").get()).toEqual({
         published_at: "2026-09-29T18:00:00Z",
       });
