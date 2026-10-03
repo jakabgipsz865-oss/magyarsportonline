@@ -20,6 +20,9 @@ export const WRITER_CLOUDFLARE_MODEL = "@cf/openai/gpt-oss-120b";
 
 /** A logikai gyors/olcsó tier Cloudflare-only production modellje. */
 const FAST_LOGICAL_MODEL_TIERS = new Set(["claude-haiku-4-5", "claude-sonnet-5"]);
+// GPT-OSS speaks the Responses shape on /ai/run. Use its supported Chat
+// Completions endpoint and validate the prompted JSON in our own boundary.
+const CHAT_ONLY_MODELS = new Set([WRITER_CLOUDFLARE_MODEL]);
 
 /** Cloudflare által dokumentált JSON Mode modellazonosítók. */
 const JSON_MODE_SUPPORTED_MODELS = new Set([
@@ -32,7 +35,6 @@ const JSON_MODE_SUPPORTED_MODELS = new Set([
   "@hf/nousresearch/hermes-2-pro-mistral-7b",
   "@hf/thebloke/deepseek-coder-6.7b-instruct-awq",
   "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-  WRITER_CLOUDFLARE_MODEL,
 ]);
 
 export interface CloudflareWorkersAiClientOptions {
@@ -211,7 +213,7 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
     // env-ben maradt modell ezt hivatalosan nem támogatja, ne próbáljuk meg
     // reménykedve parse-olni a szabad szöveges választ: használjuk a
     // dokumentált production alapmodellt.
-    this.model = JSON_MODE_SUPPORTED_MODELS.has(configuredModel)
+    this.model = JSON_MODE_SUPPORTED_MODELS.has(configuredModel) || CHAT_ONLY_MODELS.has(configuredModel)
       ? configuredModel
       : DEFAULT_CLOUDFLARE_MODEL;
     this.baseUrl = options.baseUrl ?? API_BASE;
@@ -235,8 +237,19 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
   }
 
   async completeJson(request: JsonCompletionRequest): Promise<JsonCompletionResult> {
-    const response = await this.structuredCompletion(request);
-    const content = response.result?.response;
+    let content: unknown;
+    let inputTokens = 0, outputTokens = 0;
+    if (CHAT_ONLY_MODELS.has(this.modelForRequest(request.model))) {
+      const response = await this.chatCompletion(request, undefined);
+      content = response.choices?.[0]?.message?.content;
+      inputTokens = response.usage?.prompt_tokens ?? 0;
+      outputTokens = response.usage?.completion_tokens ?? 0;
+    } else {
+      const response = await this.structuredCompletion(request);
+      content = response.result?.response;
+      inputTokens = response.result?.usage?.prompt_tokens ?? 0;
+      outputTokens = response.result?.usage?.completion_tokens ?? 0;
+    }
 
     let data: unknown;
     try {
@@ -252,8 +265,8 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
 
     return {
       data,
-      inputTokens: response.result?.usage?.prompt_tokens ?? 0,
-      outputTokens: response.result?.usage?.completion_tokens ?? 0,
+      inputTokens,
+      outputTokens,
       modelLabel: this.modelForRequest(request.model),
     };
   }
@@ -285,6 +298,7 @@ export class CloudflareWorkersAiLlmClient implements LlmClient {
     if (JSON_MODE_SUPPORTED_MODELS.has(requestedModel)) {
       return requestedModel;
     }
+    if (CHAT_ONLY_MODELS.has(requestedModel)) return requestedModel;
     return this.model;
   }
 

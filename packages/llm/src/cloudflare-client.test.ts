@@ -129,11 +129,15 @@ describe("CloudflareWorkersAiLlmClient", () => {
   });
 
   it("uses the dedicated gpt-oss model for a structured writer request", async () => {
-    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       expect(String(url)).toBe(
-        `https://api.cloudflare.com/client/v4/accounts/acc/ai/run/${WRITER_CLOUDFLARE_MODEL}`,
+        "https://api.cloudflare.com/client/v4/accounts/acc/ai/v1/chat/completions",
       );
-      return structuredResponse({ title_hu: "Cím", lead_hu: "Lead" });
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      expect(body["model"]).toBe(WRITER_CLOUDFLARE_MODEL);
+      expect(body["response_format"]).toBeUndefined();
+      return jsonResponse({ choices: [{ message: { content: '{"title_hu":"Cím","lead_hu":"Lead"}' } }],
+        usage: { prompt_tokens: 30, completion_tokens: 12 } });
     });
     const client = new CloudflareWorkersAiLlmClient({
       accountId: "acc",
@@ -149,6 +153,8 @@ describe("CloudflareWorkersAiLlmClient", () => {
     });
 
     expect(result.modelLabel).toBe(WRITER_CLOUDFLARE_MODEL);
+    expect(result.data).toEqual({ title_hu: "Cím", lead_hu: "Lead" });
+    expect(result.inputTokens).toBe(30);
   });
 
   it("parses JSON completions, including markdown-fenced output", async () => {
